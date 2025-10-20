@@ -1,4 +1,5 @@
 import { PairSummary } from '../types'
+import { CurrencyIcon } from './CurrencyIcon'
 
 export function TradesTable({ data, loading }: { data: PairSummary[]; loading: boolean }) {
     return (
@@ -14,7 +15,11 @@ export function TradesTable({ data, loading }: { data: PairSummary[]; loading: b
                         <div className="pair-header">
                             <div className="pair-info">
                                 <span className="pair-index">#{p.index}</span>
-                                <span className="pair-badge">{p.pay} → {p.get}</span>
+                                <span className="pair-badge">
+                                    <CurrencyIcon currency={p.pay} size={20} />
+                                    <span style={{ margin: '0 8px', color: 'var(--muted)' }}>→</span>
+                                    <CurrencyIcon currency={p.get} size={20} />
+                                </span>
                             </div>
                             <div className="pair-status">
                                 {p.status === 'ok' ? (
@@ -43,7 +48,11 @@ export function TradesTable({ data, loading }: { data: PairSummary[]; loading: b
                                         <div className="listing-details">
                                             <div className="listing-rate">
                                                 <span className="rate-value">{l.rate}</span>
-                                                <span className="rate-currencies">{l.have_currency}/{l.want_currency}</span>
+                                                <span className="rate-currencies" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                    <CurrencyIcon currency={l.have_currency} size={16} />
+                                                    <span>/</span>
+                                                    <CurrencyIcon currency={l.want_currency} size={16} />
+                                                </span>
                                             </div>
                                             <div className="listing-meta">
                                                 <div className="meta-item">

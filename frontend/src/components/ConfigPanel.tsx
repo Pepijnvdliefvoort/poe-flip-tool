@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Api } from '../api'
 import type { ConfigData } from '../types'
+import { CurrencyIcon } from './CurrencyIcon'
 
 export function ConfigPanel({ onChanged }: { onChanged: () => void }) {
     const [cfg, setCfg] = useState<ConfigData | null>(null)
@@ -51,14 +52,8 @@ export function ConfigPanel({ onChanged }: { onChanged: () => void }) {
                     onChange={(e) => changeLeague(e.target.value)}
                     disabled={saving}
                 >
-                    <option value="Settlers">Settlers</option>
                     <option value="Standard">Standard</option>
                     <option value="Hardcore">Hardcore</option>
-                    <option value="Hardcore Settlers">Hardcore Settlers</option>
-                    <option value="SSF Settlers">SSF Settlers</option>
-                    <option value="SSF Standard">SSF Standard</option>
-                    <option value="HC SSF Settlers">HC SSF Settlers</option>
-                    <option value="SSF Hardcore">SSF Hardcore</option>
                 </select>
             </div>
 
@@ -79,13 +74,18 @@ export function ConfigPanel({ onChanged }: { onChanged: () => void }) {
                                     <td style={{color: 'var(--muted)'}}>{i}</td>
                                     <td>
                                         <span style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: 8,
                                             padding: '4px 10px',
                                             background: 'var(--bg-secondary)',
                                             borderRadius: '6px',
                                             fontSize: '13px',
                                             fontWeight: 600
                                         }}>
-                                            {t.pay} → {t.get}
+                                            <CurrencyIcon currency={t.pay} size={18} />
+                                            <span style={{ color: 'var(--muted)' }}>→</span>
+                                            <CurrencyIcon currency={t.get} size={18} />
                                         </span>
                                     </td>
                                     <td style={{ textAlign: 'right' }}>
