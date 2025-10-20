@@ -58,13 +58,13 @@ export function ConfigPanel({ onChanged }: { onChanged: () => void }) {
             </div>
 
             <div style={{ marginBottom: 24 }}>
-                <label className="muted">Trade Pairs ({cfg.trades.length})</label>
+                <label className="muted">Trades ({cfg.trades.length})</label>
                 {cfg.trades.length > 0 ? (
                     <table>
                         <thead>
                             <tr>
                                 <th style={{width: 40}}>#</th>
-                                <th>Pair</th>
+                                <th>Pay → Get</th>
                                 <th style={{width: 80}}></th>
                             </tr>
                         </thead>
@@ -110,7 +110,7 @@ export function ConfigPanel({ onChanged }: { onChanged: () => void }) {
             </div>
 
             <div>
-                <label className="muted">Add New Pair</label>
+                <label className="muted">Add New Trade</label>
                 <div style={{display: 'flex', flexDirection: 'column', gap: 8}}>
                     <input 
                         placeholder="Want (e.g. divine)" 
@@ -130,7 +130,7 @@ export function ConfigPanel({ onChanged }: { onChanged: () => void }) {
                         disabled={saving || !get.trim() || !pay.trim()}
                         style={{width: '100%'}}
                     >
-                        {saving ? 'Adding...' : 'Add Trade Pair'}
+                        {saving ? 'Adding...' : 'Add New Trade'}
                     </button>
                 </div>
             </div>

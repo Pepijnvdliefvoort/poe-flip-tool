@@ -186,15 +186,16 @@
         /* Pairs Grid */
         .pairs-grid {
             display: grid;
-            gap: 20px;
+            gap: 12px;
         }
 
         .pair-card {
             background: var(--card);
             border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 20px;
+            border-radius: 8px;
+            padding: 12px 12px 0px 12px;
             transition: all 0.2s;
+            overflow: hidden;
         }
 
         .pair-card:hover {
@@ -202,19 +203,93 @@
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
         }
 
+        /* Collapsed state indicator */
+        .pair-card:has(.pair-header:not(:hover)) {
+            transition: all 0.3s ease;
+        }
+
         .pair-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 16px;
-            padding-bottom: 16px;
-            border-bottom: 1px solid var(--border);
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            /* border-bottom: 1px solid var(--border); */
+            transition: all 0.2s;
+        }
+
+        .pair-header.collapsible {
+            user-select: none;
+        }
+
+        .pair-header.collapsible:hover {
+            background: var(--bg-secondary);
+            margin: -6px -6px 10px -6px;
+            padding: 6px 6px 16px 6px;
+            border-radius: 6px;
         }
 
         .pair-info {
             display: flex;
             align-items: center;
             gap: 12px;
+            flex: 1;
+            min-width: 0;
+            flex-wrap: wrap;
+        }
+
+        .pair-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .collapse-btn {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            color: var(--muted);
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .collapse-btn:hover {
+            background: var(--card-hover);
+            color: var(--text);
+            border-color: var(--accent);
+        }
+
+        .collapsed-summary {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            padding: 2px 0;
+        }
+
+        .summary-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+        }
+
+        .summary-label {
+            color: var(--muted);
+            font-weight: 500;
+        }
+
+        .summary-value {
+            color: var(--text-bright);
+            font-weight: 700;
+            background: var(--bg-secondary);
+            padding: 2px 6px;
+            border-radius: 3px;
         }
 
         .pair-index {
@@ -258,35 +333,54 @@
         .best-rate {
             display: flex;
             align-items: center;
-            gap: 8px;
-            margin-bottom: 16px;
-            padding: 12px;
+            gap: 16px;
+            margin-bottom: 10px;
+            padding: 8px 10px;
             background: var(--bg-secondary);
-            border-radius: 8px;
+            border-radius: 6px;
+            flex-wrap: wrap;
+        }
+
+        .best-rate > div {
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
 
         .best-rate .label {
-            font-size: 13px;
+            font-size: 12px;
             color: var(--muted);
             font-weight: 500;
         }
 
         .best-rate .value {
-            font-size: 20px;
+            font-size: 15px;
             font-weight: 700;
             color: var(--accent);
         }
 
         /* Listings Section */
         .listings-section {
-            margin-top: 16px;
+            margin-top: 8px;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .listings-header {
-            font-size: 14px;
+            font-size: 12px;
             font-weight: 600;
             color: var(--muted);
-            margin-bottom: 12px;
+            margin-bottom: 6px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
@@ -294,7 +388,7 @@
         .listings-list {
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 6px;
         }
 
         .listing-card {
@@ -302,9 +396,16 @@
             gap: 16px;
             padding: 14px;
             background: var(--bg-secondary);
-            border: 1px solid var(--border);
+            border: none;
             border-radius: 8px;
             transition: all 0.2s;
+        }
+
+        .listing-card.compact {
+            gap: 12px;
+            padding: 8px 12px;
+            align-items: center;
+            font-size: 13px;
         }
 
         .listing-card:hover {
@@ -313,15 +414,15 @@
         }
 
         .listing-rank {
-            display: flex;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            min-width: 36px;
-            height: 36px;
+            min-width: 28px;
+            padding: 2px 6px;
             background: var(--card);
-            border-radius: 6px;
+            border-radius: 4px;
             font-weight: 700;
-            font-size: 14px;
+            font-size: 12px;
             color: var(--accent);
         }
 
@@ -338,15 +439,26 @@
         }
 
         .rate-value {
-            font-size: 18px;
+            font-size: 15px;
             font-weight: 700;
             color: var(--text-bright);
+            min-width: 60px;
         }
 
         .rate-currencies {
-            font-size: 13px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
             color: var(--muted);
             font-weight: 500;
+        }
+
+        .listing-info {
+            display: inline-flex;
+            gap: 4px;
+            font-size: 12px;
+            white-space: nowrap;
         }
 
         .listing-meta {
@@ -372,9 +484,10 @@
         }
 
         .listing-time {
-            font-size: 12px;
+            font-size: 11px;
             color: var(--muted);
-            margin-top: 4px;
+            margin-left: auto;
+            white-space: nowrap;
         }
 
         /* Config Card */
