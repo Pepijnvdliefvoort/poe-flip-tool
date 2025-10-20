@@ -387,6 +387,21 @@
             }
         }
 
+        @keyframes morph {
+            0% {
+                opacity: 1;
+                transform: scale(1) rotate(0deg);
+            }
+            50% {
+                opacity: 0;
+                transform: scale(0) rotate(180deg);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1) rotate(360deg);
+            }
+        }
+
         .listings-header {
             font-size: 12px;
             font-weight: 600;

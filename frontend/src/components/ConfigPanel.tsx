@@ -52,7 +52,9 @@ export function ConfigPanel({ onChanged, onHotToggled }: { onChanged: () => void
             if (onHotToggled && next.trades[idx]) {
                 onHotToggled(idx, next.trades[idx].hot ?? false)
             }
-        } finally { setSaving(false) }
+        } finally { 
+            setSaving(false) 
+        }
     }
 
     if (!cfg) return <div className="card"><p style={{color: 'var(--muted)'}}>Loading configuration…</p></div>
@@ -114,7 +116,8 @@ export function ConfigPanel({ onChanged, onHotToggled }: { onChanged: () => void
                                                 padding: '4px 8px',
                                                 fontSize: '16px',
                                                 background: t.hot ? 'rgba(245, 158, 11, 0.2)' : 'rgba(59, 130, 246, 0.1)',
-                                                border: '1px solid var(--border)'
+                                                border: '1px solid var(--border)',
+                                                transition: 'background 0.3s ease'
                                             }}
                                             title={t.hot ? "Marked as hot - click to remove" : "Click to mark as hot"}
                                         >
