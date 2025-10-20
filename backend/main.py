@@ -1,24 +1,18 @@
-# ...existing code...
-from trade_logic import fetch_listings_force
-# ...existing code...
-# POST /api/trades/refresh_one?index=<i>&top_n=5
-from models import PairSummary, TradesResponse
-
 import json
 import time
-
 import json
 import time
 import logging
-from pathlib import Path
-from typing import Any, Dict, List
 
+from trade_logic import fetch_listings_force
+from models import PairSummary, TradesResponse
+from pathlib import Path
+from typing import List
 from fastapi import FastAPI, Query, HTTPException, Request
 from fastapi import Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-
-from models import ConfigData, TradePair, PairSummary, TradesResponse, TradesPatch
+from models import ConfigData, PairSummary, TradesResponse, TradesPatch
 from trade_logic import fetch_listings_with_cache
 from rate_limiter import rate_limiter
 

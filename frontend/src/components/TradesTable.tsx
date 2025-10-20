@@ -53,7 +53,6 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
                 style={{ cursor: 'pointer' }}
             >
                 <div className="pair-info">
-                    <span className="pair-index">#{pair.index}</span>
                     <span className="pair-badge">
                         <CurrencyIcon currency={pair.pay} size={20} />
                         <span style={{ margin: '0 8px', color: 'var(--muted)' }}>→</span>
@@ -73,8 +72,8 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
                             ) : <>
                                 {pair.best_rate && (
                                     <span className="summary-item">
-                                        <span className="summary-label">Best:</span>
-                                        <span className="summary-value" style={{ color: 'var(--accent)', fontWeight: 500 }}>{formatRate(pair.best_rate, pair.pay, pair.get)}</span>
+                                        <span className="summary-label" style={{ fontWeight: 600 }}>Best:</span>
+                                        <span className="summary-value" style={{ color: 'var(--accent)', fontWeight: 700, fontSize: '15px' }}>{formatRate(pair.best_rate, pair.pay, pair.get)}</span>
                                     </span>
                                 )}
                                 {avgRate && (
