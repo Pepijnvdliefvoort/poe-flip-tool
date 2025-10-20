@@ -122,6 +122,56 @@ export default function App() {
     });
   };
 
+  const addNewPair = async (get: string, pay: string) => {
+    if (!data) return;
+    const newIndex = data.results.length;
+    
+    // Add placeholder for the new pair
+    setData(prev => {
+      if (!prev) return prev;
+      const results = [...prev.results, {
+        index: newIndex,
+        get,
+        pay,
+        hot: false,
+        status: 'loading' as const,
+        listings: [],
+        best_rate: null,
+        count_returned: 0
+      }];
+      return { ...prev, pairs: results.length, results };
+    });
+
+    // Fetch data for the new pair
+    try {
+      const refreshed = await Api.refreshOne(newIndex, topN);
+      setData(prev => {
+        if (!prev) return prev;
+        const results = [...prev.results];
+        results[newIndex] = refreshed;
+        return { ...prev, results };
+      });
+    } catch (e) {
+      setData(prev => {
+        if (!prev) return prev;
+        const results = [...prev.results];
+        results[newIndex] = { ...results[newIndex], status: 'error' };
+        return { ...prev, results };
+      });
+    }
+    updateRateLimit();
+  };
+
+  const removePair = (index: number) => {
+    setData(prev => {
+      if (!prev) return prev;
+      const results = prev.results.filter((_, i) => i !== index);
+      // Re-index remaining pairs
+      const reindexed = results.map((r, i) => ({ ...r, index: i }));
+      return { ...prev, pairs: reindexed.length, results: reindexed };
+    });
+  };
+
   // Optionally, fallback poll every 30s in case no user actions
   useEffect(() => {
     const interval = setInterval(() => {
@@ -189,7 +239,7 @@ export default function App() {
           <TradesTable data={data?.results || []} loading={loading} onReload={reloadPair} />
         </div>
         <aside className="config-sidebar">
-          <ConfigPanel onChanged={load} onHotToggled={updateHotStatus} />
+          <ConfigPanel onChanged={load} onHotToggled={updateHotStatus} onPairAdded={addNewPair} onPairRemoved={removePair} />
         </aside>
       </div>
 

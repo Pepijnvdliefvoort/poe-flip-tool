@@ -3,7 +3,12 @@ import { Api } from '../api'
 import type { ConfigData } from '../types'
 import { CurrencyIcon } from './CurrencyIcon'
 
-export function ConfigPanel({ onChanged, onHotToggled }: { onChanged: () => void; onHotToggled?: (index: number, hot: boolean) => void }) {
+export function ConfigPanel({ onChanged, onHotToggled, onPairAdded, onPairRemoved }: { 
+    onChanged: () => void; 
+    onHotToggled?: (index: number, hot: boolean) => void;
+    onPairAdded?: (get: string, pay: string) => void;
+    onPairRemoved?: (index: number) => void;
+}) {
     const [cfg, setCfg] = useState<ConfigData | null>(null)
     const [get, setGet] = useState('')
     const [pay, setPay] = useState('')
@@ -26,7 +31,10 @@ export function ConfigPanel({ onChanged, onHotToggled }: { onChanged: () => void
             const next = await Api.patchTrades({ add: [{ get: g, pay: p }] })
             setCfg(next)
             setGet(''); setPay('')
-            onChanged()
+            // Call the new callback instead of reloading everything
+            if (onPairAdded) {
+                onPairAdded(g, p)
+            }
         } finally { setSaving(false) }
     }
 
@@ -35,7 +43,10 @@ export function ConfigPanel({ onChanged, onHotToggled }: { onChanged: () => void
         try {
             const next = await Api.patchTrades({ remove_indices: [idx] })
             setCfg(next)
-            onChanged()
+            // Just remove from UI, don't reload
+            if (onPairRemoved) {
+                onPairRemoved(idx)
+            }
         } finally { setSaving(false) }
     }
 
