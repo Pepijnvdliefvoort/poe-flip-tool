@@ -224,8 +224,7 @@
 
         .pair-header.collapsible:hover {
             background: var(--bg-secondary);
-            margin: -6px -6px 10px -6px;
-            padding: 6px 6px 16px 6px;
+            /* margin: -6px -6px 10px -6px; */
             border-radius: 6px;
         }
 
@@ -638,6 +637,32 @@
             .controls {
                 justify-content: space-between;
             }
+        }
+
+        /* Custom scrollbar for whisper messages */
+        .whisper-scrollbar::-webkit-scrollbar {
+            height: 6px;
+        }
+
+        .whisper-scrollbar::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 3px;
+        }
+
+        .whisper-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(156, 163, 175, 0.4);
+            border-radius: 3px;
+            transition: background 0.2s;
+        }
+
+        .whisper-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(156, 163, 175, 0.6);
+        }
+
+        /* Firefox scrollbar */
+        .whisper-scrollbar {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(156, 163, 175, 0.4) rgba(0, 0, 0, 0.2);
         }
     </style>
     <link rel="icon" type="image/x-icon" href="/favicon.png">

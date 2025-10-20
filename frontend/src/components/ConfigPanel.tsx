@@ -3,7 +3,7 @@ import { Api } from '../api'
 import type { ConfigData } from '../types'
 import { CurrencyIcon } from './CurrencyIcon'
 
-export function ConfigPanel({ onChanged }: { onChanged: () => void }) {
+export function ConfigPanel({ onChanged, onHotToggled }: { onChanged: () => void; onHotToggled?: (index: number, hot: boolean) => void }) {
     const [cfg, setCfg] = useState<ConfigData | null>(null)
     const [get, setGet] = useState('')
     const [pay, setPay] = useState('')
@@ -39,6 +39,22 @@ export function ConfigPanel({ onChanged }: { onChanged: () => void }) {
         } finally { setSaving(false) }
     }
 
+    async function toggleHot(idx: number) {
+        if (!cfg) return
+        setSaving(true)
+        try {
+            const updatedTrades = cfg.trades.map((t, i) => 
+                i === idx ? { ...t, hot: !t.hot } : t
+            )
+            const next = await Api.putConfig({ ...cfg, trades: updatedTrades })
+            setCfg(next)
+            // Update the parent's data state without reloading all trades
+            if (onHotToggled && next.trades[idx]) {
+                onHotToggled(idx, next.trades[idx].hot ?? false)
+            }
+        } finally { setSaving(false) }
+    }
+
     if (!cfg) return <div className="card"><p style={{color: 'var(--muted)'}}>Loading configuration…</p></div>
 
     return (
@@ -65,6 +81,7 @@ export function ConfigPanel({ onChanged }: { onChanged: () => void }) {
                             <tr>
                                 <th style={{width: 40}}>#</th>
                                 <th>Pay → Get</th>
+                                <th style={{width: 60}}>Hot</th>
                                 <th style={{width: 80}}></th>
                             </tr>
                         </thead>
@@ -87,6 +104,22 @@ export function ConfigPanel({ onChanged }: { onChanged: () => void }) {
                                             <span style={{ color: 'var(--muted)' }}>→</span>
                                             <CurrencyIcon currency={t.get} size={18} />
                                         </span>
+                                    </td>
+                                    <td style={{ textAlign: 'center' }}>
+                                        <button
+                                            className="btn ghost"
+                                            onClick={() => toggleHot(i)}
+                                            disabled={saving}
+                                            style={{
+                                                padding: '4px 8px',
+                                                fontSize: '16px',
+                                                background: t.hot ? 'var(--warning)' : 'transparent',
+                                                border: t.hot ? '1px solid var(--warning)' : '1px solid var(--border)'
+                                            }}
+                                            title={t.hot ? "Marked as hot - click to remove" : "Click to mark as hot"}
+                                        >
+                                            {t.hot ? '🔥' : '○'}
+                                        </button>
                                     </td>
                                     <td style={{ textAlign: 'right' }}>
                                         <button 

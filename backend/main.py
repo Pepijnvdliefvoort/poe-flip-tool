@@ -39,6 +39,7 @@ def refresh_one_trade(index: int = Query(..., ge=0), top_n: int = Query(5, ge=1,
         index=index,
         get=t.get,
         pay=t.pay,
+        hot=t.hot,
         status="ok",
         listings=listings,
         best_rate=(listings[0].rate if listings else None),
@@ -54,16 +55,17 @@ async def stream_trades(request: Request, delay_s: float = Query(2, ge=0.0, le=5
             if await request.is_disconnected():
                 break
             if rate_limiter.blocked:
-                summary = PairSummary(index=idx, get=t.get, pay=t.pay, status="rate_limited", listings=[], best_rate=None, count_returned=0)
+                summary = PairSummary(index=idx, get=t.get, pay=t.pay, hot=t.hot, status="rate_limited", listings=[], best_rate=None, count_returned=0)
             else:
                 listings = fetch_listings_with_cache(league=cfg.league, have=t.pay, want=t.get, top_n=top_n)
                 if listings is None:
-                    summary = PairSummary(index=idx, get=t.get, pay=t.pay, status="error", listings=[], best_rate=None, count_returned=0)
+                    summary = PairSummary(index=idx, get=t.get, pay=t.pay, hot=t.hot, status="error", listings=[], best_rate=None, count_returned=0)
                 else:
                     summary = PairSummary(
                         index=idx,
                         get=t.get,
                         pay=t.pay,
+                        hot=t.hot,
                         status="ok",
                         listings=listings,
                         best_rate=(listings[0].rate if listings else None),
@@ -163,16 +165,17 @@ def refresh_trades(
 
     for idx, t in enumerate(cfg.trades):
         if rate_limiter.blocked:
-            summary = PairSummary(index=idx, get=t.get, pay=t.pay, status="rate_limited", listings=[], best_rate=None, count_returned=0)
+            summary = PairSummary(index=idx, get=t.get, pay=t.pay, hot=t.hot, status="rate_limited", listings=[], best_rate=None, count_returned=0)
         else:
             listings = fetch_listings_with_cache(league=cfg.league, have=t.pay, want=t.get, top_n=top_n)
             if listings is None:
-                summary = PairSummary(index=idx, get=t.get, pay=t.pay, status="error", listings=[], best_rate=None, count_returned=0)
+                summary = PairSummary(index=idx, get=t.get, pay=t.pay, hot=t.hot, status="error", listings=[], best_rate=None, count_returned=0)
             else:
                 summary = PairSummary(
                     index=idx,
                     get=t.get,
                     pay=t.pay,
+                    hot=t.hot,
                     status="ok",
                     listings=listings,
                     best_rate=(listings[0].rate if listings else None),
@@ -201,16 +204,17 @@ def trades_summary(
 
     for idx, t in enumerate(cfg.trades):
         if rate_limiter.blocked:
-            summary = PairSummary(index=idx, get=t.get, pay=t.pay, status="rate_limited", listings=[], best_rate=None, count_returned=0)
+            summary = PairSummary(index=idx, get=t.get, pay=t.pay, hot=t.hot, status="rate_limited", listings=[], best_rate=None, count_returned=0)
         else:
             listings = fetch_listings_with_cache(league=cfg.league, have=t.pay, want=t.get, top_n=top_n)
             if listings is None:
-                summary = PairSummary(index=idx, get=t.get, pay=t.pay, status="error", listings=[], best_rate=None, count_returned=0)
+                summary = PairSummary(index=idx, get=t.get, pay=t.pay, hot=t.hot, status="error", listings=[], best_rate=None, count_returned=0)
             else:
                 summary = PairSummary(
                     index=idx,
                     get=t.get,
                     pay=t.pay,
+                    hot=t.hot,
                     status="ok",
                     listings=listings,
                     best_rate=(listings[0].rate if listings else None),

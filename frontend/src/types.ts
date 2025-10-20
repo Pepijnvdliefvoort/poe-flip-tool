@@ -1,4 +1,4 @@
-export type TradePair = { get: string; pay: string }
+export type TradePair = { get: string; pay: string; hot?: boolean }
 
 export type ListingSummary = {
   rate: number
@@ -17,6 +17,7 @@ export type PairSummary = {
   index: number
   get: string
   pay: string
+  hot?: boolean
   status: 'ok' | 'error' | 'invalid' | 'loading' | 'rate_limited'
   listings: ListingSummary[]
   best_rate?: number | null

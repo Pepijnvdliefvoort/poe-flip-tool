@@ -7,9 +7,9 @@ import { CurrencyIcon } from './CurrencyIcon'
 function formatRate(num: number, have?: string, want?: string): string {
     if (num % 1 === 0) return num.toString();
     if (num > 0 && num < 1 && have && want) {
-        // Try to show as 1/x
-        const denom = Math.round(1 / num);
-        return `1/${denom}`;
+        // Try to show as 1/x with up to 2 decimals
+        const denom = 1 / num;
+        return `1/${denom.toFixed(2).replace(/\.?0+$/, '')}`;
     }
     return num.toFixed(2);
 }
@@ -46,7 +46,13 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
     }, [pair.status, remaining])
 
     return (
-        <div className="pair-card">
+        <div 
+            className="pair-card" 
+            style={{
+                border: pair.hot ? '2px solid var(--warning)' : '1px solid var(--border)',
+                background: pair.hot ? 'rgba(245, 158, 11, 0.05)' : undefined
+            }}
+        >
             <div
                 className="pair-header collapsible"
                 onClick={() => setIsExpanded(!isExpanded)}
@@ -54,47 +60,46 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
             >
                 <div className="pair-info">
                     <span className="pair-badge">
+                        {pair.hot && <span style={{ marginRight: 8, fontSize: 18 }}>🔥</span>}
                         <CurrencyIcon currency={pair.pay} size={20} />
                         <span style={{ margin: '0 8px', color: 'var(--muted)' }}>→</span>
                         <CurrencyIcon currency={pair.get} size={20} />
                     </span>
 
-                    {/* Collapsed Summary */}
-                    {!isExpanded && (
-                        <div className="collapsed-summary">
-                            {loading && pair.listings.length === 0 ? (
-                                <>
-                                    <span className="row-spinner"><span className="spinner small"></span></span>
-                                    <span className="blurred-line" style={{ width: 40 }}></span>
-                                    <span className="blurred-line" style={{ width: 30 }}></span>
-                                    <span className="blurred-line" style={{ width: 24 }}></span>
-                                </>
-                            ) : <>
-                                {pair.best_rate && (
-                                    <span className="summary-item">
-                                        <span className="summary-label" style={{ fontWeight: 600 }}>Best:</span>
-                                        <span className="summary-value" style={{ color: 'var(--accent)', fontWeight: 700, fontSize: '15px' }}>{formatRate(pair.best_rate, pair.pay, pair.get)}</span>
-                                    </span>
-                                )}
-                                {avgRate && (
-                                    <span className="summary-item">
-                                        <span className="summary-label">Avg:</span>
-                                        <span className="summary-value">{formatRate(avgRate, pair.pay, pair.get)}</span>
-                                    </span>
-                                )}
+                    {/* Summary - always shown in header row */}
+                    <div className="collapsed-summary">
+                        {loading && pair.listings.length === 0 ? (
+                            <>
+                                <span className="row-spinner"><span className="spinner small"></span></span>
+                                <span className="blurred-line" style={{ width: 40 }}></span>
+                                <span className="blurred-line" style={{ width: 30 }}></span>
+                                <span className="blurred-line" style={{ width: 24 }}></span>
+                            </>
+                        ) : <>
+                            {pair.best_rate && (
                                 <span className="summary-item">
-                                    <span className="summary-label">Listings:</span>
-                                    <span className="summary-value">{pair.listings.length}</span>
+                                    <span className="summary-label" style={{ fontWeight: 600 }}>Best:</span>
+                                    <span className="summary-value" style={{ color: 'var(--accent)', fontWeight: 700, fontSize: '15px' }}>{formatRate(pair.best_rate, pair.pay, pair.get)}</span>
                                 </span>
-                                {totalStock > 0 && (
-                                    <span className="summary-item">
-                                        <span className="summary-label">Stock:</span>
-                                        <span className="summary-value">{totalStock}</span>
-                                    </span>
-                                )}
-                            </>}
-                        </div>
-                    )}
+                            )}
+                            {avgRate && (
+                                <span className="summary-item">
+                                    <span className="summary-label">Avg:</span>
+                                    <span className="summary-value">{formatRate(avgRate, pair.pay, pair.get)}</span>
+                                </span>
+                            )}
+                            <span className="summary-item">
+                                <span className="summary-label">Listings:</span>
+                                <span className="summary-value">{pair.listings.length}</span>
+                            </span>
+                            {totalStock > 0 && (
+                                <span className="summary-item">
+                                    <span className="summary-label">Stock:</span>
+                                    <span className="summary-value">{totalStock}</span>
+                                </span>
+                            )}
+                        </>}
+                    </div>
                 </div>
 
                 <div className="pair-controls">
@@ -140,27 +145,6 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
                         </div>
                     ) : (
                         <>
-                            {pair.best_rate && (
-                                <div className="best-rate">
-                                    <div>
-                                        <span className="label">Best Rate:</span>
-                                        <span className="value">{formatRate(pair.best_rate, pair.pay, pair.get)}</span>
-                                    </div>
-                                    {avgRate && (
-                                        <div>
-                                            <span className="label">Average:</span>
-                                            <span className="value">{formatRate(avgRate, pair.pay, pair.get)}</span>
-                                        </div>
-                                    )}
-                                    {totalStock > 0 && (
-                                        <div>
-                                            <span className="label">Total Stock:</span>
-                                            <span className="value">{totalStock}</span>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
                             <div className="listings-section">
                                 <div className="listings-header">
                                     {pair.listings.length} Listing{pair.listings.length !== 1 ? 's' : ''}
@@ -185,6 +169,7 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
                                             </span>
                                             {l.whisper && (
                                                 <span
+                                                    className="whisper-scrollbar"
                                                     onClick={() => copyWhisper(l.whisper!, i)}
                                                     style={{
                                                         flex: '1 1 auto',
@@ -200,8 +185,8 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
                                                         fontFamily: 'monospace',
                                                         transition: 'all 0.2s',
                                                         userSelect: 'none',
-                                                        overflow: 'hidden',
-                                                        textOverflow: 'ellipsis',
+                                                        overflowX: 'auto',
+                                                        overflowY: 'hidden',
                                                         whiteSpace: 'nowrap',
                                                         alignSelf: 'center'
                                                     }}

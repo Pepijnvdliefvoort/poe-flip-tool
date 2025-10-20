@@ -3,43 +3,53 @@
   "trades": [
     {
       "get": "divine",
-      "pay": "chaos"
+      "pay": "chaos",
+      "hot": false
     },
     {
       "get": "chaos",
-      "pay": "divine"
+      "pay": "divine",
+      "hot": false
     },
     {
       "get": "mirror",
-      "pay": "divine"
+      "pay": "divine",
+      "hot": true
     },
     {
       "get": "divine",
-      "pay": "mirror"
+      "pay": "mirror",
+      "hot": false
     },
     {
       "get": "divine",
-      "pay": "hinekoras-lock"
+      "pay": "hinekoras-lock",
+      "hot": false
     },
     {
       "get": "mirror",
-      "pay": "hinekoras-lock"
+      "pay": "hinekoras-lock",
+      "hot": false
     },
     {
       "get": "hinekoras-lock",
-      "pay": "divine"
+      "pay": "divine",
+      "hot": false
     },
     {
       "get": "hinekoras-lock",
-      "pay": "mirror"
+      "pay": "mirror",
+      "hot": false
     },
     {
       "get": "divine",
-      "pay": "mirror-shard"
+      "pay": "mirror-shard",
+      "hot": false
     },
     {
       "get": "mirror-shard",
-      "pay": "divine"
+      "pay": "divine",
+      "hot": false
     }
   ]
 }

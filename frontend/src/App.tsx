@@ -111,6 +111,17 @@ export default function App() {
     updateRateLimit();
   }
 
+  const updateHotStatus = (index: number, hot: boolean) => {
+    setData(prev => {
+      if (!prev) return prev;
+      const results = [...prev.results];
+      if (results[index]) {
+        results[index] = { ...results[index], hot };
+      }
+      return { ...prev, results };
+    });
+  };
+
   // Optionally, fallback poll every 30s in case no user actions
   useEffect(() => {
     const interval = setInterval(() => {
@@ -178,7 +189,7 @@ export default function App() {
           <TradesTable data={data?.results || []} loading={loading} onReload={reloadPair} />
         </div>
         <aside className="config-sidebar">
-          <ConfigPanel onChanged={load} />
+          <ConfigPanel onChanged={load} onHotToggled={updateHotStatus} />
         </aside>
       </div>
 

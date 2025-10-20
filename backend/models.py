@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 class TradePair(BaseModel):
     get: str
     pay: str
+    hot: bool = Field(default=False)
 
 
 class ConfigData(BaseModel):
@@ -29,6 +30,7 @@ class PairSummary(BaseModel):
     index: int
     get: str
     pay: str
+    hot: bool = Field(default=False)
     status: str  # "ok" | "error" | "invalid" | "rate_limited"
     listings: List[ListingSummary] = Field(default_factory=list)
     best_rate: Optional[float] = None
