@@ -1,0 +1,15 @@
+{
+  "league": "Standard",
+  "trades": [
+    {"get": "divine", "pay": "chaos"},
+    {"get": "chaos", "pay": "divine"},
+    {"get": "mirror", "pay": "divine"},
+    {"get": "divine", "pay": "mirror"},
+    {"get": "divine", "pay": "hinekora_lock"},
+    {"get": "mirror", "pay": "hinekora_lock"},
+    {"get": "lock", "pay": "divine"},
+    {"get": "lock", "pay": "mirror"},
+    {"get": "divine", "pay": "mirror_shard"},
+    {"get": "mirror_shard", "pay": "divine"}
+  ]
+}
