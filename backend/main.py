@@ -53,7 +53,7 @@ def refresh_one_trade(index: int = Query(..., ge=0), top_n: int = Query(5, ge=1,
 
 # SSE endpoint for incremental trades loading
 @app.get("/api/trades/stream")
-async def stream_trades(request: Request, delay_s: float = Query(1.5, ge=0.0, le=5.0), top_n: int = Query(5, ge=1, le=20)):
+async def stream_trades(request: Request, delay_s: float = Query(2, ge=0.0, le=5.0), top_n: int = Query(5, ge=1, le=20)):
     cfg = _load_config()
     async def event_generator():
         for idx, t in enumerate(cfg.trades):

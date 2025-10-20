@@ -8,6 +8,8 @@ export type ListingSummary = {
   want_amount: number
   stock?: number | null
   seller?: string | null
+  account_name?: string | null
+  whisper?: string | null
   indexed?: string | null
 }
 

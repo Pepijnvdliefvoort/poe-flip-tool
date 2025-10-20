@@ -20,6 +20,8 @@ class ListingSummary(BaseModel):
     want_amount: float
     stock: Optional[int] = None
     seller: Optional[str] = None
+    account_name: Optional[str] = None
+    whisper: Optional[str] = None
     indexed: Optional[str] = None
 
 

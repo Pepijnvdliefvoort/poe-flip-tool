@@ -16,10 +16,17 @@ function formatRate(num: number, have?: string, want?: string): string {
 
 function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: PairSummary; defaultExpanded: boolean; loading: boolean; onReload: (index: number) => void }) {
     const [isExpanded, setIsExpanded] = useState(defaultExpanded)
+    const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
 
     useEffect(() => {
         setIsExpanded(defaultExpanded)
     }, [defaultExpanded])
+    
+    const copyWhisper = (whisper: string, index: number) => {
+        navigator.clipboard.writeText(whisper)
+        setCopiedIndex(index)
+        setTimeout(() => setCopiedIndex(null), 2000)
+    }
 
     const avgRate = pair.listings.length > 0
         ? pair.listings.reduce((sum, l) => sum + l.rate, 0) / pair.listings.length
@@ -67,7 +74,7 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
                                 {pair.best_rate && (
                                     <span className="summary-item">
                                         <span className="summary-label">Best:</span>
-                                        <span className="summary-value">{formatRate(pair.best_rate, pair.pay, pair.get)}</span>
+                                        <span className="summary-value" style={{ color: 'var(--accent)', fontWeight: 500 }}>{formatRate(pair.best_rate, pair.pay, pair.get)}</span>
                                     </span>
                                 )}
                                 {avgRate && (
@@ -162,21 +169,48 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
                                 <div className="listings-list">
                                     {pair.listings.map((l, i) => (
                                         <div key={i} className="listing-card compact">
-                                            <span className="listing-rank">#{i + 1}</span>
-                                            <span className="rate-value" style={{ color: 'var(--accent)', fontWeight: 500 }}>{formatRate(l.rate, l.have_currency, l.want_currency)}</span>
-                                            <span className="rate-currencies">
+                                            <span className="listing-rank" style={{ width: '40px', flexShrink: 0 }}>#{i + 1}</span>
+                                            <span className="rate-value" style={{ color: 'var(--accent)', fontWeight: 500, width: '60px', flexShrink: 0 }}>{formatRate(l.rate, l.have_currency, l.want_currency)}</span>
+                                            <span className="rate-currencies" style={{ width: '50px', flexShrink: 0 }}>
                                                 <CurrencyIcon currency={l.have_currency} size={14} />
                                                 <span>/</span>
                                                 <CurrencyIcon currency={l.want_currency} size={14} />
                                             </span>
-                                            <span className="listing-info">
+                                            <span className="listing-info" style={{ width: '80px', flexShrink: 0 }}>
                                                 <span className="meta-label">Stock:</span>
                                                 <span className="meta-value">{l.stock ?? '∞'}</span>
                                             </span>
-                                            <span className="listing-info">
-                                                <span className="meta-label">Seller:</span>
-                                                <span className="meta-value">{l.seller ?? 'Unknown'}</span>
+                                            <span className="listing-info" style={{ width: '180px', flexShrink: 0 }}>
+                                                <span className="meta-label">Account:</span>
+                                                <span className="meta-value">{l.account_name || 'Unknown'}</span>
                                             </span>
+                                            {l.whisper && (
+                                                <span
+                                                    onClick={() => copyWhisper(l.whisper!, i)}
+                                                    style={{
+                                                        flex: '1 1 auto',
+                                                        minWidth: 0,
+                                                        padding: '4px 8px',
+                                                        fontSize: '11px',
+                                                        background: copiedIndex === i ? '#10b981' : 'rgba(100, 100, 100, 0.1)',
+                                                        color: copiedIndex === i ? 'white' : 'rgba(156, 163, 175, 0.7)',
+                                                        border: '1px solid',
+                                                        borderColor: copiedIndex === i ? '#10b981' : 'rgba(156, 163, 175, 0.3)',
+                                                        borderRadius: '4px',
+                                                        cursor: 'pointer',
+                                                        fontFamily: 'monospace',
+                                                        transition: 'all 0.2s',
+                                                        userSelect: 'none',
+                                                        overflow: 'hidden',
+                                                        textOverflow: 'ellipsis',
+                                                        whiteSpace: 'nowrap',
+                                                        alignSelf: 'center'
+                                                    }}
+                                                    title={copiedIndex === i ? 'Copied!' : `Click to copy: ${l.whisper}`}
+                                                >
+                                                    {copiedIndex === i ? '✓ Copied!' : l.whisper}
+                                                </span>
+                                            )}
                                             {l.indexed && (
                                                 <span className="listing-time">
                                                     {new Date(l.indexed).toLocaleString()}
