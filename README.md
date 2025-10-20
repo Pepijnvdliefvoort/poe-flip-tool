@@ -12,10 +12,14 @@ A modern, real-time market analysis tool for **Path of Exile** currency trading.
 
 - **Real-time Market Data**: Stream trade data asynchronously with Server-Sent Events (SSE)
 - **Smart Caching**: Intelligent TTL-based caching to avoid rate limits and reduce API load
-- **Modern UI**: Clean, compact interface with currency icons, collapsible pairs, and loading animations
+- **Hot/Cold Trade Marking**: Mark specific trade pairs as "hot" for closer monitoring with visual indicators
+- **Whisper Messages**: Click-to-copy whisper messages for quick seller contact
+- **Account Information**: View both character and account names for each listing
+- **Modern UI**: Clean, compact two-column config panel with currency icons and collapsible pairs
 - **Configurable**: Easy-to-manage trade pairs and league settings via REST API
 - **Async Loading**: Trades load one-by-one with visual feedback (spinners & placeholder rows)
-- **Professional Design**: Dark theme, modern animations, and responsive layout
+- **Professional Design**: Dark theme, modern animations, custom scrollbars, and responsive layout
+- **Rate Limit Protection**: Soft throttling and hard blocking to prevent API lockouts
 
 ---
 
@@ -89,10 +93,12 @@ The frontend will be available at `http://localhost:5173`
 ## 🎮 Usage
 
 ### Basic Workflow
-1. **Configure Trade Pairs**: Use the config panel on the right to add/remove currency pairs (e.g., Divine → Chaos)
-2. **Load Market Data**: Click "Load Cached" to fetch current market listings
-3. **Analyze Results**: View best rates, average prices, stock levels, and seller information
-4. **Collapse/Expand**: Use the expand/collapse buttons to manage visibility
+1. **Configure Trade Pairs**: Use the compact config panel on the right to add/remove currency pairs (e.g., Divine → Chaos)
+2. **Mark Hot Trades**: Toggle the 🔥/❄️ icon to mark trades you want to monitor closely - hot trades get visual highlighting
+3. **Load Market Data**: Click "Load Cached" to fetch current market listings
+4. **Analyze Results**: View best rates, average prices, stock levels, account names, and whisper messages
+5. **Copy Whisper**: Click any whisper message to copy it to clipboard for quick seller contact
+6. **Collapse/Expand**: Use the expand/collapse buttons to manage visibility of trade details
 
 ### API Endpoints
 
@@ -195,23 +201,27 @@ Potential improvements:
 poe-flip-tool/
 ├── backend/
 │   ├── main.py              # FastAPI app & routes
-│   ├── models.py            # Pydantic models
-│   ├── trade_logic.py       # PoE Trade API logic & caching
+│   ├── models.py            # Pydantic models (TradePair, PairSummary, etc.)
+│   ├── trade_logic.py       # PoE Trade API logic, caching & whisper extraction
+│   ├── rate_limiter.py      # Rate limiting with soft throttling
 │   ├── config.json          # Trade pair configuration
-│   └── requirements.txt     # Python dependencies
+│   ├── requirements.txt     # Python dependencies
+│   └── .env                 # Environment variables (POESESSID, CF_CLEARANCE)
 ├── frontend/
 │   ├── src/
-│   │   ├── App.tsx          # Main React component
+│   │   ├── App.tsx          # Main React component with SSE streaming
 │   │   ├── api.ts           # API client
 │   │   ├── types.ts         # TypeScript types
 │   │   ├── spinner.css      # Loading animations
 │   │   └── components/
-│   │       ├── TradesTable.tsx    # Market listings display
-│   │       ├── ConfigPanel.tsx    # Configuration UI
+│   │       ├── TradesTable.tsx    # Market listings with whisper copy
+│   │       ├── ConfigPanel.tsx    # Two-column config with hot/cold toggles
 │   │       └── CurrencyIcon.tsx   # Currency icons
+│   ├── public/
+│   │   └── currency/        # Currency icon images
 │   ├── index.html           # HTML entry & global CSS
 │   ├── package.json         # Node dependencies
-│   └── vite.config.ts       # Vite configuration
+│   └── vite.config.ts       # Vite configuration with proxy
 └── README.md                # You are here!
 ```
 
