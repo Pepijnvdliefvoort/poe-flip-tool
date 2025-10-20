@@ -5,8 +5,8 @@ import { CurrencyIcon } from './CurrencyIcon'
 
 export function ConfigPanel({ onChanged }: { onChanged: () => void }) {
     const [cfg, setCfg] = useState<ConfigData | null>(null)
-    const [get, setGet] = useState('divine')
-    const [pay, setPay] = useState('chaos')
+    const [get, setGet] = useState('')
+    const [pay, setPay] = useState('')
     const [saving, setSaving] = useState(false)
 
     useEffect(() => { Api.getConfig().then(setCfg) }, [])
