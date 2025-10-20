@@ -113,6 +113,14 @@ def summarize_exchange_json(data: Dict[str, Any], top_n: int = 5) -> List[Listin
         ))
 
     out.sort(key=lambda e: (e.rate if e.rate is not None else math.inf))
+    
+    # Filter out outliers based on median rate (removes price fixers / wrong prices)
+    if len(out) >= 3:
+        rates = [e.rate for e in out]
+        mid_idx = len(rates) // 2
+        median = rates[mid_idx] if len(rates) % 2 != 0 else (rates[mid_idx - 1] + rates[mid_idx]) / 2
+        out = [e for e in out if median / 2 <= e.rate <= median * 2]
+    
     return out[:max(1, int(top_n))]
 
 

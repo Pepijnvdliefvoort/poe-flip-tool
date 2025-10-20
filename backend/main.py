@@ -1,3 +1,9 @@
+# ...existing code...
+from trade_logic import fetch_listings_force
+# ...existing code...
+# POST /api/trades/refresh_one?index=<i>&top_n=5
+from models import PairSummary, TradesResponse
+
 import json
 import time
 
@@ -23,15 +29,37 @@ logging.basicConfig(
 )
 log = logging.getLogger("poe-backend")
 
+@app.post("/api/trades/refresh_one", response_model=PairSummary)
+def refresh_one_trade(index: int = Query(..., ge=0), top_n: int = Query(5, ge=1, le=20)):
+    cfg = _load_config()
+    if not (0 <= index < len(cfg.trades)):
+        raise HTTPException(status_code=404, detail="Trade pair not found")
+    t = cfg.trades[index]
+    from rate_limiter import rate_limiter
+    if rate_limiter.blocked:
+        return PairSummary(index=index, get=t.get, pay=t.pay, status="rate_limited", listings=[], best_rate=None, count_returned=0)
+    listings = fetch_listings_force(league=cfg.league, have=t.pay, want=t.get, top_n=top_n)
+    if listings is None:
+        return PairSummary(index=index, get=t.get, pay=t.pay, status="error", listings=[], best_rate=None, count_returned=0)
+    return PairSummary(
+        index=index,
+        get=t.get,
+        pay=t.pay,
+        status="ok",
+        listings=listings,
+        best_rate=(listings[0].rate if listings else None),
+        count_returned=len(listings),
+    )
+
 # SSE endpoint for incremental trades loading
 @app.get("/api/trades/stream")
-async def stream_trades(request: Request, delay_s: float = Query(2.0, ge=0.0, le=5.0), top_n: int = Query(5, ge=1, le=20)):
+async def stream_trades(request: Request, delay_s: float = Query(1.5, ge=0.0, le=5.0), top_n: int = Query(5, ge=1, le=20)):
     cfg = _load_config()
     async def event_generator():
         for idx, t in enumerate(cfg.trades):
             if await request.is_disconnected():
                 break
-            if rate_limiter.throttled:
+            if rate_limiter.blocked:
                 summary = PairSummary(index=idx, get=t.get, pay=t.pay, status="rate_limited", listings=[], best_rate=None, count_returned=0)
             else:
                 listings = fetch_listings_with_cache(league=cfg.league, have=t.pay, want=t.get, top_n=top_n)

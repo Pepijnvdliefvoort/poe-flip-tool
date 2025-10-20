@@ -6,7 +6,7 @@ import { CurrencyIcon } from './CurrencyIcon'
 // Format rate: show as integer if whole, otherwise as fraction if < 0.01, else 2 decimals
 function formatRate(num: number, have?: string, want?: string): string {
     if (num % 1 === 0) return num.toString();
-    if (num > 0 && num < 0.01 && have && want) {
+    if (num > 0 && num < 1 && have && want) {
         // Try to show as 1/x
         const denom = Math.round(1 / num);
         return `1/${denom}`;
@@ -40,19 +40,17 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
 
     return (
         <div className="pair-card">
-            <div 
-                className="pair-header collapsible" 
+            <div
+                className="pair-header collapsible"
                 onClick={() => setIsExpanded(!isExpanded)}
                 style={{ cursor: 'pointer' }}
             >
                 <div className="pair-info">
                     <span className="pair-index">#{pair.index}</span>
                     <span className="pair-badge">
-                        <CurrencyIcon currency={pair.pay} size={20} /> 
-                        <span style={{ color: 'var(--muted)' }}>{pair.pay}</span>
+                        <CurrencyIcon currency={pair.pay} size={20} />
                         <span style={{ margin: '0 8px', color: 'var(--muted)' }}>→</span>
                         <CurrencyIcon currency={pair.get} size={20} />
-                        <span style={{ color: 'var(--muted)' }}>{pair.get}</span>
                     </span>
 
                     {/* Collapsed Summary */}
@@ -61,9 +59,9 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
                             {loading && pair.listings.length === 0 ? (
                                 <>
                                     <span className="row-spinner"><span className="spinner small"></span></span>
-                                    <span className="blurred-line" style={{width: 40}}></span>
-                                    <span className="blurred-line" style={{width: 30}}></span>
-                                    <span className="blurred-line" style={{width: 24}}></span>
+                                    <span className="blurred-line" style={{ width: 40 }}></span>
+                                    <span className="blurred-line" style={{ width: 30 }}></span>
+                                    <span className="blurred-line" style={{ width: 24 }}></span>
                                 </>
                             ) : <>
                                 {pair.best_rate && (
@@ -92,7 +90,7 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
                         </div>
                     )}
                 </div>
-                
+
                 <div className="pair-controls">
                     <div className="pair-status">
                         {pair.status === 'ok' && <span className="status-badge ok">✓ Online</span>}
@@ -127,10 +125,10 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
                             <div className="listings-list">
                                 <div className="listing-card compact">
                                     <span className="row-spinner"><span className="spinner small"></span></span>
-                                    <span className="blurred-line" style={{width: 50}}></span>
-                                    <span className="blurred-line" style={{width: 40}}></span>
-                                    <span className="blurred-line" style={{width: 60}}></span>
-                                    <span className="blurred-line" style={{width: 80}}></span>
+                                    <span className="blurred-line" style={{ width: 50 }}></span>
+                                    <span className="blurred-line" style={{ width: 40 }}></span>
+                                    <span className="blurred-line" style={{ width: 60 }}></span>
+                                    <span className="blurred-line" style={{ width: 80 }}></span>
                                 </div>
                             </div>
                         </div>
@@ -165,7 +163,7 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
                                     {pair.listings.map((l, i) => (
                                         <div key={i} className="listing-card compact">
                                             <span className="listing-rank">#{i + 1}</span>
-                                            <span className="rate-value">{formatRate(l.rate, l.have_currency, l.want_currency)}</span>
+                                            <span className="rate-value" style={{ color: 'var(--accent)', fontWeight: 500 }}>{formatRate(l.rate, l.have_currency, l.want_currency)}</span>
                                             <span className="rate-currencies">
                                                 <CurrencyIcon currency={l.have_currency} size={14} />
                                                 <span>/</span>
@@ -207,8 +205,8 @@ export function TradesTable({ data, loading, onReload }: { data: PairSummary[]; 
             <div className="section-header">
                 <h2>Market Listings</h2>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <button 
-                        className="btn ghost" 
+                    <button
+                        className="btn ghost"
                         onClick={() => setAllExpanded(!allExpanded)}
                         style={{ padding: '6px 12px', fontSize: '13px' }}
                     >
