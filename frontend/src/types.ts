@@ -15,7 +15,7 @@ export type PairSummary = {
   index: number
   get: string
   pay: string
-  status: 'ok' | 'error' | 'invalid'
+  status: 'ok' | 'error' | 'invalid' | 'loading'
   listings: ListingSummary[]
   best_rate?: number | null
   count_returned: number

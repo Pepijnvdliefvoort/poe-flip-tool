@@ -1,23 +1,54 @@
 import json
 import time
+
+import json
+import time
 import logging
 from pathlib import Path
 from typing import Any, Dict, List
 
-from fastapi import FastAPI, Query, HTTPException
+from fastapi import FastAPI, Query, HTTPException, Request
 from fastapi import Body
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
 from models import ConfigData, TradePair, PairSummary, TradesResponse, TradesPatch
 from trade_logic import fetch_listings_with_cache
 
+app = FastAPI(title="PoE Trade Backend")
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s",
 )
 log = logging.getLogger("poe-backend")
 
-app = FastAPI(title="PoE Trade Backend")
+# SSE endpoint for incremental trades loading
+@app.get("/api/trades/stream")
+async def stream_trades(request: Request, delay_s: float = Query(2.0, ge=0.0, le=5.0), top_n: int = Query(5, ge=1, le=20)):
+    cfg = _load_config()
+    async def event_generator():
+        for idx, t in enumerate(cfg.trades):
+            if await request.is_disconnected():
+                break
+            listings = fetch_listings_with_cache(league=cfg.league, have=t.pay, want=t.get, top_n=top_n)
+            if listings is None:
+                summary = PairSummary(index=idx, get=t.get, pay=t.pay, status="error", listings=[], best_rate=None, count_returned=0)
+            else:
+                summary = PairSummary(
+                    index=idx,
+                    get=t.get,
+                    pay=t.pay,
+                    status="ok",
+                    listings=listings,
+                    best_rate=(listings[0].rate if listings else None),
+                    count_returned=len(listings),
+                )
+            log.info(f"[SSE {idx}] {t.pay}->{t.get}: status={summary.status} best_rate={summary.best_rate} count={summary.count_returned}")
+            yield f"data: {json.dumps(summary.dict())}\n\n"
+            if delay_s:
+                import asyncio
+                await asyncio.sleep(delay_s)
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 app.add_middleware(
     CORSMiddleware,

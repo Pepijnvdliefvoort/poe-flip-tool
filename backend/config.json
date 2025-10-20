@@ -4,6 +4,10 @@
     {
       "get": "divine",
       "pay": "chaos"
+    },
+    {
+      "get": "mirror-shard",
+      "pay": "divine"
     }
   ]
 }
