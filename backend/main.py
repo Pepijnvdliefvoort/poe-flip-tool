@@ -90,6 +90,7 @@ def patch_trades(patch: TradesPatch = Body(...)):
         cfg.trades.append(pair)
 
     _save_config(cfg)
+    return cfg
 
 @app.post("/api/trades/refresh", response_model=TradesResponse)
 def refresh_trades(

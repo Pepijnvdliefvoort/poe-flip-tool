@@ -38,52 +38,101 @@ export function ConfigPanel({ onChanged }: { onChanged: () => void }) {
         } finally { setSaving(false) }
     }
 
-    if (!cfg) return <div className="card">Loading config…</div>
+    if (!cfg) return <div className="card"><p style={{color: 'var(--muted)'}}>Loading configuration…</p></div>
 
     return (
         <div className="card">
-            <h2 style={{ marginTop: 0 }}>Config</h2>
+            <h2>Configuration</h2>
 
-            <div className="row" style={{ alignItems: 'center' }}>
-                <div>
-                    <div className="muted" style={{ marginBottom: 6 }}>League</div>
-                    <select value={cfg.league} onChange={(e) => changeLeague(e.target.value)}>
-                        <option value="Standard">Standard</option>
-                        <option value="Hardcore">Hardcore</option>
-                        <option value="SSF Standard">SSF Standard</option>
-                        <option value="SSF Hardcore">SSF Hardcore</option>
-                    </select>
-                </div>
+            <div style={{ marginBottom: 24 }}>
+                <label className="muted">League</label>
+                <select 
+                    value={cfg.league} 
+                    onChange={(e) => changeLeague(e.target.value)}
+                    disabled={saving}
+                >
+                    <option value="Settlers">Settlers</option>
+                    <option value="Standard">Standard</option>
+                    <option value="Hardcore">Hardcore</option>
+                    <option value="Hardcore Settlers">Hardcore Settlers</option>
+                    <option value="SSF Settlers">SSF Settlers</option>
+                    <option value="SSF Standard">SSF Standard</option>
+                    <option value="HC SSF Settlers">HC SSF Settlers</option>
+                    <option value="SSF Hardcore">SSF Hardcore</option>
+                </select>
             </div>
 
-            <div style={{ height: 12 }} />
+            <div style={{ marginBottom: 24 }}>
+                <label className="muted">Trade Pairs ({cfg.trades.length})</label>
+                {cfg.trades.length > 0 ? (
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style={{width: 40}}>#</th>
+                                <th>Pair</th>
+                                <th style={{width: 80}}></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {cfg.trades.map((t, i) => (
+                                <tr key={i}>
+                                    <td style={{color: 'var(--muted)'}}>{i}</td>
+                                    <td>
+                                        <span style={{
+                                            padding: '4px 10px',
+                                            background: 'var(--bg-secondary)',
+                                            borderRadius: '6px',
+                                            fontSize: '13px',
+                                            fontWeight: 600
+                                        }}>
+                                            {t.pay} → {t.get}
+                                        </span>
+                                    </td>
+                                    <td style={{ textAlign: 'right' }}>
+                                        <button 
+                                            className="btn ghost" 
+                                            onClick={() => removePair(i)} 
+                                            disabled={saving}
+                                            style={{padding: '6px 12px', fontSize: '12px'}}
+                                        >
+                                            Remove
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                ) : (
+                    <p style={{color: 'var(--muted)', fontSize: 14, fontStyle: 'italic'}}>
+                        No trade pairs configured. Add one below.
+                    </p>
+                )}
+            </div>
 
             <div>
-                <div className="muted" style={{ marginBottom: 6 }}>Trades</div>
-                <table>
-                    <thead>
-                        <tr><th>#</th><th>Pair</th><th></th></tr>
-                    </thead>
-                    <tbody>
-                        {cfg.trades.map((t, i) => (
-                            <tr key={i}>
-                                <td>{i}</td>
-                                <td><span className="pill">{t.pay} → {t.get}</span></td>
-                                <td style={{ textAlign: 'right' }}>
-                                    <button className="btn ghost" onClick={() => removePair(i)} disabled={saving}>Remove</button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-
-            <div style={{ height: 12 }} />
-
-            <div className="row">
-                <input placeholder="get e.g. divine" value={get} onChange={e => setGet(e.target.value)} />
-                <input placeholder="pay e.g. chaos" value={pay} onChange={e => setPay(e.target.value)} />
-                <button className="btn" onClick={addPair} disabled={saving}>Add pair</button>
+                <label className="muted">Add New Pair</label>
+                <div style={{display: 'flex', flexDirection: 'column', gap: 8}}>
+                    <input 
+                        placeholder="Want (e.g. divine)" 
+                        value={get} 
+                        onChange={e => setGet(e.target.value)}
+                        disabled={saving}
+                    />
+                    <input 
+                        placeholder="Pay (e.g. chaos)" 
+                        value={pay} 
+                        onChange={e => setPay(e.target.value)}
+                        disabled={saving}
+                    />
+                    <button 
+                        className="btn primary" 
+                        onClick={addPair} 
+                        disabled={saving || !get.trim() || !pay.trim()}
+                        style={{width: '100%'}}
+                    >
+                        {saving ? 'Adding...' : 'Add Trade Pair'}
+                    </button>
+                </div>
             </div>
         </div>
     )

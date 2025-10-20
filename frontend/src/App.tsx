@@ -33,36 +33,43 @@ export default function App() {
 
   return (
     <div className="container">
-      <div className="row" style={{alignItems:'center', justifyContent:'space-between'}}>
-        <h1 style={{margin:0}}>PoE Flip Tool</h1>
-        <div className="row" style={{alignItems:'center'}}>
-          <label className="muted" style={{marginRight:8}}>Top N</label>
-          <input
-            type="number"
-            min={1}
-            max={20}
-            value={topN}
-            onChange={e=>setTopN(Number(e.target.value) || 5)}
-            style={{width:80}}
-          />
-          <button className="btn secondary" onClick={load} style={{marginLeft:8}}>Load</button>
-          <button className="btn" onClick={refresh} style={{marginLeft:8}}>Refresh live</button>
+      <header className="app-header">
+        <h1>PoE Flip Tool</h1>
+        <div className="controls">
+          <div className="control-group">
+            <label htmlFor="topn-input">Top Results</label>
+            <input
+              id="topn-input"
+              type="number"
+              min={1}
+              max={20}
+              value={topN}
+              onChange={e=>setTopN(Number(e.target.value) || 5)}
+              className="topn-input"
+            />
+          </div>
+          <button className="btn secondary" onClick={load} disabled={loading}>
+            {loading ? 'Loading...' : 'Load'}
+          </button>
+          <button className="btn primary" onClick={refresh} disabled={loading}>
+            {loading ? 'Refreshing...' : 'Refresh Live'}
+          </button>
         </div>
-      </div>
-
-      <div style={{height:12}}/>
+      </header>
 
       {data ? (
-        <div className="row">
-          <div style={{flex:2}}>
+        <div className="main-layout">
+          <div className="trades-section">
             <TradesTable data={data.results} loading={loading} />
           </div>
-          <div style={{flex:1}}>
+          <aside className="config-sidebar">
             <ConfigPanel onChanged={load} />
-          </div>
+          </aside>
         </div>
       ) : (
-        <div className="card">No data yet. Click <b>Load</b>.</div>
+        <div className="empty-state">
+          <p>No data yet. Click <strong>Load</strong> to fetch market data.</p>
+        </div>
       )}
     </div>
   )

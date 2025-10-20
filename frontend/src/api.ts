@@ -25,7 +25,9 @@ export const Api = {
         }))
     },
     async patchLeague(league: string): Promise<ConfigData> {
-        return j(await fetch(`${BASE}/api/config/league?league=${encodeURIComponent(league)}`))
+        return j(await fetch(`${BASE}/api/config/league?league=${encodeURIComponent(league)}`, {
+            method: 'PATCH'
+        }))
     },
     async patchTrades(body: { add?: TradePair[]; remove_indices?: number[] }): Promise<ConfigData> {
         return j(await fetch(`${BASE}/api/config/trades`, {
