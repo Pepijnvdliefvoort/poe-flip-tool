@@ -50,6 +50,16 @@
       "get": "mirror-shard",
       "pay": "divine",
       "hot": false
+    },
+    {
+      "get": "exalted",
+      "pay": "chaos",
+      "hot": false
+    },
+    {
+      "get": "chaos",
+      "pay": "exalted",
+      "hot": false
     }
   ]
 }

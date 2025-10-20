@@ -179,7 +179,7 @@ export default function App() {
             />
           </div>
           <button className="btn primary" onClick={load} disabled={loading}>
-            {loading ? 'Loading...' : 'Load Cached'}
+            {loading ? 'Loading...' : 'Fetch from PoE API'}
           </button>
         </div>
       </header>

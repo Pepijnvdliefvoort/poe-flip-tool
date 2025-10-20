@@ -168,7 +168,7 @@ export function ConfigPanel({ onChanged, onHotToggled }: { onChanged: () => void
                     </div>
                 ) : (
                     <p style={{color: 'var(--muted)', fontSize: 12, fontStyle: 'italic', margin: '8px 0'}}>
-                        No pairs yet
+                        No trades yet
                     </p>
                 )}
             </div>
@@ -176,7 +176,7 @@ export function ConfigPanel({ onChanged, onHotToggled }: { onChanged: () => void
             {/* Add new trade - compact */}
             <div>
                 <label className="muted" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px', display: 'block' }}>
-                    Add Pair
+                    Add Trade
                 </label>
                 <div style={{display: 'flex', flexDirection: 'column', gap: 6}}>
                     <input 
