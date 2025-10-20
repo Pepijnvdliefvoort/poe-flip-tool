@@ -11,8 +11,20 @@ export default function App() {
   const [topN, setTopN] = useState(5)
   const [rateLimit, setRateLimit] = useState<{ blocked: boolean; block_remaining: number; rules: Record<string, { current: number; limit: number; reset_s: number }[]> } | null>(null)
   const [nearLimit, setNearLimit] = useState(false)
+  const [rateLimitDisplay, setRateLimitDisplay] = useState<{ blocked: boolean; block_remaining: number; rules: Record<string, { current: number; limit: number; reset_s: number }[]> } | null>(null)
 
-
+  // Helper to update rate limit info after every API call
+  const updateRateLimit = async () => {
+    try {
+      const status = await Api.rateLimitStatus();
+      setRateLimit(status);
+      setRateLimitDisplay(status);
+      const near = Object.values(status.rules).some(ruleArr => ruleArr.some(r => r.limit > 0 && r.current / r.limit >= 0.8 && r.current < r.limit));
+      setNearLimit(near);
+    } catch (e) {
+      // ignore
+    }
+  };
 
   // SSE trades loading
   const eventSourceRef = useRef<EventSource | null>(null)
@@ -28,95 +40,106 @@ export default function App() {
         listings: [],
         best_rate: null,
         count_returned: 0
-      }))
-      setData({ league: cfg.league, pairs: emptyResults.length, results: emptyResults })
+      }));
+      setData({ league: cfg.league, pairs: emptyResults.length, results: emptyResults });
       if (eventSourceRef.current) {
-        eventSourceRef.current.close()
+        eventSourceRef.current.close();
       }
-      const url = `/api/trades/stream?top_n=${topN}`
-      const es = new window.EventSource(url)
-      eventSourceRef.current = es
-      let league = cfg.league
-      let pairs = emptyResults.length
+      const url = `/api/trades/stream?top_n=${topN}`;
+      const es = new window.EventSource(url);
+      eventSourceRef.current = es;
+      let league = cfg.league;
+      let pairs = emptyResults.length;
       es.onmessage = (event) => {
-        const summary = JSON.parse(event.data)
+        const summary = JSON.parse(event.data);
         setData(prev => {
-          const results = [...(prev?.results || [])]
-          results[summary.index] = summary
-          // Consider rate_limited or error as "arrived" so loading spinner ends.
-          const arrivedCount = results.filter(r => r.status !== 'loading').length
+          const results = [...(prev?.results || [])];
+          results[summary.index] = summary;
+          const arrivedCount = results.filter(r => r.status !== 'loading').length;
           if (pairs && arrivedCount >= pairs) {
-            setLoading(false)
+            setLoading(false);
           }
-          return { league, pairs, results }
-        })
-      }
+          return { league, pairs, results };
+        });
+        updateRateLimit();
+      };
       es.onerror = () => {
-        es.close()
-        setLoading(false)
-      }
+        es.close();
+        setLoading(false);
+        updateRateLimit();
+      };
       es.onopen = () => {
-        setLoading(true)
-      }
-    })
-    // No artificial delay or incremental loading in frontend; backend controls timing
+        setLoading(true);
+        updateRateLimit();
+      };
+    });
+    updateRateLimit();
   }, [topN])
 
   useEffect(() => { load(); return () => { eventSourceRef.current?.close() } }, [load])
 
   const reloadPair = async (index: number) => {
-    if (!data) return
-    // Optimistically set loading status for that pair
+    if (!data) return;
     setData(prev => {
-      if (!prev) return prev
-      const results = [...prev.results]
-      const p = results[index]
+      if (!prev) return prev;
+      const results = [...prev.results];
+      const p = results[index];
       if (p) {
-        results[index] = { ...p, status: 'loading', listings: [], best_rate: null, count_returned: 0 }
+        results[index] = { ...p, status: 'loading', listings: [], best_rate: null, count_returned: 0 };
       }
-      return { ...prev, results }
-    })
+      return { ...prev, results };
+    });
     try {
-      const refreshed = await Api.refreshOne(index, topN)
+      const refreshed = await Api.refreshOne(index, topN);
       setData(prev => {
-        if (!prev) return prev
-        const results = [...prev.results]
-        results[index] = refreshed
-        return { ...prev, results }
-      })
+        if (!prev) return prev;
+        const results = [...prev.results];
+        results[index] = refreshed;
+        return { ...prev, results };
+      });
     } catch (e) {
       setData(prev => {
-        if (!prev) return prev
-        const results = [...prev.results]
-        const p = results[index]
+        if (!prev) return prev;
+        const results = [...prev.results];
+        const p = results[index];
         if (p) {
-          results[index] = { ...p, status: 'error' }
+          results[index] = { ...p, status: 'error' };
         }
-        return { ...prev, results }
-      })
+        return { ...prev, results };
+      });
     }
+    updateRateLimit();
   }
 
-  // Poll rate limit status every 5s
+  // Optionally, fallback poll every 30s in case no user actions
   useEffect(() => {
-    let mounted = true
-    const poll = async () => {
-      try {
-        const status = await Api.rateLimitStatus()
-        if (!mounted) return
-        setRateLimit(status)
-        // Determine near-limit heuristic
-        const near = Object.values(status.rules).some(ruleArr => ruleArr.some(r => r.limit > 0 && r.current / r.limit >= 0.8 && r.current < r.limit))
-        setNearLimit(near)
-      } catch(e) {
-        // ignore
-      } finally {
-        if (mounted) setTimeout(poll, 5000)
-      }
-    }
-    poll()
-    return () => { mounted = false }
-  }, [])
+    const interval = setInterval(() => {
+      updateRateLimit();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Local countdown for rate limit display (updates every second, resets on API update)
+  useEffect(() => {
+    if (!rateLimit) return;
+    setRateLimitDisplay(rateLimit); // Reset to latest API values
+    const interval = setInterval(() => {
+      setRateLimitDisplay(prev => {
+        if (!prev) return prev;
+        const newBlockRemaining = Math.max(0, prev.block_remaining - 1);
+        const newRules = { ...prev.rules };
+        for (const [rule, arr] of Object.entries(newRules)) {
+          newRules[rule] = arr.map(r => ({ ...r, reset_s: Math.max(0, r.reset_s - 1) }));
+        }
+        return {
+          blocked: newBlockRemaining > 0,
+          block_remaining: newBlockRemaining,
+          rules: newRules
+        };
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [rateLimit]);
 
   return (
     <div className="container">
@@ -160,7 +183,7 @@ export default function App() {
       </div>
 
       {/* Small rate limit info box, bottom right */}
-      {rateLimit && (
+      {rateLimitDisplay && (
         <div
           style={{
             position: 'fixed',
@@ -247,7 +270,7 @@ export default function App() {
               </span>
             </span>
           </div>
-          {Object.entries(rateLimit.rules).map(([rule, arr]) => (
+          {Object.entries(rateLimitDisplay.rules).map(([rule, arr]) => (
             <div key={rule} style={{marginBottom:2}}>
               <span style={{fontWeight:500}}>{rule}:</span>{' '}
               {arr.map((r, i) => (
@@ -257,8 +280,8 @@ export default function App() {
               ))}
             </div>
           ))}
-          {rateLimit.blocked && (
-            <div style={{color:'#fee2e2', fontWeight:500}}>Blocked: {rateLimit.block_remaining.toFixed(1)}s</div>
+          {rateLimitDisplay.blocked && (
+            <div style={{color:'#fee2e2', fontWeight:500}}>Blocked: {rateLimitDisplay.block_remaining.toFixed(1)}s</div>
           )}
         </div>
       )}
