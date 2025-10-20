@@ -113,12 +113,12 @@ export function ConfigPanel({ onChanged, onHotToggled }: { onChanged: () => void
                                             style={{
                                                 padding: '4px 8px',
                                                 fontSize: '16px',
-                                                background: t.hot ? 'var(--warning)' : 'transparent',
-                                                border: t.hot ? '1px solid var(--warning)' : '1px solid var(--border)'
+                                                background: t.hot ? 'rgba(245, 158, 11, 0.2)' : 'rgba(59, 130, 246, 0.1)',
+                                                border: '1px solid var(--border)'
                                             }}
                                             title={t.hot ? "Marked as hot - click to remove" : "Click to mark as hot"}
                                         >
-                                            {t.hot ? '🔥' : '○'}
+                                            {t.hot ? '🔥' : '❄️'}
                                         </button>
                                     </td>
                                     <td style={{ textAlign: 'right' }}>

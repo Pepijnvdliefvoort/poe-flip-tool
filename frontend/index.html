@@ -149,13 +149,15 @@
         /* Layout */
         .main-layout {
             display: grid;
-            grid-template-columns: 1fr 380px;
+            grid-template-columns: minmax(0, 1fr) 380px;
             gap: 24px;
             align-items: start;
         }
 
         .trades-section {
             min-width: 0;
+            padding-left: 32px;
+            overflow: hidden;
         }
 
         .config-sidebar {
@@ -168,6 +170,7 @@
             display: flex;
             flex-direction: column;
             gap: 20px;
+            max-width: 100%;
         }
 
         .section-header {
@@ -187,6 +190,7 @@
         .pairs-grid {
             display: grid;
             gap: 12px;
+            max-width: 100%;
         }
 
         .pair-card {
@@ -196,6 +200,7 @@
             padding: 12px 12px 0px 12px;
             transition: all 0.2s;
             overflow: hidden;
+            max-width: 100%;
         }
 
         .pair-card:hover {
@@ -367,6 +372,8 @@
         .listings-section {
             margin-top: 8px;
             animation: slideDown 0.3s ease-out;
+            overflow: hidden;
+            max-width: 100%;
         }
 
         @keyframes slideDown {
@@ -393,6 +400,7 @@
             display: flex;
             flex-direction: column;
             gap: 6px;
+            width: 100%;
         }
 
         .listing-card {
@@ -403,6 +411,8 @@
             border: none;
             border-radius: 8px;
             transition: all 0.2s;
+            width: 100%;
+            box-sizing: border-box;
         }
 
         .listing-card.compact {

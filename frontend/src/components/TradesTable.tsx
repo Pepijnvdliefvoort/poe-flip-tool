@@ -46,25 +46,27 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
     }, [pair.status, remaining])
 
     return (
-        <div 
-            className="pair-card" 
-            style={{
-                border: pair.hot ? '2px solid var(--warning)' : '1px solid var(--border)',
-                background: pair.hot ? 'rgba(245, 158, 11, 0.05)' : undefined
-            }}
-        >
-            <div
-                className="pair-header collapsible"
-                onClick={() => setIsExpanded(!isExpanded)}
-                style={{ cursor: 'pointer' }}
+        <div style={{ position: 'relative', maxWidth: '100%', overflow: 'hidden' }}>
+            <div 
+                className="pair-card" 
+                style={{
+                    border: pair.hot ? '2px solid var(--warning)' : '1px solid var(--border)',
+                    background: pair.hot ? 'rgba(245, 158, 11, 0.05)' : undefined,
+                    width: '100%',
+                    boxSizing: 'border-box'
+                }}
             >
-                <div className="pair-info">
-                    <span className="pair-badge">
-                        {pair.hot && <span style={{ marginRight: 8, fontSize: 18 }}>🔥</span>}
-                        <CurrencyIcon currency={pair.pay} size={20} />
-                        <span style={{ margin: '0 8px', color: 'var(--muted)' }}>→</span>
-                        <CurrencyIcon currency={pair.get} size={20} />
-                    </span>
+                <div
+                    className="pair-header collapsible"
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    style={{ cursor: 'pointer' }}
+                >
+                    <div className="pair-info">
+                        <span className="pair-badge">
+                            <CurrencyIcon currency={pair.pay} size={20} />
+                            <span style={{ margin: '0 8px', color: 'var(--muted)' }}>→</span>
+                            <CurrencyIcon currency={pair.get} size={20} />
+                        </span>
 
                     {/* Summary - always shown in header row */}
                     <div className="collapsed-summary">
@@ -169,7 +171,7 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
                                             </span>
                                             {l.whisper && (
                                                 <span
-                                                    className="whisper-scrollbar"
+                                                    className="whisper-message"
                                                     onClick={() => copyWhisper(l.whisper!, i)}
                                                     style={{
                                                         flex: '1 1 auto',
@@ -185,8 +187,8 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
                                                         fontFamily: 'monospace',
                                                         transition: 'all 0.2s',
                                                         userSelect: 'none',
-                                                        overflowX: 'auto',
-                                                        overflowY: 'hidden',
+                                                        overflow: 'hidden',
+                                                        textOverflow: 'ellipsis',
                                                         whiteSpace: 'nowrap',
                                                         alignSelf: 'center'
                                                     }}
@@ -208,6 +210,7 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
                     )}
                 </>
             )}
+        </div>
         </div>
     )
 }
