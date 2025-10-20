@@ -11,6 +11,7 @@ import requests
 from dotenv import load_dotenv
 
 from models import ListingSummary
+from rate_limiter import rate_limiter
 
 load_dotenv()
 
@@ -54,6 +55,8 @@ def _post_exchange(league: str, have: str, want: str, timeout_s: int = 20) -> Op
         "sort": {"have": "asc"},
     }
     try:
+        # Block if currently rate limited or soft-throttled
+        rate_limiter.wait_before_request()
         resp = requests.post(
             f"{BASE_URL}/{league}",
             headers=HEADERS,
@@ -61,6 +64,8 @@ def _post_exchange(league: str, have: str, want: str, timeout_s: int = 20) -> Op
             json=payload,
             timeout=timeout_s,
         )
+        # Update limiter state using response headers
+        rate_limiter.on_response(resp.headers)
         if resp.status_code != 200:
             return None
         return resp.json()
@@ -158,4 +163,16 @@ def fetch_listings_with_cache(
         if attempt < retries:
             time.sleep(backoff_s * (2 ** attempt))
 
+    return None
+
+def fetch_listings_force(
+    *, league: str, have: str, want: str, top_n: int = 5, retries: int = 2, backoff_s: float = 0.8
+) -> Optional[List[ListingSummary]]:
+    """Fetch listings ignoring the cache (does not write to cache)."""
+    for attempt in range(retries + 1):
+        raw = _post_exchange(league, have, want)
+        if raw:
+            return summarize_exchange_json(raw, top_n=top_n)
+        if attempt < retries:
+            time.sleep(backoff_s * (2 ** attempt))
     return None

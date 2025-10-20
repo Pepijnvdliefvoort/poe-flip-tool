@@ -3,12 +3,18 @@ import '../spinner.css'
 import { PairSummary } from '../types'
 import { CurrencyIcon } from './CurrencyIcon'
 
-// Format number: show up to 2 decimals only if not a whole number
-function formatRate(num: number): string {
-    return num % 1 === 0 ? num.toString() : num.toFixed(2)
+// Format rate: show as integer if whole, otherwise as fraction if < 0.01, else 2 decimals
+function formatRate(num: number, have?: string, want?: string): string {
+    if (num % 1 === 0) return num.toString();
+    if (num > 0 && num < 0.01 && have && want) {
+        // Try to show as 1/x
+        const denom = Math.round(1 / num);
+        return `1/${denom}`;
+    }
+    return num.toFixed(2);
 }
 
-function CollapsiblePair({ pair, defaultExpanded, loading }: { pair: PairSummary; defaultExpanded: boolean; loading: boolean }) {
+function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: PairSummary; defaultExpanded: boolean; loading: boolean; onReload: (index: number) => void }) {
     const [isExpanded, setIsExpanded] = useState(defaultExpanded)
 
     useEffect(() => {
@@ -21,6 +27,17 @@ function CollapsiblePair({ pair, defaultExpanded, loading }: { pair: PairSummary
 
     const totalStock = pair.listings.reduce((sum, l) => sum + (l.stock || 0), 0)
 
+    // Countdown for rate limit remaining (local decrement to give user feedback)
+    const [remaining, setRemaining] = useState<number | null>(pair.rate_limit_remaining ?? null)
+    useEffect(() => { setRemaining(pair.rate_limit_remaining ?? null) }, [pair.rate_limit_remaining])
+    useEffect(() => {
+        if (pair.status !== 'rate_limited' || remaining === null) return
+        const id = setInterval(() => {
+            setRemaining(r => (r === null ? null : Math.max(0, r - 1)))
+        }, 1000)
+        return () => clearInterval(id)
+    }, [pair.status, remaining])
+
     return (
         <div className="pair-card">
             <div 
@@ -31,9 +48,11 @@ function CollapsiblePair({ pair, defaultExpanded, loading }: { pair: PairSummary
                 <div className="pair-info">
                     <span className="pair-index">#{pair.index}</span>
                     <span className="pair-badge">
-                        <CurrencyIcon currency={pair.pay} size={20} />
+                        <CurrencyIcon currency={pair.pay} size={20} /> 
+                        <span style={{ color: 'var(--muted)' }}>{pair.pay}</span>
                         <span style={{ margin: '0 8px', color: 'var(--muted)' }}>→</span>
                         <CurrencyIcon currency={pair.get} size={20} />
+                        <span style={{ color: 'var(--muted)' }}>{pair.get}</span>
                     </span>
 
                     {/* Collapsed Summary */}
@@ -50,13 +69,13 @@ function CollapsiblePair({ pair, defaultExpanded, loading }: { pair: PairSummary
                                 {pair.best_rate && (
                                     <span className="summary-item">
                                         <span className="summary-label">Best:</span>
-                                        <span className="summary-value">{formatRate(pair.best_rate)}</span>
+                                        <span className="summary-value">{formatRate(pair.best_rate, pair.pay, pair.get)}</span>
                                     </span>
                                 )}
                                 {avgRate && (
                                     <span className="summary-item">
                                         <span className="summary-label">Avg:</span>
-                                        <span className="summary-value">{formatRate(avgRate)}</span>
+                                        <span className="summary-value">{formatRate(avgRate, pair.pay, pair.get)}</span>
                                     </span>
                                 )}
                                 <span className="summary-item">
@@ -76,23 +95,33 @@ function CollapsiblePair({ pair, defaultExpanded, loading }: { pair: PairSummary
                 
                 <div className="pair-controls">
                     <div className="pair-status">
-                        {pair.status === 'ok' ? (
-                            <span className="status-badge ok">✓ Online</span>
-                        ) : pair.status === 'loading' ? (
-                            <span className="status-badge loading">Loading...</span>
-                        ) : (
-                            <span className="status-badge error">{pair.status}</span>
-                        )}
+                        {pair.status === 'ok' && <span className="status-badge ok">✓ Online</span>}
+                        {pair.status === 'loading' && <span className="status-badge loading">Loading...</span>}
+                        {pair.status === 'error' && <span className="status-badge error">Error</span>}
+                        {pair.status === 'invalid' && <span className="status-badge error">Invalid</span>}
+                        {pair.status === 'rate_limited' && <span className="status-badge blocked">Rate Limited{remaining !== null ? ` (${remaining.toFixed(0)}s)` : ''}</span>}
                     </div>
-                    <button className="collapse-btn" onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded) }}>
-                        {isExpanded ? '▼' : '▶'}
-                    </button>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                        <button className="collapse-btn" onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded) }}>
+                            {isExpanded ? '▼' : '▶'}
+                        </button>
+                        <button
+                            className="collapse-btn"
+                            disabled={pair.status === 'loading'}
+                            onClick={(e) => { e.stopPropagation(); onReload(pair.index) }}
+                            style={{ fontSize: '14px' }}
+                        >⟳</button>
+                    </div>
                 </div>
             </div>
 
             {isExpanded && (
                 <>
-                    {loading && pair.listings.length === 0 ? (
+                    {pair.status === 'rate_limited' ? (
+                        <div className="listings-section">
+                            <div className="listings-header">Temporarily rate limited – listings unavailable.{remaining !== null ? ` Retry after ~${remaining.toFixed(0)}s.` : ''}</div>
+                        </div>
+                    ) : loading && pair.listings.length === 0 ? (
                         <div className="listings-section">
                             <div className="listings-header">Loading…</div>
                             <div className="listings-list">
@@ -111,12 +140,12 @@ function CollapsiblePair({ pair, defaultExpanded, loading }: { pair: PairSummary
                                 <div className="best-rate">
                                     <div>
                                         <span className="label">Best Rate:</span>
-                                        <span className="value">{formatRate(pair.best_rate)}</span>
+                                        <span className="value">{formatRate(pair.best_rate, pair.pay, pair.get)}</span>
                                     </div>
                                     {avgRate && (
                                         <div>
                                             <span className="label">Average:</span>
-                                            <span className="value">{formatRate(avgRate)}</span>
+                                            <span className="value">{formatRate(avgRate, pair.pay, pair.get)}</span>
                                         </div>
                                     )}
                                     {totalStock > 0 && (
@@ -136,7 +165,7 @@ function CollapsiblePair({ pair, defaultExpanded, loading }: { pair: PairSummary
                                     {pair.listings.map((l, i) => (
                                         <div key={i} className="listing-card compact">
                                             <span className="listing-rank">#{i + 1}</span>
-                                            <span className="rate-value">{formatRate(l.rate)}</span>
+                                            <span className="rate-value">{formatRate(l.rate, l.have_currency, l.want_currency)}</span>
                                             <span className="rate-currencies">
                                                 <CurrencyIcon currency={l.have_currency} size={14} />
                                                 <span>/</span>
@@ -167,7 +196,7 @@ function CollapsiblePair({ pair, defaultExpanded, loading }: { pair: PairSummary
     )
 }
 
-export function TradesTable({ data, loading }: { data: PairSummary[]; loading: boolean }) {
+export function TradesTable({ data, loading, onReload }: { data: PairSummary[]; loading: boolean; onReload: (index: number) => void }) {
     const [allExpanded, setAllExpanded] = useState(false)
 
     // Find the index currently loading (first with empty listings)
@@ -190,7 +219,7 @@ export function TradesTable({ data, loading }: { data: PairSummary[]; loading: b
 
             <div className="pairs-grid">
                 {data.map((p, i) => (
-                    <CollapsiblePair key={p.index} pair={p} defaultExpanded={allExpanded} loading={loading && i === loadingIndex} />
+                    <CollapsiblePair key={p.index} pair={p} defaultExpanded={allExpanded} loading={loading && i === loadingIndex} onReload={onReload} />
                 ))}
             </div>
         </div>

@@ -27,10 +27,11 @@ class PairSummary(BaseModel):
     index: int
     get: str
     pay: str
-    status: str  # "ok" | "error" | "invalid"
+    status: str  # "ok" | "error" | "invalid" | "rate_limited"
     listings: List[ListingSummary] = Field(default_factory=list)
     best_rate: Optional[float] = None
     count_returned: int = 0
+    rate_limit_remaining: Optional[float] = None  # seconds until next attempt when rate_limited
 
 
 class TradesResponse(BaseModel):

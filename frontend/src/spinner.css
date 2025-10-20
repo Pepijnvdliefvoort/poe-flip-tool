@@ -42,3 +42,19 @@
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
+
+.rate-limit-banner {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  display: inline-block;
+  margin-right: 16px;
+}
+.rate-limit-banner.ok { background:#1e3a8a; color:#dbeafe; }
+.rate-limit-banner.near { background:#92400e; color:#ffedd5; }
+.rate-limit-banner.blocked { background:#7f1d1d; color:#fee2e2; animation: pulseBlock 1.2s ease-in-out infinite; }
+@keyframes pulseBlock {
+  0%,100% { filter: brightness(0.9); }
+  50% { filter: brightness(1.15); }
+}

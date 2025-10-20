@@ -1,4 +1,4 @@
-import type { TradesResponse, ConfigData, TradePair } from './types'
+import type { TradesResponse, ConfigData, TradePair, PairSummary } from './types'
 
 const BASE = import.meta.env.VITE_API_BASE || '' // vite dev proxy handles /api
 
@@ -35,5 +35,11 @@ export const Api = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ add: body.add || [], remove_indices: body.remove_indices || [] })
         }))
+    },
+    async rateLimitStatus(): Promise<{ blocked: boolean; block_remaining: number; rules: Record<string, { current: number; limit: number; reset_s: number }[]> }> {
+        return j(await fetch(`${BASE}/api/rate_limit`))
+    }
+    ,async refreshOne(index: number, top_n = 5): Promise<PairSummary> {
+        return j(await fetch(`${BASE}/api/trades/refresh_one?index=${index}&top_n=${top_n}`, { method: 'POST' }))
     }
 }

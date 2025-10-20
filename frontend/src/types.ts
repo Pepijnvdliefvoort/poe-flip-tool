@@ -15,10 +15,11 @@ export type PairSummary = {
   index: number
   get: string
   pay: string
-  status: 'ok' | 'error' | 'invalid' | 'loading'
+  status: 'ok' | 'error' | 'invalid' | 'loading' | 'rate_limited'
   listings: ListingSummary[]
   best_rate?: number | null
   count_returned: number
+  rate_limit_remaining?: number | null
 }
 
 export type TradesResponse = {

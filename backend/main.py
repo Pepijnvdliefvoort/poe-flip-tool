@@ -6,6 +6,7 @@ import time
 import logging
 from pathlib import Path
 from typing import Any, Dict, List
+import asyncio
 
 from fastapi import FastAPI, Query, HTTPException, Request
 from fastapi import Body
@@ -14,6 +15,8 @@ from fastapi.responses import StreamingResponse
 
 from models import ConfigData, TradePair, PairSummary, TradesResponse, TradesPatch
 from trade_logic import fetch_listings_with_cache
+from trade_logic import fetch_listings_force
+from rate_limiter import rate_limiter
 
 app = FastAPI(title="PoE Trade Backend")
 logging.basicConfig(
@@ -30,23 +33,41 @@ async def stream_trades(request: Request, delay_s: float = Query(2.0, ge=0.0, le
         for idx, t in enumerate(cfg.trades):
             if await request.is_disconnected():
                 break
-            listings = fetch_listings_with_cache(league=cfg.league, have=t.pay, want=t.get, top_n=top_n)
-            if listings is None:
-                summary = PairSummary(index=idx, get=t.get, pay=t.pay, status="error", listings=[], best_rate=None, count_returned=0)
-            else:
+            if rate_limiter.throttled:
                 summary = PairSummary(
                     index=idx,
                     get=t.get,
                     pay=t.pay,
-                    status="ok",
-                    listings=listings,
-                    best_rate=(listings[0].rate if listings else None),
-                    count_returned=len(listings),
+                    status="rate_limited",
+                    listings=[],
+                    best_rate=None,
+                    count_returned=0,
+                    rate_limit_remaining=round(rate_limiter.throttled_remaining, 2),
                 )
+            else:
+                # Run blocking fetch in a worker thread to avoid holding event loop
+                listings = await asyncio.to_thread(
+                    fetch_listings_with_cache,
+                    league=cfg.league,
+                    have=t.pay,
+                    want=t.get,
+                    top_n=top_n,
+                )
+                if listings is None:
+                    summary = PairSummary(index=idx, get=t.get, pay=t.pay, status="error", listings=[], best_rate=None, count_returned=0)
+                else:
+                    summary = PairSummary(
+                        index=idx,
+                        get=t.get,
+                        pay=t.pay,
+                        status="ok",
+                        listings=listings,
+                        best_rate=(listings[0].rate if listings else None),
+                        count_returned=len(listings),
+                    )
             log.info(f"[SSE {idx}] {t.pay}->{t.get}: status={summary.status} best_rate={summary.best_rate} count={summary.count_returned}")
             yield f"data: {json.dumps(summary.dict())}\n\n"
             if delay_s:
-                import asyncio
                 await asyncio.sleep(delay_s)
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
@@ -136,19 +157,22 @@ def refresh_trades(
     results: List[PairSummary] = []
 
     for idx, t in enumerate(cfg.trades):
-        listings = fetch_listings_with_cache(league=cfg.league, have=t.pay, want=t.get, top_n=top_n)
-        if listings is None:
-            summary = PairSummary(index=idx, get=t.get, pay=t.pay, status="error", listings=[], best_rate=None, count_returned=0)
+        if rate_limiter.throttled:
+            summary = PairSummary(index=idx, get=t.get, pay=t.pay, status="rate_limited", listings=[], best_rate=None, count_returned=0, rate_limit_remaining=round(rate_limiter.throttled_remaining, 2))
         else:
-            summary = PairSummary(
-                index=idx,
-                get=t.get,
-                pay=t.pay,
-                status="ok",
-                listings=listings,
-                best_rate=(listings[0].rate if listings else None),
-                count_returned=len(listings),
-            )
+            listings = fetch_listings_with_cache(league=cfg.league, have=t.pay, want=t.get, top_n=top_n)
+            if listings is None:
+                summary = PairSummary(index=idx, get=t.get, pay=t.pay, status="error", listings=[], best_rate=None, count_returned=0)
+            else:
+                summary = PairSummary(
+                    index=idx,
+                    get=t.get,
+                    pay=t.pay,
+                    status="ok",
+                    listings=listings,
+                    best_rate=(listings[0].rate if listings else None),
+                    count_returned=len(listings),
+                )
         results.append(summary)
         if delay_s:
             time.sleep(delay_s)
@@ -157,6 +181,31 @@ def refresh_trades(
         log.info(f"[{idx}] {t.pay}->{t.get}: status={summary.status} best_rate={summary.best_rate} count={summary.count_returned}")
 
     return TradesResponse(league=cfg.league, pairs=len(cfg.trades), results=results)
+
+
+@app.post("/api/trades/refresh_one", response_model=PairSummary)
+def refresh_one(index: int = Query(..., ge=0), top_n: int = Query(5, ge=1, le=20)):
+    """Refresh a single trade pair by index, bypassing cache.
+    Returns just the PairSummary for that pair.
+    """
+    cfg = _load_config()
+    if index < 0 or index >= len(cfg.trades):
+        raise HTTPException(status_code=404, detail="Trade index out of range")
+    pair = cfg.trades[index]
+    if rate_limiter.throttled:
+        return PairSummary(index=index, get=pair.get, pay=pair.pay, status="rate_limited", listings=[], best_rate=None, count_returned=0, rate_limit_remaining=round(rate_limiter.throttled_remaining, 2))
+    listings = fetch_listings_force(league=cfg.league, have=pair.pay, want=pair.get, top_n=top_n)
+    if listings is None:
+        return PairSummary(index=index, get=pair.get, pay=pair.pay, status="error", listings=[], best_rate=None, count_returned=0)
+    return PairSummary(
+        index=index,
+        get=pair.get,
+        pay=pair.pay,
+        status="ok",
+        listings=listings,
+        best_rate=(listings[0].rate if listings else None),
+        count_returned=len(listings),
+    )
 
 
 @app.get("/api/trades", response_model=TradesResponse)
@@ -171,19 +220,22 @@ def trades_summary(
     results: List[PairSummary] = []
 
     for idx, t in enumerate(cfg.trades):
-        listings = fetch_listings_with_cache(league=cfg.league, have=t.pay, want=t.get, top_n=top_n)
-        if listings is None:
-            summary = PairSummary(index=idx, get=t.get, pay=t.pay, status="error", listings=[], best_rate=None, count_returned=0)
+        if rate_limiter.throttled:
+            summary = PairSummary(index=idx, get=t.get, pay=t.pay, status="rate_limited", listings=[], best_rate=None, count_returned=0, rate_limit_remaining=round(rate_limiter.throttled_remaining, 2))
         else:
-            summary = PairSummary(
-                index=idx,
-                get=t.get,
-                pay=t.pay,
-                status="ok",
-                listings=listings,
-                best_rate=(listings[0].rate if listings else None),
-                count_returned=len(listings),
-            )
+            listings = fetch_listings_with_cache(league=cfg.league, have=t.pay, want=t.get, top_n=top_n)
+            if listings is None:
+                summary = PairSummary(index=idx, get=t.get, pay=t.pay, status="error", listings=[], best_rate=None, count_returned=0)
+            else:
+                summary = PairSummary(
+                    index=idx,
+                    get=t.get,
+                    pay=t.pay,
+                    status="ok",
+                    listings=listings,
+                    best_rate=(listings[0].rate if listings else None),
+                    count_returned=len(listings),
+                )
         results.append(summary)
         if delay_s:
             time.sleep(delay_s)
@@ -191,3 +243,20 @@ def trades_summary(
         log.info(f"[{idx}] {t.pay}->{t.get}: status={summary.status} best_rate={summary.best_rate} count={summary.count_returned}")
 
     return TradesResponse(league=cfg.league, pairs=len(cfg.trades), results=results)
+
+
+@app.get("/api/rate_limit")
+def rate_limit_status():
+    """Return current rate limit status and parsed rule states for observability."""
+    state = rate_limiter.debug_state()
+    return {
+        "blocked": rate_limiter.blocked,
+        "block_remaining": round(rate_limiter.block_remaining, 3),
+        "rules": {
+            name: [
+                {"current": cur, "limit": lim, "reset_s": reset}
+                for (cur, lim, reset) in tuples
+            ]
+            for name, tuples in state.items()
+        },
+    }
