@@ -369,7 +369,7 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
     )
 }
 
-export function TradesTable({ data, loading, onReload, accountName }: { data: PairSummary[]; loading: boolean; onReload: (index: number) => void; accountName?: string | null }) {
+export function TradesTable({ data, loading, onReload, onRefresh, accountName }: { data: PairSummary[]; loading: boolean; onReload: (index: number) => void; onRefresh?: () => void; accountName?: string | null }) {
     const [allExpanded, setAllExpanded] = useState(false)
 
     // Compute global max absolute delta for baseline-aligned sparklines
@@ -403,6 +403,17 @@ export function TradesTable({ data, loading, onReload, accountName }: { data: Pa
                     >
                         {allExpanded ? 'Collapse All' : 'Expand All'}
                     </button>
+                    {onRefresh && (
+                        <button
+                            className={`btn ${loading ? 'ghost' : 'primary'}`}
+                            onClick={() => onRefresh()}
+                            disabled={loading}
+                            style={{ padding: '6px 14px', fontSize: '13px' }}
+                            title="Refresh all trades"
+                        >
+                            {loading ? 'Loading…' : 'Refresh'}
+                        </button>
+                    )}
                 </div>
             </div>
 

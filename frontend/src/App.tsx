@@ -353,18 +353,13 @@ export default function App() {
               )}
             </div>
           )}
-          {view === 'trades' && (
-            <button className="btn primary" onClick={() => load(true)} disabled={loading} style={{ padding: '6px 16px' }}>
-              {loading ? 'Loading...' : 'Refresh'}
-            </button>
-          )}
         </div>
       </header>
 
       {view === 'trades' ? (
         <div className="main-layout">
           <div className="trades-section">
-            <TradesTable data={data?.results || []} loading={loading} onReload={reloadPair} accountName={accountName} />
+            <TradesTable data={data?.results || []} loading={loading} onReload={reloadPair} onRefresh={() => load(true)} accountName={accountName} />
           </div>
           <aside className="config-sidebar">
             <ConfigPanel 
