@@ -95,10 +95,29 @@ export default function App() {
   useEffect(() => {
     if (!autoRefresh) return;
 
-    const checkInterval = 10000; // Check every 10 seconds
+    const checkInterval = 60000; // Check every 60 seconds (very conservative)
     
     const checkCacheStatus = async () => {
       try {
+        // First check rate limit status
+        const rateLimitCheck = await Api.rateLimitStatus();
+        
+        // Don't auto-refresh if we're blocked or near the limit
+        if (rateLimitCheck.blocked) {
+          console.log('[Auto-refresh] ⛔ Skipping - currently rate limited');
+          return;
+        }
+        
+        // Check if we're near any limit (>50% utilization - very conservative)
+        const nearAnyLimit = Object.values(rateLimitCheck.rules).some(ruleArr => 
+          ruleArr.some(r => r.limit > 0 && r.current / r.limit >= 0.5)
+        );
+        
+        if (nearAnyLimit) {
+          console.log('[Auto-refresh] 🐌 Skipping - near rate limit (>50% utilization)');
+          return;
+        }
+        
         const response = await fetch(`${BASE}/api/cache/status`);
         if (!response.ok) return;
         
@@ -106,10 +125,12 @@ export default function App() {
         const expiredPairs = status.pairs.filter((p: any) => p.expired);
         
         if (expiredPairs.length > 0 && data) {
-          console.log(`[Auto-refresh] Found ${expiredPairs.length} expired cache entries, refreshing...`);
+          console.log(`[Auto-refresh] 🔄 Found ${expiredPairs.length} expired cache entries, refreshing...`);
           
-          // Refresh each expired pair individually
-          for (const pair of expiredPairs) {
+          // Limit to refreshing max 2 pairs per check to avoid rate limits (very conservative)
+          const pairsToRefresh = expiredPairs.slice(0, 2);
+          
+          for (const pair of pairsToRefresh) {
             // Update UI to show loading
             setData(prev => {
               if (!prev) return prev;
@@ -141,8 +162,8 @@ export default function App() {
               });
             }
             
-            // Small delay between refreshes to avoid rate limiting
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Even longer delay between refreshes (3 seconds)
+            await new Promise(resolve => setTimeout(resolve, 3000));
           }
           
           updateRateLimit();

@@ -1,9 +1,11 @@
 import json
 import time
 import logging
+import os
 from pathlib import Path
 from typing import List
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, Query, HTTPException, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -16,10 +18,15 @@ from rate_limiter import rate_limiter
 # App Initialization & Logging
 # ============================================================================
 
+load_dotenv()
+
+# Get log level from environment
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+
 app = FastAPI(title="PoE Trade Backend")
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
     format="%(asctime)s | %(levelname)s | %(message)s",
 )
 log = logging.getLogger("poe-backend")

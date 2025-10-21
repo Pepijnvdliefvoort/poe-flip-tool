@@ -76,9 +76,9 @@ class RateLimiter:
         self._block_until: float = 0.0  # hard block (Retry-After or full rule)
         self._soft_delay_until: float = 0.0  # gentle spacing suggestion
         self._last_rules: List[RuleState] = []
-        # Configurable thresholds
-        self.soft_ratio = float(os.getenv("POE_SOFT_RATIO", "0.8"))
-        self.soft_sleep_factor = float(os.getenv("POE_SOFT_SLEEP_FACTOR", "0.05"))
+        # Configurable thresholds - more conservative defaults
+        self.soft_ratio = float(os.getenv("POE_SOFT_RATIO", "0.6"))  # Trigger at 60% instead of 80%
+        self.soft_sleep_factor = float(os.getenv("POE_SOFT_SLEEP_FACTOR", "0.1"))  # Sleep 10% of window instead of 5%
 
     def wait_before_request(self):
         """Block the calling thread until it's safe to issue a request."""
@@ -108,7 +108,7 @@ class RateLimiter:
                     ra = int(retry_after)
                     if ra > 0:
                         self._block_until = max(self._block_until, now + ra)
-                        log.warning(f"PoE global Retry-After received ({ra}s). Blocking until {self._block_until:.0f}.")
+                        log.warning(f"⛔ PoE Retry-After received: {ra}s. Hard blocking until {time.strftime('%H:%M:%S', time.localtime(self._block_until))}")
                 except ValueError:
                     pass
 
@@ -130,11 +130,14 @@ class RateLimiter:
                 self._last_rules.extend(parsed)
                 # Determine hard block condition
                 for st in parsed:
+                    # Log current state for debugging
+                    log.debug(f"Rate limit {st.name}: {st.current}/{st.limit} (ratio={st.ratio:.2f}, reset={st.reset_s}s)")
+                    
                     if st.current >= st.limit and st.reset_s > 0:
                         until = now + st.reset_s
                         if until > self._block_until:
                             self._block_until = until
-                            log.warning(f"Rate limit reached for {st.name} rule: current={st.current} limit={st.limit}. Blocking {st.reset_s}s.")
+                            log.warning(f"⛔ Rate limit EXCEEDED for {st.name}: {st.current}/{st.limit}. Hard blocking for {st.reset_s}s until {time.strftime('%H:%M:%S', time.localtime(until))}")
 
             # Soft throttle: space out if nearing limits
             soft_sleep = 0.0
@@ -143,12 +146,12 @@ class RateLimiter:
                     continue
                 # heuristic: if usage above configured ratio and not yet at limit
                 if st.ratio >= self.soft_ratio and st.current < st.limit:
-                    # Sleep configured factor of remaining window or at least 0.2s (cap 3s)
-                    candidate = min(max(st.reset_s * self.soft_sleep_factor, 0.2), 3.0)
+                    # Sleep configured factor of remaining window or at least 0.5s (cap 5s)
+                    candidate = min(max(st.reset_s * self.soft_sleep_factor, 0.5), 5.0)
                     soft_sleep = max(soft_sleep, candidate)
+                    log.info(f"🐌 Soft throttle triggered for {st.name}: {st.current}/{st.limit} ({st.ratio*100:.1f}% >= {self.soft_ratio*100:.0f}%). Sleeping {candidate:.1f}s")
             if soft_sleep > 0:
                 self._soft_delay_until = now + soft_sleep
-                log.info(f"Applying soft throttle sleep={soft_sleep:.2f}s (utilization >= {self.soft_ratio:.2f}, factor={self.soft_sleep_factor}).")
 
     def debug_state(self) -> Dict[str, List[Tuple[int, int, int]]]:
         """Return last parsed rule states for introspection (counts, limits, resets)."""

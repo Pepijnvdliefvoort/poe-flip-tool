@@ -63,12 +63,23 @@ cd backend
 py -m pip install -r requirements.txt
 
 # Create .env file with your PoE credentials
-echo POESESSID=your_session_id_here > .env
-echo CF_CLEARANCE=your_cloudflare_clearance_here >> .env
+# Copy the example file and edit it
+copy .env.example .env
+# Then edit .env with your actual POESESSID and CF_CLEARANCE
 
 # Run the backend
 python -m uvicorn main:app --reload
 ```
+
+**Configuration Options** (Optional - edit `.env` file):
+- `CACHE_TTL_SECONDS` - Cache expiration time (default: 900 = 15 min)
+- `HISTORY_RETENTION_HOURS` - How long to keep price history (default: 24)
+- `HISTORY_MAX_POINTS` - Max snapshots per pair (default: 100)
+- `LOG_LEVEL` - Logging verbosity: DEBUG, INFO, WARNING (default: INFO)
+- `POE_SOFT_RATIO` - Rate limit soft throttle threshold (default: 0.8)
+- `POE_SOFT_SLEEP_FACTOR` - Throttle sleep factor (default: 0.05)
+
+See `.env.example` for detailed descriptions of all options.
 
 The backend API will be available at `http://localhost:8000`
 

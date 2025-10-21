@@ -20,6 +20,15 @@ CF_CLEARANCE = os.getenv("CF_CLEARANCE")
 if not POESESSID or not CF_CLEARANCE:
     raise RuntimeError("Missing POESESSID or CF_CLEARANCE in .env")
 
+# Configurable settings from .env
+CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "900"))  # Default: 15 minutes
+HISTORY_RETENTION_HOURS = int(os.getenv("HISTORY_RETENTION_HOURS", "24"))  # Default: 24 hours
+HISTORY_MAX_POINTS = int(os.getenv("HISTORY_MAX_POINTS", "100"))  # Default: 100 snapshots per pair
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()  # Default: INFO
+
+# Configure logging level
+logging.getLogger("poe-backend").setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
+
 BASE_URL = "https://www.pathofexile.com/api/trade/exchange"
 
 HEADERS = {
@@ -56,7 +65,9 @@ def _post_exchange(league: str, have: str, want: str, timeout_s: int = 20) -> Op
     }
     try:
         # Block if currently rate limited or soft-throttled
+        log.debug(f"Fetching {have}->{want} (throttled={rate_limiter.throttled}, remaining={rate_limiter.throttled_remaining:.1f}s)")
         rate_limiter.wait_before_request()
+        
         resp = requests.post(
             f"{BASE_URL}/{league}",
             headers=HEADERS,
@@ -64,12 +75,24 @@ def _post_exchange(league: str, have: str, want: str, timeout_s: int = 20) -> Op
             json=payload,
             timeout=timeout_s,
         )
+        
         # Update limiter state using response headers
         rate_limiter.on_response(resp.headers)
-        if resp.status_code != 200:
+        
+        if resp.status_code == 429:
+            log.error(f"❌ 429 Too Many Requests for {have}->{want}. Headers: {dict(resp.headers)}")
             return None
+        
+        if resp.status_code != 200:
+            log.warning(f"Non-200 status {resp.status_code} for {have}->{want}")
+            return None
+            
         return resp.json()
-    except Exception:
+    except requests.exceptions.Timeout:
+        log.warning(f"Timeout fetching {have}->{want}")
+        return None
+    except Exception as e:
+        log.error(f"Error fetching {have}->{want}: {e}")
         return None
 
 
@@ -147,7 +170,7 @@ class PriceSnapshot:
 
 class HistoricalCache:
     """Tracks price history for trend analysis and sparklines"""
-    def __init__(self, retention_hours: int = 24, max_points_per_pair: int = 100): # 24 hours default
+    def __init__(self, retention_hours: int = HISTORY_RETENTION_HOURS, max_points_per_pair: int = HISTORY_MAX_POINTS):
         self.retention_hours = retention_hours
         self.max_points = max_points_per_pair
         # Key: (league, have, want) -> List of PriceSnapshot
@@ -297,8 +320,8 @@ class TradeCache:
         log.info("Cache CLEARED")
 
 
-cache = TradeCache(ttl_seconds=900)  # 15 minutes
-historical_cache = HistoricalCache(retention_hours=24, max_points_per_pair=100)
+cache = TradeCache(ttl_seconds=CACHE_TTL_SECONDS)
+historical_cache = HistoricalCache(retention_hours=HISTORY_RETENTION_HOURS, max_points_per_pair=HISTORY_MAX_POINTS)
 
 
 def fetch_listings_with_cache(
