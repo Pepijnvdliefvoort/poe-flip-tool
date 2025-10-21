@@ -92,14 +92,89 @@ export function ConfigPanel({ onChanged, onHotToggled, onPairAdded, onPairRemove
                 </div>
                 <div style={{ flex: 1 }}>
                     <label className="muted" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '4px' }}>Top Results</label>
-                    <input
-                        type="number"
-                        min={1}
-                        max={20}
-                        value={topN}
-                        onChange={e => onTopNChanged(Number(e.target.value) || 5)}
-                        style={{ fontSize: '13px', padding: '6px 8px', width: '100%' }}
-                    />
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'stretch' }}>
+                        <input
+                            id="topn-input"
+                            type="number"
+                            min={1}
+                            max={20}
+                            value={topN}
+                            onChange={e => onTopNChanged(Number(e.target.value) || 5)}
+                            style={{ fontSize: '13px', padding: '6px 8px', flex: 1, textAlign: 'center', paddingRight: '32px' }}
+                        />
+                        <div style={{ 
+                            position: 'absolute', 
+                            right: 0, 
+                            top: 0, 
+                            bottom: 0, 
+                            display: 'flex', 
+                            flexDirection: 'column',
+                            width: '24px'
+                        }}>
+                            <button
+                                onClick={() => {
+                                    const input = document.getElementById('topn-input') as HTMLInputElement;
+                                    if (input) input.stepUp();
+                                    onTopNChanged(Number(input.value) || 1);
+                                }}
+                                style={{
+                                    background: 'var(--bg-secondary)',
+                                    border: '1px solid var(--border)',
+                                    borderRadius: '6px 6px 0 0',
+                                    flex: 1,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    padding: 0,
+                                    borderBottom: '0.5px solid var(--border)'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.borderColor = 'var(--accent)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.borderColor = 'var(--border)';
+                                    e.currentTarget.style.borderBottom = '0.5px solid var(--border)';
+                                }}
+                            >
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(156, 163, 175, 0.6)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="18,15 12,9 6,15"></polyline>
+                                </svg>
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const input = document.getElementById('topn-input') as HTMLInputElement;
+                                    if (input) input.stepDown();
+                                    onTopNChanged(Number(input.value) || 20);
+                                }}
+                                style={{
+                                    background: 'var(--bg-secondary)',
+                                    border: '1px solid var(--border)',
+                                    borderRadius: '0 0 6px 6px',
+                                    flex: 1,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    padding: 0,
+                                    borderTop: '0.5px solid var(--border)'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.borderColor = 'var(--accent)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.borderColor = 'var(--border)';
+                                    e.currentTarget.style.borderTop = '0.5px solid var(--border)';
+                                }}
+                            >
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(156, 163, 175, 0.6)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="6,9 12,15 18,9"></polyline>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 

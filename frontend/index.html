@@ -563,6 +563,19 @@
             transition: all 0.2s;
         }
 
+        /* Hide native number input spinners */
+        input[type="number"] {
+            -webkit-appearance: textfield;
+            -moz-appearance: textfield;
+            appearance: textfield;
+        }
+        
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
         /* Custom select dropdown styling to match scrollbar */
         select {
             appearance: none;
