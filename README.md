@@ -12,6 +12,7 @@ A modern, real-time market analysis tool for **Path of Exile** currency trading.
 
 - **Real-time Market Data**: Stream trade data asynchronously with Server-Sent Events (SSE)
 - **Smart Caching**: Intelligent TTL-based caching to avoid rate limits and reduce API load
+- **SQLite Persistence**: Cache and price history survive application restarts with automatic database management
 - **Price Trend Indicators**: Inline micro sparkline + % change (direction colored) showing recent momentum
 - **Historical Price Tracking**: 7-day (configurable) price history with automatic snapshot recording
 - **Hot/Cold Trade Marking**: Mark specific trade pairs as "hot" for closer monitoring with visual indicators
@@ -22,7 +23,7 @@ A modern, real-time market analysis tool for **Path of Exile** currency trading.
 - **Async Loading**: Trades load one-by-one with visual feedback (spinners & placeholder rows)
 - **Professional Design**: Dark theme, smooth transitions, custom scrollbars with SVG styling
 - **Rate Limit Protection**: Soft throttling and hard blocking to prevent API lockouts
- - **System Dashboard**: In-app view to inspect cache entries, expirations, and historical snapshot counts
+- **System Dashboard**: In-app view to inspect cache entries, expirations, historical snapshot counts, and database stats
 
 ---
 
@@ -34,6 +35,7 @@ A modern, real-time market analysis tool for **Path of Exile** currency trading.
 - **Pydantic**: Data validation and settings management
 - **Requests**: HTTP library for PoE Trade API calls
 - **Python-dotenv**: Environment variable management
+- **SQLite3**: Built-in Python database for persistent storage (cache and price history)
 
 ### Frontend
 - **React 18**: Modern UI library with hooks
@@ -130,13 +132,33 @@ The frontend will be available at `http://localhost:5173`
 - `GET /api/rate_limit` - Current rate limit state (blocked flag, remaining seconds, parsed rule states)
 - `GET /api/cache/status` - Per-configured pair cache presence and seconds until expiry
 - `GET /api/cache/summary` - Aggregate cache + historical statistics (entries, soonest expiry, snapshot counts)
+- `GET /api/database/stats` - SQLite database statistics (size, entry counts, oldest/newest snapshots)
+
+### Data Persistence
+
+The application automatically persists cache entries and price history to a SQLite database (`backend/poe_cache.db`). This provides several benefits:
+
+- **Restart Resilience**: Cache entries and historical snapshots survive application restarts
+- **Faster Startup**: Previously cached data is immediately available without API calls
+- **Historical Analysis**: All price snapshots are retained up to the configured retention period (7 days default)
+- **Automatic Cleanup**: Expired cache entries and old snapshots are automatically pruned
+
+The database is created automatically on first run. No manual setup is required. The file location is:
+- `backend/poe_cache.db` (relative to the backend directory)
+
+**Database Schema**:
+- `cache_entries`: Stores cached API responses with TTL expiration
+- `price_snapshots`: Stores historical price observations with timestamps
+
+View database statistics via the System Dashboard or the `/api/database/stats` endpoint.
 
 ### In-App System Dashboard
 Switch to the "System" tab in the header to view:
+- **Database Persistence**: File location, size, and entry/snapshot counts
 - Live cache summary (auto refresh every 15s)
 - Cache entry table with remaining TTL per pair
 - Historical snapshot counts and retention parameters
-- Interactive history viewer (select pair -> mini chart + table)
+- Interactive history viewer (select pair → mini chart + table)
 
 ---
 
@@ -227,6 +249,8 @@ poe-flip-tool/
 │   ├── models.py            # Pydantic models (ListingSummary, PairSummary, etc.)
 │   ├── trade_logic.py       # PoE API logic, caching, historical tracking
 │   ├── rate_limiter.py      # Rate limiting with soft throttling
+│   ├── persistence.py       # SQLite database persistence layer
+│   ├── poe_cache.db         # SQLite database (auto-created)
 │   ├── config.json          # Trade pair configuration
 │   ├── requirements.txt     # Python dependencies
 │   └── .env                 # Environment variables (POESESSID, CF_CLEARANCE)
@@ -237,9 +261,10 @@ poe-flip-tool/
 │   │   ├── types.ts         # TypeScript types
 │   │   ├── spinner.css      # Loading animations
 │   │   └── components/
-│   │       ├── TradesTable.tsx    # Market listings with whisper copy & trends
-│   │       ├── ConfigPanel.tsx    # Sidebar config with league/pairs/top_n
-│   │       └── CurrencyIcon.tsx   # Currency icons
+│   │       ├── TradesTable.tsx      # Market listings with whisper copy & trends
+│   │       ├── ConfigPanel.tsx      # Sidebar config with league/pairs/top_n
+│   │       ├── SystemDashboard.tsx  # System monitoring & database stats
+│   │       └── CurrencyIcon.tsx     # Currency icons
 │   ├── public/
 │   │   └── currency/        # Currency icon images
 │   ├── index.html           # HTML entry & global CSS

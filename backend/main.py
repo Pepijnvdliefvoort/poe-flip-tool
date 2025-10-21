@@ -368,6 +368,7 @@ def rate_limit_status():
 def cache_summary():
     """Aggregate cache + historical stats including per-entry expirations and snapshot counts."""
     from trade_logic import cache, historical_cache
+    from persistence import db
     cfg = _load_config()
 
     trade_cache_stats = cache.stats()
@@ -385,5 +386,17 @@ def cache_summary():
     }
 
 
-
-
+@app.get("/api/database/stats")
+def database_stats():
+    """Get SQLite database statistics and health info."""
+    from persistence import db
+    
+    try:
+        stats = db.get_database_stats()
+        return {
+            "status": "ok",
+            **stats
+        }
+    except Exception as e:
+        log.error(f"Failed to get database stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

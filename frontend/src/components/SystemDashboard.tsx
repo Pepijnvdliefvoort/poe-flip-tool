@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Api } from '../api'
-import type { CacheSummary, CacheStatus, HistoryResponse, ConfigData } from '../types'
+import type { CacheSummary, CacheStatus, HistoryResponse, ConfigData, DatabaseStats } from '../types'
 
 export function SystemDashboard() {
   const [cacheSummary, setCacheSummary] = useState<CacheSummary | null>(null)
   const [cacheStatus, setCacheStatus] = useState<CacheStatus | null>(null)
+  const [dbStats, setDbStats] = useState<DatabaseStats | null>(null)
   const [config, setConfig] = useState<ConfigData | null>(null)
   const [selectedPair, setSelectedPair] = useState<{ have: string; want: string } | null>(null)
   const [history, setHistory] = useState<HistoryResponse | null>(null)
@@ -16,14 +17,16 @@ export function SystemDashboard() {
   useEffect(() => {
     const load = async () => {
       try {
-        const [cfg, summary, status] = await Promise.all([
+        const [cfg, summary, status, db] = await Promise.all([
           Api.getConfig(),
           Api.cacheSummary(),
-          Api.cacheStatus()
+          Api.cacheStatus(),
+          Api.databaseStats()
         ])
         setConfig(cfg)
         setCacheSummary(summary)
         setCacheStatus(status)
+        setDbStats(db)
         if (!selectedPair && cfg.trades.length > 0) {
           setSelectedPair({ have: cfg.trades[0].pay, want: cfg.trades[0].get })
         }
@@ -39,12 +42,14 @@ export function SystemDashboard() {
     if (!autoRefresh) return
     const id = setInterval(async () => {
       try {
-        const [summary, status] = await Promise.all([
+        const [summary, status, db] = await Promise.all([
           Api.cacheSummary(),
-          Api.cacheStatus()
+          Api.cacheStatus(),
+          Api.databaseStats()
         ])
         setCacheSummary(summary)
         setCacheStatus(status)
+        setDbStats(db)
       } catch { /* ignore */ }
     }, 15000)
     return () => clearInterval(id)
@@ -79,6 +84,25 @@ export function SystemDashboard() {
         </label>
       </div>
       {error && <div style={{ color: '#f87171', fontSize: 13 }}>{error}</div>}
+
+      {/* Database Stats */}
+      <section style={{ background: 'rgba(30,41,59,0.5)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
+        <h3 style={{ marginTop: 0 }}>Database Persistence</h3>
+        {!dbStats ? <div>Loading database stats…</div> : (
+          <div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, fontSize: 13 }}>
+              <Stat label="DB Size" value={formatBytes(dbStats.database_size_bytes)} />
+              <Stat label="Cache Entries" value={dbStats.cache_entries} />
+              <Stat label="Price Snapshots" value={dbStats.price_snapshots} />
+            </div>
+            <div style={{ marginTop: 12, fontSize: 12, opacity: 0.7 }}>
+              <div><strong>File:</strong> {dbStats.database_file}</div>
+              {dbStats.oldest_snapshot && <div><strong>Oldest:</strong> {new Date(dbStats.oldest_snapshot).toLocaleString()}</div>}
+              {dbStats.newest_snapshot && <div><strong>Newest:</strong> {new Date(dbStats.newest_snapshot).toLocaleString()}</div>}
+            </div>
+          </div>
+        )}
+      </section>
 
       {/* Cache Summary */}
       <section style={{ background: 'rgba(30,41,59,0.5)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
@@ -197,6 +221,14 @@ function Stat({ label, value }: { label: string; value: any }) {
       <span style={{ fontSize: 14, fontWeight: 600 }}>{value}</span>
     </div>
   )
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
 }
 
 function HistoryMiniChart({ data }: { data: { timestamp: string; best_rate: number; avg_rate: number }[] }) {

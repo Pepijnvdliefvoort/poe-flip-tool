@@ -91,3 +91,14 @@ export type HistoryResponse = {
   history: { timestamp: string; best_rate: number; avg_rate: number; listing_count: number }[]
   trend: PriceTrend
 }
+
+export type DatabaseStats = {
+  status: string
+  database_file: string
+  database_size_bytes: number
+  cache_entries: number
+  price_snapshots: number
+  oldest_cache_entry: string | null
+  oldest_snapshot: string | null
+  newest_snapshot: string | null
+}

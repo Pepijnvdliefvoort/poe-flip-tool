@@ -1,4 +1,4 @@
-import type { TradesResponse, ConfigData, TradePair, PairSummary, CacheSummary, CacheStatus, HistoryResponse } from './types'
+import type { TradesResponse, ConfigData, TradePair, PairSummary, CacheSummary, CacheStatus, HistoryResponse, DatabaseStats } from './types'
 
 const BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000' // vite dev proxy handles /api
 
@@ -45,5 +45,8 @@ export const Api = {
     async history(have: string, want: string, maxPoints?: number): Promise<HistoryResponse> {
         const qp = maxPoints ? `?max_points=${maxPoints}` : ''
         return j(await fetch(`${BASE}/api/history/${encodeURIComponent(have)}/${encodeURIComponent(want)}${qp}`))
+    },
+    async databaseStats(): Promise<DatabaseStats> {
+        return j(await fetch(`${BASE}/api/database/stats`))
     }
 }

@@ -13,7 +13,6 @@ interface SparklineProps {
     showMinMax?: boolean
 }
 const Sparkline = memo(function Sparkline({ values, width = 70, height = 24, stroke = 'var(--accent)', relativeFirst = false, globalMaxAbsDelta, showMinMax = true }: SparklineProps) {
-    const [hover, setHover] = useState(false)
     if (!values || values.length < 2) return null
 
     // Stats
@@ -25,10 +24,9 @@ const Sparkline = memo(function Sparkline({ values, width = 70, height = 24, str
 
     const stepX = width / (values.length - 1)
 
-    // Build path based on hover state: relative (baseline mid) vs absolute (fill)
+    // Build path using relative mode (baseline mid)
     let d: string
-    let area: string | null = null
-    if (!hover && relativeFirst && globalMaxAbsDelta && globalMaxAbsDelta > 0) {
+    if (relativeFirst && globalMaxAbsDelta && globalMaxAbsDelta > 0) {
         const deltas = values.map(v => v - base)
         d = deltas.map((dv, i) => {
             const x = i * stepX
@@ -43,12 +41,11 @@ const Sparkline = memo(function Sparkline({ values, width = 70, height = 24, str
             const y = height - ((v - min) / range) * height
             return `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`
         }).join(' ')
-        area = `${d} L${width},${height} L0,${height} Z`
     }
 
-    // Recompute coordinates for min/max markers and last point (using whichever coordinate system currently displayed)
+    // Compute Y coordinates for markers
     const computeY = (v: number) => {
-        if (!hover && relativeFirst && globalMaxAbsDelta && globalMaxAbsDelta > 0) {
+        if (relativeFirst && globalMaxAbsDelta && globalMaxAbsDelta > 0) {
             const dv = v - base
             const y = (height / 2) - (dv / globalMaxAbsDelta) * (height / 2)
             return Math.min(height, Math.max(0, y))
@@ -61,17 +58,15 @@ const Sparkline = memo(function Sparkline({ values, width = 70, height = 24, str
     const maxIndex = values.indexOf(max)
     const lastIndex = values.length - 1
 
-    const tooltip = `Min: ${min.toFixed(4)}\nMax: ${max.toFixed(4)}\nStart: ${base.toFixed(4)}\nLast: ${last.toFixed(4)}\nChange: ${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%\nMode: ${hover ? 'Absolute' : 'Relative'}`
+    const tooltip = `Min: ${min.toFixed(4)}\nMax: ${max.toFixed(4)}\nStart: ${base.toFixed(4)}\nLast: ${last.toFixed(4)}\nChange: ${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%`
 
     return (
         <div
             style={{ position: 'relative', width, height }}
-            onMouseEnter={() => setHover(true)}
-            onMouseLeave={() => setHover(false)}
             title={tooltip}
         >
             <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: 'block', overflow: 'visible' }}>
-                {!hover && relativeFirst && globalMaxAbsDelta && globalMaxAbsDelta > 0 && (
+                {relativeFirst && globalMaxAbsDelta && globalMaxAbsDelta > 0 && (
                     <line
                         x1={0}
                         x2={width}
@@ -82,29 +77,21 @@ const Sparkline = memo(function Sparkline({ values, width = 70, height = 24, str
                         strokeDasharray="2 2"
                     />
                 )}
-                {area && (
-                    <path
-                        d={area}
-                        fill={hover ? 'rgba(99,102,241,0.25)' : 'rgba(99,102,241,0.15)'}
-                        stroke="none"
-                    />
-                )}
                 <path
                     d={d}
                     fill="none"
-                    stroke={hover ? stroke : 'var(--accent)'}
-                    strokeWidth={hover ? 2 : 1.5}
+                    stroke="var(--accent)"
+                    strokeWidth={1.5}
                     strokeLinecap="round"
-                    style={{ transition: 'stroke 120ms ease, stroke-width 120ms ease' }}
                 />
-                {showMinMax && !hover && (
+                {showMinMax && (
                     <>
                         <circle cx={minIndex * stepX} cy={computeY(min)} r={1.8} fill="#10b981" />
                         <circle cx={maxIndex * stepX} cy={computeY(max)} r={1.8} fill="#ef4444" />
                     </>
                 )}
                 {/* Last point highlight */}
-                <circle cx={lastIndex * stepX} cy={computeY(last)} r={hover ? 3 : 2} fill={hover ? stroke : 'var(--accent)'} stroke="#111827" strokeWidth={1} />
+                <circle cx={lastIndex * stepX} cy={computeY(last)} r={2} fill="var(--accent)" stroke="#111827" strokeWidth={1} />
             </svg>
         </div>
     )

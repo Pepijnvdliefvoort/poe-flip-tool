@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 
 from models import ListingSummary
 from rate_limiter import rate_limiter
+from persistence import db
 
 load_dotenv()
 
@@ -176,6 +177,33 @@ class HistoricalCache:
         self.max_points = max_points_per_pair
         # Key: (league, have, want) -> List of PriceSnapshot
         self._history: Dict[Tuple[str, str, str], List[PriceSnapshot]] = {}
+        self._load_from_db()
+    
+    def _load_from_db(self):
+        """Load historical snapshots from database on startup."""
+        try:
+            snapshots_dict = db.load_all_snapshots(self.retention_hours)
+            for key, snapshot_data_list in snapshots_dict.items():
+                # Convert dicts to PriceSnapshot objects
+                snapshots = [
+                    PriceSnapshot(
+                        timestamp=datetime.fromisoformat(s["timestamp"]),
+                        best_rate=s["best_rate"],
+                        avg_rate=s["avg_rate"],
+                        listing_count=s["listing_count"]
+                    )
+                    for s in snapshot_data_list
+                ]
+                self._history[key] = snapshots
+            
+            if snapshots_dict:
+                total_points = sum(len(v) for v in snapshots_dict.values())
+                log.info(f"Restored {len(snapshots_dict)} pairs with {total_points} total snapshots from database")
+            
+            # Cleanup old snapshots in database
+            db.cleanup_old_snapshots(self.retention_hours)
+        except Exception as e:
+            log.error(f"Failed to load history from database: {e}")
     
     def add_snapshot(self, league: str, have: str, want: str, listings: List[ListingSummary]):
         """Record current price data as a historical snapshot"""
@@ -200,6 +228,9 @@ class HistoricalCache:
         
         # Clean up old data
         self._cleanup(key)
+        
+        # Persist to database
+        db.save_snapshot(league, have, want, snapshot.timestamp, best_rate, avg_rate, len(listings))
         
         log.debug(f"Historical snapshot added: {have}->{want} best={best_rate:.2f} avg={avg_rate:.2f}")
     
@@ -328,6 +359,24 @@ class TradeCache:
     def __init__(self, ttl_seconds: int = 1800):  # 30 minutes default
         self.ttl = ttl_seconds
         self._store: Dict[Tuple[str, str, str], CacheEntry] = {}
+        self._load_from_db()
+
+    def _load_from_db(self):
+        """Load cache entries from database on startup."""
+        try:
+            entries = db.load_cache_entries()
+            for key, (listings_data, expires_at) in entries.items():
+                # Reconstruct ListingSummary objects
+                listings = [ListingSummary(**l) for l in listings_data]
+                self._store[key] = CacheEntry(data=listings, expires_at=expires_at)
+            
+            if entries:
+                log.info(f"Restored {len(entries)} cache entries from database")
+            
+            # Cleanup expired entries in database
+            db.cleanup_expired_cache()
+        except Exception as e:
+            log.error(f"Failed to load cache from database: {e}")
 
     def get(self, league: str, have: str, want: str) -> Optional[List[ListingSummary]]:
         key = (league, have, want)
@@ -344,6 +393,9 @@ class TradeCache:
         expires_at = datetime.utcnow() + timedelta(seconds=self.ttl)
         self._store[key] = CacheEntry(data=data, expires_at=expires_at)
         log.info(f"Cache SET: {have}->{want} (expires at {expires_at.strftime('%H:%M:%S')})")
+        
+        # Persist to database
+        db.save_cache_entry(league, have, want, data, expires_at)
 
     def invalidate(self, league: str, have: str, want: str):
         """Remove a specific entry from cache"""
