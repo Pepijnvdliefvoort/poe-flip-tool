@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, memo } from 'react'
+import { createPortal } from 'react-dom'
 import '../spinner.css'
 import { PairSummary } from '../types'
 
@@ -9,10 +10,12 @@ interface SparklineProps {
     height?: number
     stroke?: string
     relativeFirst?: boolean
-    globalMaxAbsDelta?: number
+    globalMaxAbsDelta?: number // treated as max absolute percent change for baseline-centering across all series
     showMinMax?: boolean
+    visualCapPct?: number // clamp global scaling to at most this percent for visibility (e.g. 50)
+    adaptive?: boolean // if true, use per-series max instead of global for finer detail (still centered)
 }
-const Sparkline = memo(function Sparkline({ values, width = 70, height = 24, stroke = 'var(--accent)', relativeFirst = false, globalMaxAbsDelta, showMinMax = true }: SparklineProps) {
+const Sparkline = memo(function Sparkline({ values, width = 70, height = 24, stroke = 'var(--accent)', relativeFirst = false, globalMaxAbsDelta, showMinMax = true, visualCapPct = 50, adaptive = true }: SparklineProps) {
     if (!values || values.length < 2) return null
 
     // Stats
@@ -27,10 +30,19 @@ const Sparkline = memo(function Sparkline({ values, width = 70, height = 24, str
     // Build path using relative mode (baseline mid)
     let d: string
     if (relativeFirst && globalMaxAbsDelta && globalMaxAbsDelta > 0) {
-        const deltas = values.map(v => v - base)
-        d = deltas.map((dv, i) => {
+        // Percent-based deltas relative to base.
+        const deltasPct = values.map(v => base !== 0 ? ((v - base) / base) * 100 : 0)
+        const seriesMaxAbsPct = Math.max(...deltasPct.map(Math.abs)) || 0
+        // Determine scaling denominator: adaptive per-series or global, then clamp by visualCapPct.
+        let denom = adaptive ? seriesMaxAbsPct : globalMaxAbsDelta
+        if (visualCapPct > 0) {
+            denom = Math.min(denom, visualCapPct)
+        }
+        // If denom is extremely small, enlarge so tiny movements still show: enforce a minimum visual range of 2%.
+        if (denom < 2) denom = 2
+        d = deltasPct.map((dp, i) => {
             const x = i * stepX
-            const y = (height / 2) - (dv / globalMaxAbsDelta) * (height / 2)
+            const y = (height / 2) - (dp / denom) * (height / 2)
             const cy = Math.min(height, Math.max(0, y))
             return `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${cy.toFixed(2)}`
         }).join(' ')
@@ -46,8 +58,12 @@ const Sparkline = memo(function Sparkline({ values, width = 70, height = 24, str
     // Compute Y coordinates for markers
     const computeY = (v: number) => {
         if (relativeFirst && globalMaxAbsDelta && globalMaxAbsDelta > 0) {
-            const dv = v - base
-            const y = (height / 2) - (dv / globalMaxAbsDelta) * (height / 2)
+            const dp = base !== 0 ? ((v - base) / base) * 100 : 0
+            const seriesMaxAbsPct = Math.max(...values.map(val => base !== 0 ? Math.abs(((val - base) / base) * 100) : 0)) || 0
+            let denom = adaptive ? seriesMaxAbsPct : globalMaxAbsDelta
+            if (visualCapPct > 0) denom = Math.min(denom, visualCapPct)
+            if (denom < 2) denom = 2
+            const y = (height / 2) - (dp / denom) * (height / 2)
             return Math.min(height, Math.max(0, y))
         } else {
             const range = max - min || 1
@@ -109,7 +125,7 @@ function formatRate(num: number, have?: string, want?: string): string {
     return num.toFixed(2);
 }
 
-function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAbsDelta, accountName }: { pair: PairSummary; defaultExpanded: boolean; loading: boolean; onReload: (index: number) => void; globalMaxAbsDelta: number; accountName?: string | null }) {
+function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAbsDelta, accountName, selectedMetrics }: { pair: PairSummary; defaultExpanded: boolean; loading: boolean; onReload: (index: number) => void; globalMaxAbsDelta: number; accountName?: string | null; selectedMetrics: string[] }) {
     const [isExpanded, setIsExpanded] = useState(defaultExpanded)
     const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
     const timeoutRef = useRef<number | null>(null)
@@ -143,11 +159,34 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
         }
     }, [])
 
-    const avgRate = pair.listings.length > 0
-        ? pair.listings.reduce((sum, l) => sum + l.rate, 0) / pair.listings.length
-        : null
+    // Metric calculations for relevant metrics
+    const rates = pair.listings.map(l => l.rate)
+    const medianRate = (() => {
+        if (!rates.length) return null
+        const sorted = [...rates].sort((a,b)=>a-b)
+        const mid = Math.floor(sorted.length/2)
+        return sorted.length % 2 ? sorted[mid] : (sorted[mid-1]+sorted[mid])/2
+    })()
+    const spreadPct = (() => {
+        if (rates.length < 2) return null
+        const min = Math.min(...rates)
+        const max = Math.max(...rates)
+        return min !== 0 ? ((max - min) / min) * 100 : null
+    })()
 
-    const totalStock = pair.listings.reduce((sum, l) => sum + (l.stock || 0), 0)
+    // Metric render map (only relevant metrics for stable/permanent leagues)
+    const metricRenderers: Record<string, { label: string; value: JSX.Element | null; tooltip: string }> = {
+        spread: {
+            label: 'Spread',
+            value: spreadPct !== null ? <span className="summary-value">{spreadPct.toFixed(1)}%</span> : null,
+            tooltip: 'Spread: (highest rate - lowest rate) / lowest rate. Indicates dispersion; higher spread may mean opportunity.'
+        },
+        median: {
+            label: 'Median',
+            value: medianRate !== null ? <span className="summary-value">{formatRate(medianRate, pair.pay, pair.get)}</span> : null,
+            tooltip: 'Median: Middle value of sorted listing rates. More robust than average against outliers.'
+        }
+    }
 
     // Rate limited status (removed countdown as rate_limit_remaining field was unused)
     const isRateLimited = pair.status === 'rate_limited'
@@ -198,33 +237,34 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
                             <span className="summary-item" style={{ width: 140, display: 'inline-flex', gap: 6, alignItems: 'center', justifyContent: 'flex-start' }}>
                                 {pair.trend && pair.trend.sparkline && pair.trend.sparkline.length >= 2 ? (
                                     <>
-                                        <Sparkline values={pair.trend.sparkline} width={70} relativeFirst={true} globalMaxAbsDelta={globalMaxAbsDelta} />
+                                        <Sparkline values={pair.trend.sparkline} width={70} relativeFirst={true} globalMaxAbsDelta={globalMaxAbsDelta} adaptive={true} visualCapPct={40} />
                                         <span style={{ fontSize: '11px', minWidth: 10, textAlign: 'right', color: pair.trend.direction === 'up' ? '#ef4444' : pair.trend.direction === 'down' ? '#10b981' : '#6b7280', whiteSpace: 'nowrap' }}>
                                             {pair.trend.change_percent > 0 ? '+' : ''}{pair.trend.change_percent.toFixed(1)}%
                                         </span>
                                     </>
                                 ) : null}
                             </span>
-                            <span className="summary-item" style={{ width: 90, display: 'inline-flex', gap: 4, alignItems: 'center', whiteSpace: 'nowrap' }}>
-                                {avgRate ? (
-                                    <>
-                                        <span className="summary-label">Avg:</span>
-                                        <span className="summary-value">{formatRate(avgRate, pair.pay, pair.get)}</span>
-                                    </>
-                                ) : null}
-                            </span>
-                            <span className="summary-item" style={{ width: 95, display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-                                <span className="summary-label">Listings:</span>
-                                <span className="summary-value">{pair.listings.length}</span>
-                            </span>
-                            <span className="summary-item" style={{ width: 80, display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-                                {totalStock > 0 ? (
-                                    <>
-                                        <span className="summary-label">Stock:</span>
-                                        <span className="summary-value">{totalStock}</span>
-                                    </>
-                                ) : null}
-                            </span>
+                            {/* Selected metrics (max 2) - always 2 equal columns */}
+                            <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 240, border: 'none', height: 20 }}>
+                                <tbody>
+                                    <tr>
+                                        {Array.from({ length: 2 }).map((_, idx) => {
+                                            const key = selectedMetrics[idx]
+                                            if (!key) return <td key={idx} style={{ width: 120, border: 'none', height: 20, padding: 0 }}></td>
+                                            const def = metricRenderers[key]
+                                            if (!def || !def.value) return <td key={idx} style={{ width: 120, border: 'none', height: 20, padding: 0 }}></td>
+                                            return (
+                                                <td key={idx} style={{ width: 120, border: 'none', height: 20, padding: 0 }} title={def.tooltip}>
+                                                    <span className="summary-item" style={{ display: 'inline-flex', gap: 4, alignItems: 'center', whiteSpace: 'nowrap' }}>
+                                                        <span className="summary-label">{def.label}:</span>
+                                                        {def.value}
+                                                    </span>
+                                                </td>
+                                            )
+                                        })}
+                                    </tr>
+                                </tbody>
+                            </table>
                         </>}
                     </div>
                 </div>
@@ -371,65 +411,163 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
 
 export function TradesTable({ data, loading, onReload, onRefresh, accountName }: { data: PairSummary[]; loading: boolean; onReload: (index: number) => void; onRefresh?: () => void; accountName?: string | null }) {
     const [allExpanded, setAllExpanded] = useState(false)
+    const METRIC_KEYS = ['spread','median'] as const
+    type MetricKey = typeof METRIC_KEYS[number]
+    const [selectedMetrics, setSelectedMetrics] = useState<MetricKey[]>(() => {
+        try {
+            const raw = localStorage.getItem('selectedMetrics')
+            if (raw) {
+                const arr = JSON.parse(raw)
+                if (Array.isArray(arr)) {
+                    return arr.filter(k => METRIC_KEYS.includes(k)) as MetricKey[]
+                }
+            }
+        } catch {}
+        return []
+    })
+    useEffect(() => {
+        localStorage.setItem('selectedMetrics', JSON.stringify(selectedMetrics))
+    }, [selectedMetrics])
+    const toggleMetric = (key: MetricKey) => {
+        setSelectedMetrics(prev => {
+            const has = prev.includes(key)
+            if (has) return prev.filter(k => k !== key)
+            if (prev.length >= 2) return prev // enforce max 2
+            const updated = [...prev, key]
+            if (updated.length === 2) {
+                // Auto close when hitting max selection for quicker UX
+                setTimeout(() => setMetricsOpen(false), 0)
+            }
+            return updated
+        })
+    }
+    const metricsButtonRef = useRef<HTMLButtonElement | null>(null)
+    const menuRef = useRef<HTMLDivElement | null>(null)
+    const [metricsOpen, setMetricsOpen] = useState(false)
+    const [menuPos, setMenuPos] = useState<{top:number;left:number}>({top:0,left:0})
+    useEffect(() => {
+        const handler = (e: MouseEvent) => {
+            const btn = metricsButtonRef.current
+            const menuEl = menuRef.current
+            if (!btn) return
+            if (btn.contains(e.target as Node)) return
+            if (menuEl && menuEl.contains(e.target as Node)) return
+            setMetricsOpen(false)
+        }
+        if (metricsOpen) {
+            // compute position
+            const rect = metricsButtonRef.current?.getBoundingClientRect()
+            if (rect) {
+                setMenuPos({ top: rect.bottom + 6, left: rect.left })
+            }
+            document.addEventListener('mousedown', handler)
+            window.addEventListener('resize', () => setMetricsOpen(false), { once: true })
+            window.addEventListener('scroll', () => setMetricsOpen(false), { once: true })
+        }
+        return () => { document.removeEventListener('mousedown', handler) }
+    }, [metricsOpen])
 
     // Compute global max absolute delta for baseline-aligned sparklines
     const globalMaxAbsDelta = (() => {
-        let maxAbs = 0
+        // Find maximum absolute percent change relative to first point among all sparklines
+        let maxAbsPct = 0
         for (const p of data) {
             const s = p.trend?.sparkline
             if (s && s.length > 1) {
                 const base = s[0]
+                if (base === 0) continue
                 for (const v of s) {
-                    const delta = Math.abs(v - base)
-                    if (delta > maxAbs) maxAbs = delta
+                    const pct = Math.abs(((v - base) / base) * 100)
+                    if (pct > maxAbsPct) maxAbsPct = pct
                 }
             }
         }
-        return maxAbs || 0
+        return maxAbsPct || 0
     })()
 
     // Find the index currently loading (first with empty listings)
     const loadingIndex = loading ? data.findIndex(p => p.listings.length === 0) : -1
 
     return (
-        <div className="trades-container">
-            <div className="section-header">
-                <h2>Market Listings</h2>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <button
-                        className="btn ghost"
-                        onClick={() => setAllExpanded(!allExpanded)}
-                        style={{ padding: '6px 12px', fontSize: '13px' }}
-                    >
-                        {allExpanded ? 'Collapse All' : 'Expand All'}
-                    </button>
-                    {onRefresh && (
+        <>
+            <div className="trades-container">
+                <div className="section-header">
+                    <h2>Market Listings</h2>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                         <button
-                            className={`btn ${loading ? 'ghost' : 'primary'}`}
-                            onClick={() => onRefresh()}
-                            disabled={loading}
-                            style={{ padding: '6px 14px', fontSize: '13px' }}
-                            title="Refresh all trades"
+                            ref={metricsButtonRef}
+                            className="btn ghost"
+                            style={{ padding: '6px 10px', fontSize: '13px', display:'inline-flex', alignItems:'center', gap:5 }}
+                            onClick={() => setMetricsOpen(o => !o)}
+                            title="Select up to 2 metrics to display"
                         >
-                            {loading ? 'Loading…' : 'Refresh'}
+                            <span style={{fontSize:14}}>⚙</span>
+                            <span>Metrics{selectedMetrics.length ? ` (${selectedMetrics.length})` : ''}</span>
                         </button>
-                    )}
+                        <button
+                            className="btn ghost"
+                            onClick={() => setAllExpanded(!allExpanded)}
+                            style={{ padding: '6px 12px', fontSize: '13px' }}
+                        >
+                            {allExpanded ? 'Collapse All' : 'Expand All'}
+                        </button>
+                        {onRefresh && (
+                            <button
+                                className={`btn ${loading ? 'ghost' : 'primary'}`}
+                                onClick={() => onRefresh()}
+                                disabled={loading}
+                                style={{ padding: '6px 14px', fontSize: '13px' }}
+                                title="Refresh all trades"
+                            >
+                                {loading ? 'Loading…' : 'Refresh'}
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                <div className="pairs-grid">
+                    {data.map((p, i) => (
+                        <CollapsiblePair
+                            key={p.index}
+                            pair={p}
+                            defaultExpanded={allExpanded}
+                            loading={loading && i === loadingIndex}
+                            onReload={onReload}
+                            globalMaxAbsDelta={globalMaxAbsDelta}
+                            accountName={accountName}
+                            selectedMetrics={selectedMetrics}
+                        />
+                    ))}
                 </div>
             </div>
-
-            <div className="pairs-grid">
-                {data.map((p, i) => (
-                    <CollapsiblePair 
-                        key={p.index} 
-                        pair={p} 
-                        defaultExpanded={allExpanded} 
-                        loading={loading && i === loadingIndex} 
-                        onReload={onReload} 
-                        globalMaxAbsDelta={globalMaxAbsDelta}
-                        accountName={accountName}
-                    />
-                ))}
-            </div>
-        </div>
+            {metricsOpen && createPortal(
+                <div ref={menuRef} style={{ position:'fixed', top:menuPos.top, left:menuPos.left, background:'#1f2937', border:'1px solid #374151', borderRadius:8, padding:'10px 12px 8px', zIndex: 9999, width:180, boxShadow:'0 8px 24px rgba(0,0,0,0.3)' }}>
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:7 }}>
+                        <div style={{ fontSize: 12, color: '#9ca3af', fontWeight:500 }}>Select metrics (max 2)</div>
+                        <button onClick={() => setMetricsOpen(false)} style={{ background:'none', border:'none', color:'#9ca3af', cursor:'pointer', fontSize:13, padding:0, lineHeight:1 }}>✕</button>
+                    </div>
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr', columnGap:8, rowGap:3, marginBottom:6 }}>
+                        {METRIC_KEYS.map(k => {
+                            const checked = selectedMetrics.includes(k)
+                            const disabled = !checked && selectedMetrics.length >= 2
+                            const labels: Record<MetricKey,string> = { spread:'Spread', median:'Median' }
+                            const tooltips: Record<MetricKey,string> = {
+                                spread: 'Dispersion between highest and lowest rate',
+                                median: 'Middle rate (robust to outliers)'
+                            }
+                            return (
+                                <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, cursor: disabled ? 'not-allowed' : 'pointer', background: checked ? 'rgba(59,130,246,0.12)' : 'transparent', padding: '4px 6px', borderRadius:4, transition:'background 0.15s ease' }} title={tooltips[k]}>
+                                    <input type="checkbox" checked={checked} disabled={disabled} onChange={() => toggleMetric(k)} style={{ cursor: disabled ? 'not-allowed' : 'pointer', margin:0, width:14, height:14, flexShrink:0 }} />
+                                    <span style={{ lineHeight:1 }}>{labels[k]}</span>
+                                </label>
+                            )
+                        })}
+                    </div>
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                        <button onClick={() => setSelectedMetrics([])} style={{ background:'none', border:'none', color:'#60a5fa', fontSize:11, cursor:'pointer', padding:0, fontWeight:500 }}>Clear all</button>
+                        {selectedMetrics.length >= 2 && <div style={{ fontSize: 11, color:'#fbbf24', fontWeight:500 }}>Max 2 selected</div>}
+                    </div>
+                </div>, document.body)}
+        </>
     )
 }
