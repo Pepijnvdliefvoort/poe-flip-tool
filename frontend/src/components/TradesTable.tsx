@@ -121,7 +121,16 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
                             disabled={pair.status === 'loading'}
                             onClick={(e) => { e.stopPropagation(); onReload(pair.index) }}
                             style={{ fontSize: '14px' }}
+                            title="Refresh this trade"
                         >⟳</button>
+                        {pair.trade_url && (
+                            <button
+                                className="collapse-btn"
+                                onClick={(e) => { e.stopPropagation(); window.open(pair.trade_url!, '_blank') }}
+                                style={{ fontSize: '14px' }}
+                                title="Open on PoE Trade"
+                            >🔗</button>
+                        )}
                     </div>
                 </div>
             </div>

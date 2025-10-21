@@ -27,13 +27,13 @@
       "hot": false
     },
     {
-      "get": "mirror",
-      "pay": "hinekoras-lock",
+      "get": "hinekoras-lock",
+      "pay": "divine",
       "hot": false
     },
     {
-      "get": "hinekoras-lock",
-      "pay": "divine",
+      "get": "mirror",
+      "pay": "hinekoras-lock",
       "hot": false
     },
     {

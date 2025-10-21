@@ -139,53 +139,82 @@ class CacheEntry:
 
 
 class TradeCache:
-    def __init__(self, ttl_seconds: int = 120):
+    def __init__(self, ttl_seconds: int = 1800):  # 30 minutes default
         self.ttl = ttl_seconds
-        self._store: Dict[Tuple[str, str, str, int], CacheEntry] = {}
+        self._store: Dict[Tuple[str, str, str], CacheEntry] = {}
 
-    def get(self, league: str, have: str, want: str, top_n: int) -> Optional[List[ListingSummary]]:
-        key = (league, have, want, top_n)
+    def get(self, league: str, have: str, want: str) -> Optional[List[ListingSummary]]:
+        key = (league, have, want)
         entry = self._store.get(key)
         if entry and datetime.utcnow() < entry.expires_at:
+            log.info(f"Cache HIT: {have}->{want} (expires in {(entry.expires_at - datetime.utcnow()).total_seconds():.0f}s)")
             return entry.data
+        if entry:
+            log.info(f"Cache EXPIRED: {have}->{want}")
         return None
 
-    def set(self, league: str, have: str, want: str, top_n: int, data: List[ListingSummary]):
-        key = (league, have, want, top_n)
-        self._store[key] = CacheEntry(data=data, expires_at=datetime.utcnow() + timedelta(seconds=self.ttl))
+    def set(self, league: str, have: str, want: str, data: List[ListingSummary]):
+        key = (league, have, want)
+        expires_at = datetime.utcnow() + timedelta(seconds=self.ttl)
+        self._store[key] = CacheEntry(data=data, expires_at=expires_at)
+        log.info(f"Cache SET: {have}->{want} (expires at {expires_at.strftime('%H:%M:%S')})")
+
+    def invalidate(self, league: str, have: str, want: str):
+        """Remove a specific entry from cache"""
+        key = (league, have, want)
+        if key in self._store:
+            del self._store[key]
+            log.info(f"Cache INVALIDATED: {have}->{want}")
+
+    def clear_all(self):
+        """Clear entire cache"""
+        self._store.clear()
+        log.info("Cache CLEARED")
 
 
-cache = TradeCache(ttl_seconds=120)
+cache = TradeCache(ttl_seconds=900)  # 15 minutes
 
 
 def fetch_listings_with_cache(
     *, league: str, have: str, want: str, top_n: int = 5, retries: int = 2, backoff_s: float = 0.8
 ) -> Optional[List[ListingSummary]]:
-    # cache
-    cached = cache.get(league, have, want, top_n)
+    """Fetch listings from cache if available, otherwise fetch from API and cache result."""
+    # Check cache first
+    cached = cache.get(league, have, want)
     if cached is not None:
-        return cached
+        # Return cached data, but slice to top_n
+        return cached[:top_n]
 
-    # retry
+    # Not in cache, fetch from API
     for attempt in range(retries + 1):
         raw = _post_exchange(league, have, want)
         if raw:
-            listings = summarize_exchange_json(raw, top_n=top_n)
-            cache.set(league, have, want, top_n, listings)
-            return listings
+            # Fetch more than top_n so we have good cache data
+            listings = summarize_exchange_json(raw, top_n=20)  # Always fetch 20 for cache
+            cache.set(league, have, want, listings)
+            return listings[:top_n]
         if attempt < retries:
             time.sleep(backoff_s * (2 ** attempt))
 
     return None
 
+
 def fetch_listings_force(
     *, league: str, have: str, want: str, top_n: int = 5, retries: int = 2, backoff_s: float = 0.8
 ) -> Optional[List[ListingSummary]]:
-    """Fetch listings ignoring the cache (does not write to cache)."""
+    """Force fetch listings from API, bypassing and updating cache."""
+    # Invalidate cache for this pair
+    cache.invalidate(league, have, want)
+    
+    # Fetch fresh data from API
     for attempt in range(retries + 1):
         raw = _post_exchange(league, have, want)
         if raw:
-            return summarize_exchange_json(raw, top_n=top_n)
+            # Fetch more than top_n so we have good cache data
+            listings = summarize_exchange_json(raw, top_n=20)  # Always fetch 20 for cache
+            cache.set(league, have, want, listings)
+            return listings[:top_n]
         if attempt < retries:
             time.sleep(backoff_s * (2 ** attempt))
+    
     return None

@@ -36,6 +36,7 @@ class PairSummary(BaseModel):
     best_rate: Optional[float] = None
     count_returned: int = 0
     rate_limit_remaining: Optional[float] = None  # seconds until next attempt when rate_limited
+    trade_url: Optional[str] = None  # URL to PoE trade site for this pair
 
 
 class TradesResponse(BaseModel):

@@ -23,6 +23,7 @@ export type PairSummary = {
   best_rate?: number | null
   count_returned: number
   rate_limit_remaining?: number | null
+  trade_url?: string | null
 }
 
 export type TradesResponse = {
