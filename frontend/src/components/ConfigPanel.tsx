@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Api } from '../api'
 import type { ConfigData } from '../types'
 import { CurrencyIcon } from './CurrencyIcon'
@@ -11,7 +11,8 @@ export function ConfigPanel({
     topN, 
     onTopNChanged,
     autoRefresh,
-    onAutoRefreshChanged
+    onAutoRefreshChanged,
+    onAccountNameChanged
 }: { 
     onChanged: () => void; 
     onHotToggled?: (index: number, hot: boolean) => void;
@@ -21,13 +22,22 @@ export function ConfigPanel({
     onTopNChanged: (value: number) => void;
     autoRefresh: boolean;
     onAutoRefreshChanged: (value: boolean) => void;
+    onAccountNameChanged?: (name: string | null) => void;
 }) {
     const [cfg, setCfg] = useState<ConfigData | null>(null)
     const [get, setGet] = useState('')
     const [pay, setPay] = useState('')
     const [saving, setSaving] = useState(false)
+    const [accountNameDraft, setAccountNameDraft] = useState('')
+    const [accountNameSaving, setAccountNameSaving] = useState(false)
+    const accountNameDebounceRef = useRef<number | null>(null)
 
-    useEffect(() => { Api.getConfig().then(setCfg) }, [])
+    useEffect(() => { 
+        Api.getConfig().then(c => { 
+            setCfg(c)
+            setAccountNameDraft(c.account_name || '')
+        }) 
+    }, [])
 
     async function changeLeague(newLeague: string) {
         const next = await Api.patchLeague(newLeague)
@@ -80,6 +90,33 @@ export function ConfigPanel({
             setSaving(false) 
         }
     }
+
+    // Debounced account name save
+    useEffect(() => {
+        if (!cfg) return
+        // Skip initial load
+        // Clear previous timer
+        if (accountNameDebounceRef.current !== null) {
+            clearTimeout(accountNameDebounceRef.current)
+        }
+        accountNameDebounceRef.current = window.setTimeout(async () => {
+            const draft = accountNameDraft.trim()
+            if (draft === (cfg.account_name || '')) return
+            setAccountNameSaving(true)
+            try {
+                const next = await Api.patchAccountName(draft)
+                setCfg(next)
+                if (onAccountNameChanged) onAccountNameChanged(next.account_name || null)
+            } finally {
+                setAccountNameSaving(false)
+            }
+        }, 600) // 600ms debounce
+        return () => {
+            if (accountNameDebounceRef.current !== null) {
+                clearTimeout(accountNameDebounceRef.current)
+            }
+        }
+    }, [accountNameDraft])
 
     if (!cfg) return <div className="card"><p style={{color: 'var(--muted)'}}>Loading…</p></div>
 
@@ -186,6 +223,21 @@ export function ConfigPanel({
                             </button>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            {/* Account Name for Highlighting */}
+            <div style={{ marginBottom: 16 }}>
+                <label className="muted" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '4px' }}>Account Name (Highlight)</label>
+                <input
+                    type="text"
+                    value={accountNameDraft}
+                    onChange={(e) => setAccountNameDraft(e.target.value)}
+                    placeholder="e.g. iNeoxiz#3422"
+                    style={{ fontSize: '13px', padding: '6px 8px', width: '100%', boxSizing: 'border-box' }}
+                />
+                <div className="muted" style={{ fontSize: '11px', marginTop: '4px' }}>
+                    {accountNameSaving ? 'Saving…' : 'Trades matching this PoE account will be highlighted.'}
                 </div>
             </div>
 

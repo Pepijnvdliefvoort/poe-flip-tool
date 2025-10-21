@@ -106,7 +106,7 @@ npm run dev
 
 **Configuration Options** (Optional - edit `frontend/.env` file):
 - `VITE_API_BASE` - Backend API URL (default: http://localhost:8000)
-- `VITE_ACCOUNT_NAME` - Your PoE account name (e.g., iNeoxiz#3422) to highlight your own trades with a subtle blue background
+- `account_name` (stored in `backend/config.json` and editable in the UI) - Your PoE account name (e.g., iNeoxiz#3422). Trades matching this value are highlighted. Supports comma-separated list for multiple names.
 
 See `frontend/.env.example` for the template.
 

@@ -42,6 +42,7 @@ export type TradesResponse = {
 export type ConfigData = {
   league: string
   trades: TradePair[]
+  account_name?: string | null
 }
 
 // Cache status (lightweight per pair)

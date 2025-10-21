@@ -102,6 +102,14 @@ def patch_league(league: str):
     return cfg
 
 
+@app.patch("/api/config/account_name", response_model=ConfigData)
+def patch_account_name(account_name: str = Body(..., embed=True)):
+    """Update only the account_name setting used for highlighting listings"""
+    cfg = _load_config()
+    cfg.account_name = account_name.strip() or None
+    _save_config(cfg)
+    return cfg
+
 @app.patch("/api/config/trades", response_model=ConfigData)
 def patch_trades(patch: TradesPatch = Body(...)):
     """

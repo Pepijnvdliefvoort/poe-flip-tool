@@ -17,6 +17,7 @@ export default function App() {
   const [nearLimit, setNearLimit] = useState(false)
   const [rateLimitDisplay, setRateLimitDisplay] = useState<{ blocked: boolean; block_remaining: number; rules: Record<string, { current: number; limit: number; reset_s: number }[]> } | null>(null)
   const [view, setView] = useState<'trades' | 'system'>('trades')
+  const [accountName, setAccountName] = useState<string | null>(null)
 
   // Helper to update rate limit info after every API call
   const updateRateLimit = async () => {
@@ -49,6 +50,7 @@ export default function App() {
         count_returned: 0
       }));
       setData({ league: cfg.league, pairs: emptyResults.length, results: emptyResults });
+      setAccountName(cfg.account_name || null)
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
       }
@@ -342,7 +344,7 @@ export default function App() {
       {view === 'trades' ? (
         <div className="main-layout">
           <div className="trades-section">
-            <TradesTable data={data?.results || []} loading={loading} onReload={reloadPair} />
+            <TradesTable data={data?.results || []} loading={loading} onReload={reloadPair} accountName={accountName} />
           </div>
           <aside className="config-sidebar">
             <ConfigPanel 
@@ -354,6 +356,7 @@ export default function App() {
               onTopNChanged={setTopN}
               autoRefresh={autoRefresh}
               onAutoRefreshChanged={setAutoRefresh}
+              onAccountNameChanged={setAccountName}
             />
           </aside>
         </div>

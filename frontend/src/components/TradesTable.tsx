@@ -109,7 +109,7 @@ function formatRate(num: number, have?: string, want?: string): string {
     return num.toFixed(2);
 }
 
-function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAbsDelta }: { pair: PairSummary; defaultExpanded: boolean; loading: boolean; onReload: (index: number) => void; globalMaxAbsDelta: number }) {
+function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAbsDelta, accountName }: { pair: PairSummary; defaultExpanded: boolean; loading: boolean; onReload: (index: number) => void; globalMaxAbsDelta: number; accountName?: string | null }) {
     const [isExpanded, setIsExpanded] = useState(defaultExpanded)
     const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
     const timeoutRef = useRef<number | null>(null)
@@ -279,8 +279,9 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
                                 </div>
                                 <div className="listings-list">
                                     {pair.listings.map((l, i) => {
-                                        // Support multiple names in env (comma-separated) and PoE display variations
-                                        const rawNames: string[] = (import.meta.env.VITE_ACCOUNT_NAME || '')
+                                        // Support multiple names from runtime config (comma-separated). Fallback to env only if prop not provided.
+                                        const sourceNames = accountName && accountName.length > 0 ? accountName : (import.meta.env.VITE_ACCOUNT_NAME || '')
+                                        const rawNames: string[] = sourceNames
                                             .split(',')
                                             .map((s: string) => s.trim())
                                             .filter((val: string) => !!val)
@@ -363,7 +364,7 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
     )
 }
 
-export function TradesTable({ data, loading, onReload }: { data: PairSummary[]; loading: boolean; onReload: (index: number) => void }) {
+export function TradesTable({ data, loading, onReload, accountName }: { data: PairSummary[]; loading: boolean; onReload: (index: number) => void; accountName?: string | null }) {
     const [allExpanded, setAllExpanded] = useState(false)
 
     // Compute global max absolute delta for baseline-aligned sparklines
@@ -402,7 +403,15 @@ export function TradesTable({ data, loading, onReload }: { data: PairSummary[]; 
 
             <div className="pairs-grid">
                 {data.map((p, i) => (
-                    <CollapsiblePair key={p.index} pair={p} defaultExpanded={allExpanded} loading={loading && i === loadingIndex} onReload={onReload} globalMaxAbsDelta={globalMaxAbsDelta} />
+                    <CollapsiblePair 
+                        key={p.index} 
+                        pair={p} 
+                        defaultExpanded={allExpanded} 
+                        loading={loading && i === loadingIndex} 
+                        onReload={onReload} 
+                        globalMaxAbsDelta={globalMaxAbsDelta}
+                        accountName={accountName}
+                    />
                 ))}
             </div>
         </div>

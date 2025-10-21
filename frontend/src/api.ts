@@ -30,6 +30,13 @@ export const Api = {
             body: JSON.stringify({ add: body.add || [], remove_indices: body.remove_indices || [] })
         }))
     },
+    async patchAccountName(account_name: string): Promise<ConfigData> {
+        return j(await fetch(`${BASE}/api/config/account_name`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ account_name })
+        }))
+    },
     async rateLimitStatus(): Promise<{ blocked: boolean; block_remaining: number; rules: Record<string, { current: number; limit: number; reset_s: number }[]> }> {
         return j(await fetch(`${BASE}/api/rate_limit`))
     },
