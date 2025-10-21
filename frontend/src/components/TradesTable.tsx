@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import '../spinner.css'
 import { PairSummary } from '../types'
 import { CurrencyIcon } from './CurrencyIcon'
@@ -17,16 +17,36 @@ function formatRate(num: number, have?: string, want?: string): string {
 function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: PairSummary; defaultExpanded: boolean; loading: boolean; onReload: (index: number) => void }) {
     const [isExpanded, setIsExpanded] = useState(defaultExpanded)
     const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
+    const timeoutRef = useRef<number | null>(null)
 
     useEffect(() => {
         setIsExpanded(defaultExpanded)
     }, [defaultExpanded])
     
     const copyWhisper = (whisper: string, index: number) => {
+        // Clear any existing timeout
+        if (timeoutRef.current !== null) {
+            clearTimeout(timeoutRef.current)
+        }
+        
         navigator.clipboard.writeText(whisper)
         setCopiedIndex(index)
-        setTimeout(() => setCopiedIndex(null), 1250) // Faster timeout
+        
+        // Set new timeout
+        timeoutRef.current = window.setTimeout(() => {
+            setCopiedIndex(null)
+            timeoutRef.current = null
+        }, 1250)
     }
+
+    // Cleanup timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (timeoutRef.current !== null) {
+                clearTimeout(timeoutRef.current)
+            }
+        }
+    }, [])
 
     const avgRate = pair.listings.length > 0
         ? pair.listings.reduce((sum, l) => sum + l.rate, 0) / pair.listings.length
@@ -186,10 +206,10 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
                                                         minWidth: 0,
                                                         padding: '4px 8px',
                                                         fontSize: '11px',
-                                                        background: copiedIndex === i ? '#10b981' : 'rgba(100, 100, 100, 0.1)',
-                                                        color: copiedIndex === i ? 'white' : 'rgba(156, 163, 175, 0.7)',
+                                                        background: copiedIndex === i ? 'rgba(16, 185, 129, 0.3)' : 'rgba(100, 100, 100, 0.1)',
+                                                        color: copiedIndex === i ? 'rgba(255, 255, 255, 0.5)' : 'rgba(156, 163, 175, 0.7)',
                                                         border: '1px solid',
-                                                        borderColor: copiedIndex === i ? '#10b981' : 'rgba(156, 163, 175, 0.3)',
+                                                        borderColor: copiedIndex === i ? 'rgba(16, 185, 129, 0.9)' : 'rgba(156, 163, 175, 0.3)',
                                                         borderRadius: '4px',
                                                         cursor: 'pointer',
                                                         fontFamily: 'monospace',
