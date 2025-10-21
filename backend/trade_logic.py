@@ -149,7 +149,7 @@ class PriceSnapshot:
 
 class HistoricalCache:
     """Tracks price history for trend analysis and sparklines"""
-    def __init__(self, retention_hours: int = 24, max_points_per_pair: int = 100):
+    def __init__(self, retention_hours: int = 24, max_points_per_pair: int = 100): # 24 hours default
         self.retention_hours = retention_hours
         self.max_points = max_points_per_pair
         # Key: (league, have, want) -> List of PriceSnapshot

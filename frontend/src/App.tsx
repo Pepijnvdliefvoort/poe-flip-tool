@@ -229,7 +229,7 @@ export default function App() {
             />
           </div>
           <button className="btn primary" onClick={load} disabled={loading}>
-            {loading ? 'Loading...' : 'Fetch from PoE API'}
+            {loading ? 'Loading...' : 'Refresh Trades'}
           </button>
         </div>
       </header>
