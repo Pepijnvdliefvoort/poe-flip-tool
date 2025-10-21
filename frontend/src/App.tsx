@@ -5,6 +5,8 @@ import type { TradesResponse } from './types'
 import { TradesTable } from './components/TradesTable'
 import { ConfigPanel } from './components/ConfigPanel'
 
+const BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000' // vite dev proxy handles /api
+
 export default function App() {
   const [data, setData] = useState<TradesResponse | null>(null)
   const [loading, setLoading] = useState(false)
@@ -45,7 +47,7 @@ export default function App() {
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
       }
-      const url = `/api/trades/stream?top_n=${topN}`;
+      const url = `${BASE}/api/trades/stream?top_n=${topN}`;
       const es = new window.EventSource(url);
       eventSourceRef.current = es;
       let league = cfg.league;

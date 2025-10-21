@@ -54,9 +54,14 @@ def _generate_trade_url(league: str, want: str, have: str) -> str:
 
 def _load_config() -> ConfigData:
     """Load configuration from config.json"""
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    return ConfigData.parse_obj(data)
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return ConfigData.parse_obj(data)
+    except Exception as e:
+        log.error(f"Error loading config: {e}")
+        # Return default config if loading fails
+        return ConfigData(league="Standard", trades=[])
 
 
 def _save_config(cfg: ConfigData) -> None:

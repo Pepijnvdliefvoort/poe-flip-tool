@@ -57,13 +57,8 @@ cd poe-flip-tool
 ```bash
 cd backend
 
-# Create and activate virtual environment (optional but recommended)
-python -m venv venv
-.\venv\Scripts\activate  # Windows
-# source venv/bin/activate  # Linux/Mac
-
 # Install dependencies
-pip install -r requirements.txt
+py -m pip install -r requirements.txt
 
 # Create .env file with your PoE credentials
 echo POESESSID=your_session_id_here > .env

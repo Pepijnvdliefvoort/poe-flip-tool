@@ -1,6 +1,6 @@
 import type { TradesResponse, ConfigData, TradePair, PairSummary } from './types'
 
-const BASE = import.meta.env.VITE_API_BASE || '' // vite dev proxy handles /api
+const BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000' // vite dev proxy handles /api
 
 async function j<T>(res: Response): Promise<T> {
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
