@@ -138,6 +138,133 @@ class CacheEntry:
     expires_at: datetime
 
 
+@dataclass
+class PriceSnapshot:
+    """A single price observation at a point in time"""
+    timestamp: datetime
+    best_rate: float
+    avg_rate: float
+    listing_count: int
+
+
+class HistoricalCache:
+    """Tracks price history for trend analysis and sparklines"""
+    def __init__(self, retention_hours: int = 24, max_points_per_pair: int = 100):
+        self.retention_hours = retention_hours
+        self.max_points = max_points_per_pair
+        # Key: (league, have, want) -> List of PriceSnapshot
+        self._history: Dict[Tuple[str, str, str], List[PriceSnapshot]] = {}
+    
+    def add_snapshot(self, league: str, have: str, want: str, listings: List[ListingSummary]):
+        """Record current price data as a historical snapshot"""
+        if not listings:
+            return
+        
+        key = (league, have, want)
+        best_rate = listings[0].rate
+        avg_rate = sum(l.rate for l in listings) / len(listings)
+        
+        snapshot = PriceSnapshot(
+            timestamp=datetime.utcnow(),
+            best_rate=best_rate,
+            avg_rate=avg_rate,
+            listing_count=len(listings),
+        )
+        
+        if key not in self._history:
+            self._history[key] = []
+        
+        self._history[key].append(snapshot)
+        
+        # Clean up old data
+        self._cleanup(key)
+        
+        log.debug(f"Historical snapshot added: {have}->{want} best={best_rate:.2f} avg={avg_rate:.2f}")
+    
+    def _cleanup(self, key: Tuple[str, str, str]):
+        """Remove snapshots older than retention period and limit to max points"""
+        if key not in self._history:
+            return
+        
+        cutoff = datetime.utcnow() - timedelta(hours=self.retention_hours)
+        snapshots = self._history[key]
+        
+        # Remove old entries
+        snapshots = [s for s in snapshots if s.timestamp > cutoff]
+        
+        # Limit to max points (keep most recent)
+        if len(snapshots) > self.max_points:
+            snapshots = snapshots[-self.max_points:]
+        
+        self._history[key] = snapshots
+    
+    def get_history(self, league: str, have: str, want: str, max_points: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Get price history for a pair, formatted for API response"""
+        key = (league, have, want)
+        snapshots = self._history.get(key, [])
+        
+        # Clean up before returning
+        if snapshots:
+            self._cleanup(key)
+            snapshots = self._history.get(key, [])
+        
+        # Limit points if requested
+        if max_points and len(snapshots) > max_points:
+            # Sample evenly across the dataset
+            step = len(snapshots) / max_points
+            indices = [int(i * step) for i in range(max_points)]
+            snapshots = [snapshots[i] for i in indices]
+        
+        return [
+            {
+                "timestamp": s.timestamp.isoformat(),
+                "best_rate": round(s.best_rate, 6),
+                "avg_rate": round(s.avg_rate, 6),
+                "listing_count": s.listing_count,
+            }
+            for s in snapshots
+        ]
+    
+    def get_trend(self, league: str, have: str, want: str) -> Dict[str, Any]:
+        """Calculate trend statistics for a pair"""
+        key = (league, have, want)
+        snapshots = self._history.get(key, [])
+        
+        if len(snapshots) < 2:
+            return {
+                "direction": "neutral",
+                "change_percent": 0.0,
+                "data_points": len(snapshots),
+            }
+        
+        # Compare recent average to older average
+        recent_count = max(1, len(snapshots) // 4)  # Last 25% of data
+        recent_avg = sum(s.best_rate for s in snapshots[-recent_count:]) / recent_count
+        older_avg = sum(s.best_rate for s in snapshots[:recent_count]) / recent_count
+        
+        change_percent = ((recent_avg - older_avg) / older_avg) * 100 if older_avg > 0 else 0.0
+        
+        if change_percent > 2:
+            direction = "up"
+        elif change_percent < -2:
+            direction = "down"
+        else:
+            direction = "neutral"
+        
+        return {
+            "direction": direction,
+            "change_percent": round(change_percent, 2),
+            "data_points": len(snapshots),
+            "oldest": snapshots[0].timestamp.isoformat(),
+            "newest": snapshots[-1].timestamp.isoformat(),
+        }
+    
+    def clear_all(self):
+        """Clear all historical data"""
+        self._history.clear()
+        log.info("Historical cache CLEARED")
+
+
 class TradeCache:
     def __init__(self, ttl_seconds: int = 1800):  # 30 minutes default
         self.ttl = ttl_seconds
@@ -173,6 +300,7 @@ class TradeCache:
 
 
 cache = TradeCache(ttl_seconds=900)  # 15 minutes
+historical_cache = HistoricalCache(retention_hours=24, max_points_per_pair=100)
 
 
 def fetch_listings_with_cache(
@@ -195,6 +323,10 @@ def fetch_listings_with_cache(
             # Fetch more than top_n so we have good cache data
             listings = summarize_exchange_json(raw, top_n=20)  # Always fetch 20 for cache
             cache.set(league, have, want, listings)
+            
+            # Add to historical tracking
+            historical_cache.add_snapshot(league, have, want, listings)
+            
             return (listings[:top_n], False)
         if attempt < retries:
             time.sleep(backoff_s * (2 ** attempt))
@@ -219,6 +351,10 @@ def fetch_listings_force(
             # Fetch more than top_n so we have good cache data
             listings = summarize_exchange_json(raw, top_n=20)  # Always fetch 20 for cache
             cache.set(league, have, want, listings)
+            
+            # Add to historical tracking
+            historical_cache.add_snapshot(league, have, want, listings)
+            
             return (listings[:top_n], False)
         if attempt < retries:
             time.sleep(backoff_s * (2 ** attempt))

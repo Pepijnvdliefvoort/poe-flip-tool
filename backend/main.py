@@ -170,6 +170,10 @@ def trades_summary(
                     trade_url=trade_url,
                 )
             else:
+                # Get trend data from historical cache
+                from trade_logic import historical_cache
+                trend_data = historical_cache.get_trend(cfg.league, t.pay, t.get)
+                
                 summary = PairSummary(
                     index=idx,
                     get=t.get,
@@ -180,6 +184,7 @@ def trades_summary(
                     best_rate=(listings[0].rate if listings else None),
                     count_returned=len(listings),
                     trade_url=trade_url,
+                    trend=trend_data,
                 )
         
         results.append(summary)
@@ -244,6 +249,10 @@ def refresh_trades(
                     trade_url=trade_url,
                 )
             else:
+                # Get trend data from historical cache
+                from trade_logic import historical_cache
+                trend_data = historical_cache.get_trend(cfg.league, t.pay, t.get)
+                
                 summary = PairSummary(
                     index=idx,
                     get=t.get,
@@ -254,6 +263,7 @@ def refresh_trades(
                     best_rate=(listings[0].rate if listings else None),
                     count_returned=len(listings),
                     trade_url=trade_url,
+                    trend=trend_data,
                 )
         
         results.append(summary)
@@ -460,4 +470,61 @@ def clear_cache():
     cache.clear_all()
     return {"status": "ok", "message": "Cache cleared"}
 
+
+@app.get("/api/history/{have}/{want}")
+def get_price_history(
+    have: str,
+    want: str,
+    league: str = Query("Standard"),
+    max_points: int = Query(50, ge=10, le=200),
+):
+    """Get historical price data for a specific currency pair"""
+    from trade_logic import historical_cache
+    
+    history = historical_cache.get_history(league, have, want, max_points=max_points)
+    trend = historical_cache.get_trend(league, have, want)
+    
+    return {
+        "league": league,
+        "have": have,
+        "want": want,
+        "history": history,
+        "trend": trend,
+    }
+
+
+@app.get("/api/history/status")
+def get_history_status():
+    """Get overview of all tracked price histories"""
+    from trade_logic import historical_cache
+    
+    summaries = []
+    for key, snapshots in historical_cache._history.items():
+        league, have, want = key
+        if snapshots:
+            trend = historical_cache.get_trend(league, have, want)
+            summaries.append({
+                "league": league,
+                "have": have,
+                "want": want,
+                "data_points": len(snapshots),
+                "trend": trend,
+                "oldest": snapshots[0].timestamp.isoformat(),
+                "newest": snapshots[-1].timestamp.isoformat(),
+            })
+    
+    return {
+        "retention_hours": historical_cache.retention_hours,
+        "max_points_per_pair": historical_cache.max_points,
+        "tracked_pairs": len(summaries),
+        "summaries": summaries,
+    }
+
+
+@app.post("/api/history/clear")
+def clear_history():
+    """Clear all historical data"""
+    from trade_logic import historical_cache
+    historical_cache.clear_all()
+    return {"status": "ok", "message": "Historical cache cleared"}
 

@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 
 
@@ -26,6 +26,15 @@ class ListingSummary(BaseModel):
     indexed: Optional[str] = None
 
 
+class PriceTrend(BaseModel):
+    """Trend information for sparkline visualization"""
+    direction: str  # "up" | "down" | "neutral"
+    change_percent: float
+    data_points: int
+    oldest: Optional[str] = None
+    newest: Optional[str] = None
+
+
 class PairSummary(BaseModel):
     index: int
     get: str
@@ -36,7 +45,8 @@ class PairSummary(BaseModel):
     best_rate: Optional[float] = None
     count_returned: int = 0
     rate_limit_remaining: Optional[float] = None  # seconds until next attempt when rate_limited
-    trade_url: Optional[str] = None  # URL to PoE trade site for this pair
+    trend: Optional[PriceTrend] = None  # Price trend for sparkline
+    history: Optional[List[Dict[str, Any]]] = Field(default=None)  # Historical price data
 
 
 class TradesResponse(BaseModel):

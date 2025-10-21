@@ -84,6 +84,13 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
                                     <span className="summary-value" style={{ color: 'var(--accent)', fontWeight: 700, fontSize: '15px' }}>{formatRate(pair.best_rate, pair.pay, pair.get)}</span>
                                 </span>
                             )}
+                            {pair.trend && pair.trend.data_points >= 2 && (
+                                <span className="summary-item" title={`${pair.trend.change_percent > 0 ? '+' : ''}${pair.trend.change_percent.toFixed(1)}% (${pair.trend.data_points} data points)`}>
+                                    {pair.trend.direction === 'up' && <span style={{ color: '#ef4444', fontSize: '14px' }}>📈</span>}
+                                    {pair.trend.direction === 'down' && <span style={{ color: '#10b981', fontSize: '14px' }}>📉</span>}
+                                    {pair.trend.direction === 'neutral' && <span style={{ color: '#6b7280', fontSize: '14px' }}>➡️</span>}
+                                </span>
+                            )}
                             {avgRate && (
                                 <span className="summary-item">
                                     <span className="summary-label">Avg:</span>
@@ -123,14 +130,6 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
                             style={{ fontSize: '14px' }}
                             title="Refresh this trade"
                         >⟳</button>
-                        {pair.trade_url && (
-                            <button
-                                className="collapse-btn"
-                                onClick={(e) => { e.stopPropagation(); window.open(pair.trade_url!, '_blank') }}
-                                style={{ fontSize: '14px' }}
-                                title="Open on PoE Trade"
-                            >🔗</button>
-                        )}
                     </div>
                 </div>
             </div>

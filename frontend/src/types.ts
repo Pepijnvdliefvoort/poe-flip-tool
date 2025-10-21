@@ -13,6 +13,21 @@ export type ListingSummary = {
   indexed?: string | null
 }
 
+export type PriceTrend = {
+  direction: 'up' | 'down' | 'neutral'
+  change_percent: number
+  data_points: number
+  oldest?: string | null
+  newest?: string | null
+}
+
+export type PriceSnapshot = {
+  timestamp: string
+  best_rate: number
+  avg_rate: number
+  listing_count: number
+}
+
 export type PairSummary = {
   index: number
   get: string
@@ -23,7 +38,8 @@ export type PairSummary = {
   best_rate?: number | null
   count_returned: number
   rate_limit_remaining?: number | null
-  trade_url?: string | null
+  trend?: PriceTrend | null
+  history?: PriceSnapshot[] | null
 }
 
 export type TradesResponse = {
