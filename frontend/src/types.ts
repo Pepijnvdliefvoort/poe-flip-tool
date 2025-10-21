@@ -31,6 +31,7 @@ export type PairSummary = {
   best_rate?: number | null
   count_returned: number
   trend?: PriceTrend | null
+  fetched_at?: string | null
 }
 
 export type TradesResponse = {

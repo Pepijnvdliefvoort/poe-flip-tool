@@ -236,6 +236,11 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
                         {pair.status === 'error' && <span className="status-badge error">Error</span>}
                         {pair.status === 'invalid' && <span className="status-badge error">Invalid</span>}
                         {pair.status === 'rate_limited' && <span className="status-badge blocked">Rate Limited</span>}
+                        {pair.fetched_at && (
+                            <span style={{ fontSize: '11px', opacity: 0.5, marginLeft: 8 }}>
+                                {new Date(pair.fetched_at).toLocaleTimeString()}
+                            </span>
+                        )}
                     </div>
                     <div style={{ display: 'flex', gap: 6 }}>
                         <button className="collapse-btn" onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded) }}>

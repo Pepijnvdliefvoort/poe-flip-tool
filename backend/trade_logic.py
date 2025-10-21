@@ -432,7 +432,7 @@ class TradeCache:
                 "league": league,
                 "have": have,
                 "want": want,
-                "expires_at": entry.expires_at.isoformat(),
+                "expires_at": entry.expires_at.isoformat() + 'Z',  # Append Z to indicate UTC
                 "seconds_remaining": round(remaining, 1),
                 "expired": remaining == 0,
                 "listing_count": len(entry.data),
@@ -442,7 +442,7 @@ class TradeCache:
         return {
             "ttl_seconds": self.ttl,
             "entries": len(self._store),
-            "soonest_expiry": soonest_expiry.isoformat() if soonest_expiry else None,
+            "soonest_expiry": (soonest_expiry.isoformat() + 'Z') if soonest_expiry else None,  # Append Z
             "entries_detail": entries,
         }
 

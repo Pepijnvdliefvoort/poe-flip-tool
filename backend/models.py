@@ -46,6 +46,7 @@ class PairSummary(BaseModel):
     best_rate: Optional[float] = None
     count_returned: int = 0
     trend: Optional[PriceTrend] = None  # Price trend for sparkline
+    fetched_at: Optional[str] = None  # ISO timestamp of when data was fetched
 
 
 class TradesResponse(BaseModel):

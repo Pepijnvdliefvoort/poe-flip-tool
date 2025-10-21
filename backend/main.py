@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 import time
 import logging
@@ -161,6 +162,7 @@ def refresh_one_trade(
             listings=[],
             best_rate=None,
             count_returned=0,
+            fetched_at=datetime.utcnow().isoformat() + 'Z',
         )
     
     listings, was_cached = fetch_listings_force(
@@ -180,6 +182,7 @@ def refresh_one_trade(
             listings=[],
             best_rate=None,
             count_returned=0,
+            fetched_at=datetime.utcnow().isoformat() + 'Z',
         )
     
     # Record snapshot and get trend data from historical cache
@@ -198,6 +201,7 @@ def refresh_one_trade(
         best_rate=(listings[0].rate if listings else None),
         count_returned=len(listings),
         trend=trend_data,
+        fetched_at=datetime.utcnow().isoformat() + 'Z',
     )
 
 
@@ -231,6 +235,7 @@ async def stream_trades(
                     listings=[],
                     best_rate=None,
                     count_returned=0,
+                    fetched_at=datetime.utcnow().isoformat() + 'Z',
                 )
             else:
                 # Use force or cache based on parameter
@@ -259,6 +264,7 @@ async def stream_trades(
                         listings=[],
                         best_rate=None,
                         count_returned=0,
+                        fetched_at=datetime.utcnow().isoformat() + 'Z',
                     )
                 else:
                     # Record snapshot and get trend data from historical cache
@@ -277,6 +283,7 @@ async def stream_trades(
                         best_rate=(listings[0].rate if listings else None),
                         count_returned=len(listings),
                         trend=trend_data,
+                        fetched_at=datetime.utcnow().isoformat() + 'Z',
                     )
             
             log.info(
