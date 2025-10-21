@@ -218,18 +218,6 @@ export default function App() {
           </div>
         )}
         <div className="controls">
-          <div className="control-group">
-            <label htmlFor="topn-input">Top Results</label>
-            <input
-              id="topn-input"
-              type="number"
-              min={1}
-              max={20}
-              value={topN}
-              onChange={e=>setTopN(Number(e.target.value) || 5)}
-              className="topn-input"
-            />
-          </div>
           <button className="btn primary" onClick={load} disabled={loading}>
             {loading ? 'Loading...' : 'Refresh Trades'}
           </button>
@@ -241,7 +229,7 @@ export default function App() {
           <TradesTable data={data?.results || []} loading={loading} onReload={reloadPair} />
         </div>
         <aside className="config-sidebar">
-          <ConfigPanel onChanged={load} onHotToggled={updateHotStatus} onPairAdded={addNewPair} onPairRemoved={removePair} />
+          <ConfigPanel onChanged={load} onHotToggled={updateHotStatus} onPairAdded={addNewPair} onPairRemoved={removePair} topN={topN} onTopNChanged={setTopN} />
         </aside>
       </div>
 

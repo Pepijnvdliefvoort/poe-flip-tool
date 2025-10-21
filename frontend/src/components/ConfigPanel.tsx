@@ -3,11 +3,13 @@ import { Api } from '../api'
 import type { ConfigData } from '../types'
 import { CurrencyIcon } from './CurrencyIcon'
 
-export function ConfigPanel({ onChanged, onHotToggled, onPairAdded, onPairRemoved }: { 
+export function ConfigPanel({ onChanged, onHotToggled, onPairAdded, onPairRemoved, topN, onTopNChanged }: { 
     onChanged: () => void; 
     onHotToggled?: (index: number, hot: boolean) => void;
     onPairAdded?: (get: string, pay: string) => void;
     onPairRemoved?: (index: number) => void;
+    topN: number;
+    onTopNChanged: (value: number) => void;
 }) {
     const [cfg, setCfg] = useState<ConfigData | null>(null)
     const [get, setGet] = useState('')
@@ -74,18 +76,31 @@ export function ConfigPanel({ onChanged, onHotToggled, onPairAdded, onPairRemove
         <div className="card" style={{ fontSize: '14px' }}>
             <h2 style={{ fontSize: '20px', marginBottom: '16px' }}>Config</h2>
 
-            {/* League selector - compact */}
-            <div style={{ marginBottom: 16 }}>
-                <label className="muted" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>League</label>
-                <select 
-                    value={cfg.league} 
-                    onChange={(e) => changeLeague(e.target.value)}
-                    disabled={saving}
-                    style={{ fontSize: '13px', padding: '6px 8px' }}
-                >
-                    <option value="Standard">Standard</option>
-                    <option value="Hardcore">Hardcore</option>
-                </select>
+            {/* League selector and Top Results - side by side */}
+            <div style={{ display: 'flex', gap: '12px', marginBottom: 16 }}>
+                <div style={{ flex: 1 }}>
+                    <label className="muted" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '4px' }}>League</label>
+                    <select 
+                        value={cfg.league} 
+                        onChange={(e) => changeLeague(e.target.value)}
+                        disabled={saving}
+                        style={{ fontSize: '13px', padding: '6px 8px', width: '100%' }}
+                    >
+                        <option value="Standard">Standard</option>
+                        <option value="Hardcore">Hardcore</option>
+                    </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                    <label className="muted" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '4px' }}>Top Results</label>
+                    <input
+                        type="number"
+                        min={1}
+                        max={20}
+                        value={topN}
+                        onChange={e => onTopNChanged(Number(e.target.value) || 5)}
+                        style={{ fontSize: '13px', padding: '6px 8px', width: '100%' }}
+                    />
+                </div>
             </div>
 
             {/* Trade pairs list - compact */}
