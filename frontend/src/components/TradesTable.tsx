@@ -25,7 +25,7 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
     const copyWhisper = (whisper: string, index: number) => {
         navigator.clipboard.writeText(whisper)
         setCopiedIndex(index)
-        setTimeout(() => setCopiedIndex(null), 2000)
+        setTimeout(() => setCopiedIndex(null), 1250) // Faster timeout
     }
 
     const avgRate = pair.listings.length > 0
@@ -193,12 +193,13 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
                                                         borderRadius: '4px',
                                                         cursor: 'pointer',
                                                         fontFamily: 'monospace',
-                                                        transition: 'all 0.2s',
+                                                        transition: 'all 0.3s ease-in-out',
                                                         userSelect: 'none',
                                                         overflow: 'hidden',
                                                         textOverflow: 'ellipsis',
                                                         whiteSpace: 'nowrap',
-                                                        alignSelf: 'center'
+                                                        alignSelf: 'center',
+                                                        textAlign: 'center'
                                                     }}
                                                     title={copiedIndex === i ? 'Copied!' : `Click to copy: ${l.whisper}`}
                                                 >
