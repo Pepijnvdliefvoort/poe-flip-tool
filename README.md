@@ -18,6 +18,7 @@ A modern, real-time market analysis tool for **Path of Exile** currency trading.
 - **Hot/Cold Trade Marking**: Mark specific trade pairs as "hot" for closer monitoring with visual indicators
 - **Whisper Messages**: Click-to-copy whisper messages for quick seller contact with fade animations
 - **Account Information**: View account names for each listing
+- **Personal Trade Highlighting**: Configure your account name to automatically highlight your own listings with a blue glow
 - **Modern UI**: Clean, compact sidebar with currency icons, custom form controls, and responsive layout
 - **Configurable**: Easy-to-manage trade pairs and league settings via REST API
 - **Async Loading**: Trades load one-by-one with visual feedback (spinners & placeholder rows)
@@ -94,9 +95,20 @@ cd frontend
 # Install dependencies
 npm install
 
+# Create .env file (optional - for highlighting your own trades)
+# Copy the example file and edit it
+copy .env.example .env
+# Then edit .env with your actual account name (e.g., YourName#1234)
+
 # Run the dev server
 npm run dev
 ```
+
+**Configuration Options** (Optional - edit `frontend/.env` file):
+- `VITE_API_BASE` - Backend API URL (default: http://localhost:8000)
+- `VITE_ACCOUNT_NAME` - Your PoE account name (e.g., iNeoxiz#3422) to highlight your own trades with a subtle blue background
+
+See `frontend/.env.example` for the template.
 
 The frontend will be available at `http://localhost:5173`
 

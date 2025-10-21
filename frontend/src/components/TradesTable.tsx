@@ -278,8 +278,29 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
                                     {pair.listings.length} Listing{pair.listings.length !== 1 ? 's' : ''}
                                 </div>
                                 <div className="listings-list">
-                                    {pair.listings.map((l, i) => (
-                                        <div key={i} className="listing-card compact">
+                                    {pair.listings.map((l, i) => {
+                                        // Support multiple names in env (comma-separated) and PoE display variations
+                                        const rawNames: string[] = (import.meta.env.VITE_ACCOUNT_NAME || '')
+                                            .split(',')
+                                            .map((s: string) => s.trim())
+                                            .filter((val: string) => !!val)
+                                        // Normalize: remove optional #discriminator suffix (e.g., Name#1234) for comparison
+                                        const normalize = (name?: string | null) => (name || '').replace(/#\d{3,5}$/,'').toLowerCase()
+                                        const normalizedListing = normalize(l.account_name)
+                                        const isMyTrade = rawNames.some((envName: string) => {
+                                            const nEnv: string = normalize(envName)
+                                            return nEnv && nEnv === normalizedListing
+                                        })
+                                        return (
+                                        <div 
+                                            key={i} 
+                                            className="listing-card compact"
+                                            style={{
+                                                background: isMyTrade ? 'rgba(59, 130, 246, 0.12)' : undefined,
+                                                border: isMyTrade ? '1px solid rgba(59, 130, 246, 0.35)' : undefined,
+                                                boxShadow: isMyTrade ? '0 0 8px rgba(59, 130, 246, 0.2)' : undefined
+                                            }}
+                                        >
                                             <span className="listing-rank" style={{ width: '40px', flexShrink: 0 }}>#{i + 1}</span>
                                             <span className="rate-value" style={{ color: 'var(--accent)', fontWeight: 500, width: '60px', flexShrink: 0 }}>{formatRate(l.rate, l.have_currency, l.want_currency)}</span>
                                             <span className="rate-currencies" style={{ width: '50px', flexShrink: 0 }}>
@@ -291,9 +312,9 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
                                                 <span className="meta-label">Stock:</span>
                                                 <span className="meta-value">{l.stock ?? '∞'}</span>
                                             </span>
-                                            <span className="listing-info" style={{ width: '180px', flexShrink: 0 }}>
+                                            <span className="listing-info" style={{ width: '180px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
                                                 <span className="meta-label">Account:</span>
-                                                <span className="meta-value">{l.account_name || 'Unknown'}</span>
+                                                <span className="meta-value" style={{ fontWeight: isMyTrade ? 600 : undefined }}>{l.account_name || 'Unknown'}</span>
                                             </span>
                                             {l.whisper && (
                                                 <span
@@ -330,7 +351,7 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
                                                 </span>
                                             )}
                                         </div>
-                                    ))}
+                                    )})}
                                 </div>
                             </div>
                         </>
