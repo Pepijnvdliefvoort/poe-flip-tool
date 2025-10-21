@@ -177,13 +177,16 @@ cache = TradeCache(ttl_seconds=900)  # 15 minutes
 
 def fetch_listings_with_cache(
     *, league: str, have: str, want: str, top_n: int = 5, retries: int = 2, backoff_s: float = 0.8
-) -> Optional[List[ListingSummary]]:
-    """Fetch listings from cache if available, otherwise fetch from API and cache result."""
+) -> Tuple[Optional[List[ListingSummary]], bool]:
+    """
+    Fetch listings from cache if available, otherwise fetch from API and cache result.
+    Returns: (listings, was_cached)
+    """
     # Check cache first
     cached = cache.get(league, have, want)
     if cached is not None:
         # Return cached data, but slice to top_n
-        return cached[:top_n]
+        return (cached[:top_n], True)
 
     # Not in cache, fetch from API
     for attempt in range(retries + 1):
@@ -192,17 +195,20 @@ def fetch_listings_with_cache(
             # Fetch more than top_n so we have good cache data
             listings = summarize_exchange_json(raw, top_n=20)  # Always fetch 20 for cache
             cache.set(league, have, want, listings)
-            return listings[:top_n]
+            return (listings[:top_n], False)
         if attempt < retries:
             time.sleep(backoff_s * (2 ** attempt))
 
-    return None
+    return (None, False)
 
 
 def fetch_listings_force(
     *, league: str, have: str, want: str, top_n: int = 5, retries: int = 2, backoff_s: float = 0.8
-) -> Optional[List[ListingSummary]]:
-    """Force fetch listings from API, bypassing and updating cache."""
+) -> Tuple[Optional[List[ListingSummary]], bool]:
+    """
+    Force fetch listings from API, bypassing and updating cache.
+    Returns: (listings, was_cached) - was_cached is always False for this function
+    """
     # Invalidate cache for this pair
     cache.invalidate(league, have, want)
     
@@ -213,8 +219,8 @@ def fetch_listings_force(
             # Fetch more than top_n so we have good cache data
             listings = summarize_exchange_json(raw, top_n=20)  # Always fetch 20 for cache
             cache.set(league, have, want, listings)
-            return listings[:top_n]
+            return (listings[:top_n], False)
         if attempt < retries:
             time.sleep(backoff_s * (2 ** attempt))
     
-    return None
+    return (None, False)

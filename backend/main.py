@@ -135,6 +135,7 @@ def trades_summary(
 
     for idx, t in enumerate(cfg.trades):
         trade_url = _generate_trade_url(cfg.league, t.get, t.pay)
+        was_cached = False
         
         if rate_limiter.blocked:
             summary = PairSummary(
@@ -149,7 +150,7 @@ def trades_summary(
                 trade_url=trade_url,
             )
         else:
-            listings = fetch_listings_with_cache(
+            listings, was_cached = fetch_listings_with_cache(
                 league=cfg.league,
                 have=t.pay,
                 want=t.get,
@@ -183,12 +184,13 @@ def trades_summary(
         
         results.append(summary)
         
-        if delay_s:
+        # Only delay if data was not from cache
+        if delay_s and not was_cached:
             time.sleep(delay_s)
 
         log.info(
             f"[GET {idx}] {t.pay}->{t.get}: status={summary.status} "
-            f"best_rate={summary.best_rate} count={summary.count_returned}"
+            f"best_rate={summary.best_rate} count={summary.count_returned} cached={was_cached}"
         )
 
     return TradesResponse(league=cfg.league, pairs=len(cfg.trades), results=results)
@@ -222,7 +224,7 @@ def refresh_trades(
             )
         else:
             # Use fetch_listings_force to bypass cache and get fresh data
-            listings = fetch_listings_force(
+            listings, was_cached = fetch_listings_force(
                 league=cfg.league,
                 have=t.pay,
                 want=t.get,
@@ -296,7 +298,7 @@ def refresh_one_trade(
             trade_url=trade_url,
         )
     
-    listings = fetch_listings_force(
+    listings, was_cached = fetch_listings_force(
         league=cfg.league,
         have=t.pay,
         want=t.get,
@@ -346,6 +348,7 @@ async def stream_trades(
                 break
             
             trade_url = _generate_trade_url(cfg.league, t.get, t.pay)
+            was_cached = False
             
             if rate_limiter.blocked:
                 summary = PairSummary(
@@ -360,7 +363,7 @@ async def stream_trades(
                     trade_url=trade_url,
                 )
             else:
-                listings = fetch_listings_with_cache(
+                listings, was_cached = fetch_listings_with_cache(
                     league=cfg.league,
                     have=t.pay,
                     want=t.get,
@@ -394,12 +397,13 @@ async def stream_trades(
             
             log.info(
                 f"[SSE {idx}] {t.pay}->{t.get}: status={summary.status} "
-                f"best_rate={summary.best_rate} count={summary.count_returned}"
+                f"best_rate={summary.best_rate} count={summary.count_returned} cached={was_cached}"
             )
             
             yield f"data: {json.dumps(summary.dict())}\n\n"
             
-            if delay_s:
+            # Only delay if data was not from cache
+            if delay_s and not was_cached:
                 import asyncio
                 await asyncio.sleep(delay_s)
     
