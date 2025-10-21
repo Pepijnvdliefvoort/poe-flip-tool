@@ -54,16 +54,9 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
 
     const totalStock = pair.listings.reduce((sum, l) => sum + (l.stock || 0), 0)
 
-    // Countdown for rate limit remaining (local decrement to give user feedback)
-    const [remaining, setRemaining] = useState<number | null>(pair.rate_limit_remaining ?? null)
-    useEffect(() => { setRemaining(pair.rate_limit_remaining ?? null) }, [pair.rate_limit_remaining])
-    useEffect(() => {
-        if (pair.status !== 'rate_limited' || remaining === null) return
-        const id = setInterval(() => {
-            setRemaining(r => (r === null ? null : Math.max(0, r - 1)))
-        }, 1000)
-        return () => clearInterval(id)
-    }, [pair.status, remaining])
+    // Rate limited status (removed countdown as rate_limit_remaining field was unused)
+    const isRateLimited = pair.status === 'rate_limited'
+
 
     return (
         <div style={{ position: 'relative', maxWidth: '100%', overflow: 'hidden' }}>
@@ -137,7 +130,7 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
                         {pair.status === 'loading' && <span className="status-badge loading">Loading...</span>}
                         {pair.status === 'error' && <span className="status-badge error">Error</span>}
                         {pair.status === 'invalid' && <span className="status-badge error">Invalid</span>}
-                        {pair.status === 'rate_limited' && <span className="status-badge blocked">Rate Limited{remaining !== null ? ` (${remaining.toFixed(0)}s)` : ''}</span>}
+                        {pair.status === 'rate_limited' && <span className="status-badge blocked">Rate Limited</span>}
                     </div>
                     <div style={{ display: 'flex', gap: 6 }}>
                         <button className="collapse-btn" onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded) }}>
@@ -158,7 +151,7 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
                 <>
                     {pair.status === 'rate_limited' ? (
                         <div className="listings-section">
-                            <div className="listings-header">Temporarily rate limited – listings unavailable.{remaining !== null ? ` Retry after ~${remaining.toFixed(0)}s.` : ''}</div>
+                            <div className="listings-header">Temporarily rate limited – listings unavailable.</div>
                         </div>
                     ) : loading && pair.listings.length === 0 ? (
                         <div className="listings-section">

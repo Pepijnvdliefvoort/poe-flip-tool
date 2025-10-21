@@ -20,7 +20,6 @@ class ListingSummary(BaseModel):
     want_currency: str
     want_amount: float
     stock: Optional[int] = None
-    seller: Optional[str] = None
     account_name: Optional[str] = None
     whisper: Optional[str] = None
     indexed: Optional[str] = None
@@ -44,9 +43,7 @@ class PairSummary(BaseModel):
     listings: List[ListingSummary] = Field(default_factory=list)
     best_rate: Optional[float] = None
     count_returned: int = 0
-    rate_limit_remaining: Optional[float] = None  # seconds until next attempt when rate_limited
     trend: Optional[PriceTrend] = None  # Price trend for sparkline
-    history: Optional[List[Dict[str, Any]]] = Field(default=None)  # Historical price data
 
 
 class TradesResponse(BaseModel):

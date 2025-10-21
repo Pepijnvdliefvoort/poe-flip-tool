@@ -12,13 +12,15 @@ A modern, real-time market analysis tool for **Path of Exile** currency trading.
 
 - **Real-time Market Data**: Stream trade data asynchronously with Server-Sent Events (SSE)
 - **Smart Caching**: Intelligent TTL-based caching to avoid rate limits and reduce API load
+- **Price Trend Indicators**: Visual indicators (📈📉➡️) showing if prices are rising, falling, or stable
+- **Historical Price Tracking**: 24-hour price history with automatic snapshot recording
 - **Hot/Cold Trade Marking**: Mark specific trade pairs as "hot" for closer monitoring with visual indicators
-- **Whisper Messages**: Click-to-copy whisper messages for quick seller contact
-- **Account Information**: View both character and account names for each listing
-- **Modern UI**: Clean, compact two-column config panel with currency icons and collapsible pairs
+- **Whisper Messages**: Click-to-copy whisper messages for quick seller contact with fade animations
+- **Account Information**: View account names for each listing
+- **Modern UI**: Clean, compact sidebar with currency icons, custom form controls, and responsive layout
 - **Configurable**: Easy-to-manage trade pairs and league settings via REST API
 - **Async Loading**: Trades load one-by-one with visual feedback (spinners & placeholder rows)
-- **Professional Design**: Dark theme, modern animations, custom scrollbars, and responsive layout
+- **Professional Design**: Dark theme, smooth transitions, custom scrollbars with SVG styling
 - **Rate Limit Protection**: Soft throttling and hard blocking to prevent API lockouts
 
 ---
@@ -88,27 +90,31 @@ The frontend will be available at `http://localhost:5173`
 ## 🎮 Usage
 
 ### Basic Workflow
-1. **Configure Trade Pairs**: Use the compact config panel on the right to add/remove currency pairs (e.g., Divine → Chaos)
-2. **Mark Hot Trades**: Toggle the 🔥/❄️ icon to mark trades you want to monitor closely - hot trades get visual highlighting
-3. **Load Market Data**: Click "Load Cached" to fetch current market listings
-4. **Analyze Results**: View best rates, average prices, stock levels, account names, and whisper messages
-5. **Copy Whisper**: Click any whisper message to copy it to clipboard for quick seller contact
-6. **Collapse/Expand**: Use the expand/collapse buttons to manage visibility of trade details
+1. **Configure Trade Pairs**: Use the config panel sidebar to add/remove currency pairs and adjust "Top Results" slider
+2. **Select League**: Choose your league from the dropdown
+3. **Load Market Data**: Click "Refresh Trades" to fetch live market data (bypasses cache)
+4. **View Trends**: Check the trend indicators (📈📉➡️) to see if prices are rising, falling, or stable
+5. **Analyze Results**: View best rates, profit calculations, stock levels, and account names
+6. **Copy Whisper**: Click any whisper message to copy it to clipboard - shows "✓ Copied!" confirmation
+7. **View History**: Open `http://localhost:8000/api/history/<have>/<want>` to see detailed price snapshots
 
 ### API Endpoints
 
 #### Config Management
 - `GET /api/config` - Get current configuration
-- `PUT /api/config` - Update full configuration
-- `PATCH /api/config/league?league=<name>` - Change league
-- `PATCH /api/config/trades` - Add/remove trade pairs
+- `PATCH /api/config/league` - Change league (body: `{"value": "Standard"}`)
+- `PATCH /api/config/pairs` - Update trade pairs (body: `{"value": [["chaos", "divine"], ...]}`)
+- `PATCH /api/config/top_n` - Set number of results per pair (body: `{"value": 5}`)
 
 #### Trade Data
-- `GET /api/trades/stream?top_n=5&delay_s=2.0` - SSE stream of trade summaries (used by frontend)
-- `GET /api/trades?top_n=5` - Get cached trade summaries (JSON)
-- `POST /api/trades/refresh?top_n=5` - Force refresh all trades
+- `GET /api/trades/stream?force=false` - SSE stream of trade summaries (used by frontend)
+- `POST /api/trades/refresh_one` - Refresh a single trade pair (body: `{"have": "chaos", "want": "divine"}`)
+
+#### Price History
+- `GET /api/history/{have}/{want}?max_points=20` - Get historical price snapshots for a currency pair
+
+#### System
 - `GET /api/rate_limit` - Current rate limit state (blocked flag, remaining seconds, parsed rule states)
-- `POST /api/trades/refresh_one?index=<i>&top_n=5` - Refresh a single trade pair (bypasses cache for that pair only)
 
 ---
 
@@ -196,8 +202,8 @@ Potential improvements:
 poe-flip-tool/
 ├── backend/
 │   ├── main.py              # FastAPI app & routes
-│   ├── models.py            # Pydantic models (TradePair, PairSummary, etc.)
-│   ├── trade_logic.py       # PoE Trade API logic, caching & whisper extraction
+│   ├── models.py            # Pydantic models (ListingSummary, PairSummary, etc.)
+│   ├── trade_logic.py       # PoE API logic, caching, historical tracking
 │   ├── rate_limiter.py      # Rate limiting with soft throttling
 │   ├── config.json          # Trade pair configuration
 │   ├── requirements.txt     # Python dependencies
@@ -209,8 +215,8 @@ poe-flip-tool/
 │   │   ├── types.ts         # TypeScript types
 │   │   ├── spinner.css      # Loading animations
 │   │   └── components/
-│   │       ├── TradesTable.tsx    # Market listings with whisper copy
-│   │       ├── ConfigPanel.tsx    # Two-column config with hot/cold toggles
+│   │       ├── TradesTable.tsx    # Market listings with whisper copy & trends
+│   │       ├── ConfigPanel.tsx    # Sidebar config with league/pairs/top_n
 │   │       └── CurrencyIcon.tsx   # Currency icons
 │   ├── public/
 │   │   └── currency/        # Currency icon images

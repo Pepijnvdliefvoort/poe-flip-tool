@@ -30,7 +30,9 @@ export default function App() {
 
   // SSE trades loading
   const eventSourceRef = useRef<EventSource | null>(null)
-  const load = useCallback(() => {
+  const initialLoadRef = useRef(true) // Track if this is the initial load
+  
+  const load = useCallback((forceRefresh = false) => {
     setLoading(true)
     // Pre-populate results with empty rows for each trade
     Api.getConfig().then(cfg => {
@@ -47,7 +49,8 @@ export default function App() {
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
       }
-      const url = `${BASE}/api/trades/stream?top_n=${topN}`;
+      // Use force parameter: true for manual refresh, false for initial load
+      const url = `${BASE}/api/trades/stream?top_n=${topN}&force=${forceRefresh}`;
       const es = new window.EventSource(url);
       eventSourceRef.current = es;
       let league = cfg.league;
@@ -78,7 +81,14 @@ export default function App() {
     updateRateLimit();
   }, [topN])
 
-  useEffect(() => { load(); return () => { eventSourceRef.current?.close() } }, [load])
+  // Initial load uses cache, subsequent manual refreshes force fresh data
+  useEffect(() => { 
+    if (initialLoadRef.current) {
+      load(false); // Initial load from cache
+      initialLoadRef.current = false;
+    }
+    return () => { eventSourceRef.current?.close() } 
+  }, [load])
 
   const reloadPair = async (index: number) => {
     if (!data) return;
@@ -218,7 +228,7 @@ export default function App() {
           </div>
         )}
         <div className="controls">
-          <button className="btn primary" onClick={load} disabled={loading}>
+          <button className="btn primary" onClick={() => load(true)} disabled={loading}>
             {loading ? 'Loading...' : 'Refresh Trades'}
           </button>
         </div>
@@ -229,7 +239,7 @@ export default function App() {
           <TradesTable data={data?.results || []} loading={loading} onReload={reloadPair} />
         </div>
         <aside className="config-sidebar">
-          <ConfigPanel onChanged={load} onHotToggled={updateHotStatus} onPairAdded={addNewPair} onPairRemoved={removePair} topN={topN} onTopNChanged={setTopN} />
+          <ConfigPanel onChanged={() => load(false)} onHotToggled={updateHotStatus} onPairAdded={addNewPair} onPairRemoved={removePair} topN={topN} onTopNChanged={setTopN} />
         </aside>
       </div>
 

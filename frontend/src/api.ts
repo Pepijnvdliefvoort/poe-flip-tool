@@ -8,12 +8,6 @@ async function j<T>(res: Response): Promise<T> {
 }
 
 export const Api = {
-    async getTrades(top_n = 5): Promise<TradesResponse> {
-        return j(await fetch(`${BASE}/api/trades?top_n=${top_n}`))
-    },
-    async refreshTrades(top_n = 5): Promise<TradesResponse> {
-        return j(await fetch(`${BASE}/api/trades/refresh?top_n=${top_n}`, { method: 'POST' }))
-    },
     async getConfig(): Promise<ConfigData> {
         return j(await fetch(`${BASE}/api/config`))
     },

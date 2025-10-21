@@ -99,7 +99,6 @@ def summarize_exchange_json(data: Dict[str, Any], top_n: int = 5) -> List[Listin
             continue
 
         account = listing.get("account") or {}
-        seller = account.get("lastCharacterName") or account.get("name")
         account_name = account.get("name")
         
         # Build whisper message
@@ -119,7 +118,6 @@ def summarize_exchange_json(data: Dict[str, Any], top_n: int = 5) -> List[Listin
             want_currency=str(it.get("currency")),
             want_amount=float(want_amt),
             stock=it.get("stock"),
-            seller=seller,
             account_name=account_name,
             whisper=whisper,
             indexed=listing.get("indexed"),
