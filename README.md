@@ -146,6 +146,49 @@ The frontend will be available at `http://localhost:5173`
 - `GET /api/cache/summary` - Aggregate cache + historical statistics (entries, soonest expiry, snapshot counts)
 - `GET /api/database/stats` - SQLite database statistics (size, entry counts, oldest/newest snapshots)
 
+#### Stash
+- `GET /api/stash/{tab_name}` - Fetch a specific stash tab by its name (uses configured `account_name` & league). Returns 404 if the tab is not found, 400 if no account name configured. Example: `/api/stash/currency`.
+#### Valuations
+- `GET /api/value/latest` - Latest divine-equivalent value for each unique configured currency (uses historical snapshots; returns null values if no data). Used by Profit Tracker.
+
+### Profit Tracker
+The Profit Tracker tab ("Profit" in the header) lets you take manual portfolio snapshots of your `currency` stash tab, persist them, and view a historical chart of total Divine value over time.
+
+New Portfolio Endpoints:
+- `POST /api/portfolio/snapshot` – Computes current stash quantities + valuations and stores a snapshot row (returns the snapshot payload).
+- `GET /api/portfolio/history?limit=120` – Returns most recent N stored snapshots with breakdowns.
+
+Snapshot Workflow:
+1. Click "Snapshot Now".
+2. Backend fetches `/api/stash/currency` (server-side), loads latest valuations via `/api/value/latest`, computes per-currency totals, and stores the aggregate.
+3. Response includes: `timestamp`, `total_divines`, detailed `breakdown`, and `saved` boolean.
+4. Frontend appends to in-memory history for a smooth chart update.
+
+Valuation Logic Recap:
+- If tracked pair is `chaos -> divine` (pay chaos, get divine): best_rate = chaos per 1 divine, so 1 chaos = 1 / best_rate divine.
+- If tracked pair is `divine -> chaos` (pay divine, get chaos): best_rate = divine per 1 chaos (already per-unit divine cost); invert only when pay != divine.
+- Missing data produces `null` divine_per_unit and `null` total_divine for that currency.
+
+Displayed Columns (each snapshot breakdown):
+- Currency key
+- Quantity (summed stack sizes in the tab)
+- Divine / Unit (derived or null)
+- Total (quantity * divine per unit or null)
+- Source Pair (e.g. `chaos->divine` or `divine->exalted`)
+
+Chart Rendering:
+- Frontend renders a sparkline of `total_divines` across snapshots.
+- Points are ordered chronologically; last point annotated with current total.
+
+Data Retention:
+- Snapshots persist in SQLite (`portfolio_snapshots` table).
+- Retrieval limit defaults to backend parameter (up to 1000). Client currently requests last 120.
+
+Failure Modes & Notes:
+- If no `account_name` configured, snapshot endpoint returns 400.
+- If stash tab named `currency` not found, snapshot fails (ensure tab name matches exactly, case-insensitive match performed server-side).
+- Valuations may be partially null if insufficient historical trade data yet.
+
 ### Data Persistence
 
 The application automatically persists cache entries and price history to a SQLite database (`backend/poe_cache.db`). This provides several benefits:

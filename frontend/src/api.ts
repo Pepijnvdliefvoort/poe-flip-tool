@@ -1,4 +1,4 @@
-import type { TradesResponse, ConfigData, TradePair, PairSummary, CacheSummary, CacheStatus, HistoryResponse, DatabaseStats } from './types'
+import type { TradesResponse, ConfigData, TradePair, PairSummary, CacheSummary, CacheStatus, HistoryResponse, DatabaseStats, LatestValuesResponse, StashTabResponse, PortfolioSnapshot, PortfolioHistoryResponse } from './types'
 
 const BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000' // vite dev proxy handles /api
 
@@ -55,5 +55,20 @@ export const Api = {
     },
     async databaseStats(): Promise<DatabaseStats> {
         return j(await fetch(`${BASE}/api/database/stats`))
+    }
+    ,
+    async stashTab(tabName: string): Promise<StashTabResponse> {
+        return j(await fetch(`${BASE}/api/stash/${encodeURIComponent(tabName)}`))
+    },
+    async latestValues(): Promise<LatestValuesResponse> {
+        return j(await fetch(`${BASE}/api/value/latest`))
+    }
+    ,
+    async portfolioSnapshot(): Promise<PortfolioSnapshot> {
+        return j(await fetch(`${BASE}/api/portfolio/snapshot`, { method: 'POST' }))
+    },
+    async portfolioHistory(limit?: number): Promise<PortfolioHistoryResponse> {
+        const qp = limit ? `?limit=${limit}` : ''
+        return j(await fetch(`${BASE}/api/portfolio/history${qp}`))
     }
 }

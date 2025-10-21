@@ -69,6 +69,16 @@ class DatabasePersistence:
                 
                 CREATE INDEX IF NOT EXISTS idx_snapshots_time 
                 ON price_snapshots(timestamp);
+
+                CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    total_divines REAL NOT NULL,
+                    breakdown_json TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_portfolio_time
+                ON portfolio_snapshots(timestamp);
             ''')
             log.debug("Database schema created/verified")
         except Exception as e:
@@ -327,12 +337,20 @@ class DatabasePersistence:
             # Snapshots count
             cursor.execute('SELECT COUNT(*) as count FROM price_snapshots')
             snapshot_count = cursor.fetchone()['count']
+
+            # Portfolio snapshots count
+            cursor.execute('SELECT COUNT(*) as count FROM portfolio_snapshots')
+            portfolio_count = cursor.fetchone()['count']
             
             # Oldest and newest snapshots
             cursor.execute('SELECT MIN(timestamp) as oldest, MAX(timestamp) as newest FROM price_snapshots')
             row = cursor.fetchone()
             oldest_snapshot = row['oldest'] if row['oldest'] else None
             newest_snapshot = row['newest'] if row['newest'] else None
+
+            # Newest portfolio snapshot
+            cursor.execute('SELECT MAX(timestamp) as newest FROM portfolio_snapshots')
+            newest_portfolio_snapshot = cursor.fetchone()['newest']
             
             # Oldest cache entry
             cursor.execute('SELECT MIN(expires_at) as oldest FROM cache_entries')
@@ -346,9 +364,11 @@ class DatabasePersistence:
                 'database_size_bytes': file_size,
                 'cache_entries': cache_count,
                 'price_snapshots': snapshot_count,
+                'portfolio_snapshots': portfolio_count,
                 'oldest_cache_entry': oldest_cache,
                 'oldest_snapshot': oldest_snapshot,
                 'newest_snapshot': newest_snapshot,
+                'newest_portfolio_snapshot': newest_portfolio_snapshot,
             }
         except Exception as e:
             log.error(f"Failed to get database stats: {e}")
@@ -357,9 +377,11 @@ class DatabasePersistence:
                 'database_size_bytes': 0,
                 'cache_entries': 0,
                 'price_snapshots': 0,
+                'portfolio_snapshots': 0,
                 'oldest_cache_entry': None,
                 'oldest_snapshot': None,
                 'newest_snapshot': None,
+                'newest_portfolio_snapshot': None,
             }
     
     def close(self):
@@ -367,6 +389,55 @@ class DatabasePersistence:
         if self.conn:
             self.conn.close()
             log.info("Database connection closed")
+
+    # ============================================================================
+    # Portfolio Snapshot Operations
+    # ============================================================================
+
+    def save_portfolio_snapshot(self, timestamp: datetime, total_divines: float, breakdown: List[Dict[str, Any]]) -> bool:
+        """Persist a portfolio snapshot with total value and breakdown list."""
+        try:
+            payload = json.dumps(breakdown)
+            with self._transaction() as cursor:
+                cursor.execute('''
+                    INSERT INTO portfolio_snapshots (timestamp, total_divines, breakdown_json)
+                    VALUES (?, ?, ?)
+                ''', (timestamp.isoformat(), total_divines, payload))
+            log.debug(f"Saved portfolio snapshot total={total_divines:.3f} @ {timestamp.isoformat()}")
+            return True
+        except Exception as e:
+            log.error(f"Failed to save portfolio snapshot: {e}")
+            return False
+
+    def load_portfolio_history(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Return chronological portfolio snapshots (oldest -> newest)."""
+        try:
+            query = 'SELECT timestamp, total_divines, breakdown_json FROM portfolio_snapshots ORDER BY timestamp ASC'
+            if limit:
+                query += f' LIMIT {int(limit)}'
+            cursor = self.conn.cursor()
+            cursor.execute(query)
+            rows = []
+            for r in cursor.fetchall():
+                try:
+                    ts = r['timestamp']
+                    if isinstance(ts, str):
+                        ts_dt = datetime.fromisoformat(ts)
+                    else:
+                        ts_dt = ts
+                    breakdown = json.loads(r['breakdown_json'])
+                    rows.append({
+                        'timestamp': ts_dt.isoformat(),
+                        'total_divines': r['total_divines'],
+                        'breakdown': breakdown,
+                    })
+                except Exception as e:
+                    log.warning(f"Skipping invalid portfolio snapshot row: {e}")
+                    continue
+            return rows
+        except Exception as e:
+            log.error(f"Failed to load portfolio history: {e}")
+            return []
 
 
 # Global persistence instance

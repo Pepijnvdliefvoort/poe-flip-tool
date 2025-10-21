@@ -5,6 +5,7 @@ import logging
 import os
 from pathlib import Path
 from typing import List
+import requests
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Query, HTTPException, Request, Body
@@ -14,6 +15,7 @@ from fastapi.responses import StreamingResponse
 from models import ConfigData, PairSummary, TradesResponse, TradesPatch
 from trade_logic import fetch_listings_with_cache, fetch_listings_force
 from rate_limiter import rate_limiter
+from trade_logic import HEADERS, COOKIES  # reuse existing headers/cookies for PoE
 
 # ============================================================================
 # App Initialization & Logging
@@ -415,3 +417,256 @@ def database_stats():
     except Exception as e:
         log.error(f"Failed to get database stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Stash Tab Endpoint
+# ============================================================================
+
+@app.get("/api/stash/{tab_name}")
+def get_stash_tab(tab_name: str):
+    """Retrieve contents of a specific stash tab by name.
+
+    Uses the configured account_name from config.json and current league.
+    Performs two requests if necessary:
+      1. Fetch tabs metadata to locate tab index by name.
+      2. Fetch items for that tab index.
+
+    Returns 404 if the tab cannot be found by name.
+    Returns 400 if no account name configured.
+    Returns 502 if upstream PoE API fails.
+    """
+    cfg = _load_config()
+    if not cfg.account_name:
+        raise HTTPException(status_code=400, detail="No account_name configured in backend config.json")
+
+    league = cfg.league
+    account = cfg.account_name
+
+    base_url = "https://www.pathofexile.com/character-window/get-stash-items"
+
+    def _request(params):
+        try:
+            # Respect existing rate limiter
+            rate_limiter.wait_before_request()
+            resp = requests.get(base_url, headers=HEADERS, cookies=COOKIES, params=params, timeout=20)
+            rate_limiter.on_response(resp.headers)
+            if resp.status_code == 429:
+                log.warning("Stash API 429 (rate limited)")
+                return None, 429
+            if resp.status_code != 200:
+                log.warning(f"Stash API non-200 {resp.status_code}")
+                return None, resp.status_code
+            return resp.json(), 200
+        except Exception as e:
+            log.error(f"Error calling stash API: {e}")
+            return None, 0
+
+    # First call: include tabs metadata so we can locate by name.
+    meta_params = {
+        "accountName": account,
+        "league": league,
+        "tabIndex": 0,
+        "tabs": 1,
+    }
+    meta_json, code = _request(meta_params)
+    if not meta_json:
+        raise HTTPException(status_code=502, detail="Failed to fetch stash tabs metadata from PoE API")
+
+    tabs = meta_json.get("tabs") or []
+    target = None
+    # PoE tab objects usually have keys: id, n (name), i (index)
+    for t in tabs:
+        name = t.get("n") or t.get("name")
+        if isinstance(name, str) and name.lower() == tab_name.lower():
+            target = t
+            break
+
+    if not target:
+        raise HTTPException(status_code=404, detail=f"Stash tab '{tab_name}' not found")
+
+    tab_index = target.get("i")
+    if tab_index is None:
+        raise HTTPException(status_code=502, detail="PoE API response missing tab index")
+
+    # Second call: fetch items for that tab index, we can omit tabs metadata for speed.
+    items_params = {
+        "accountName": account,
+        "league": league,
+        "tabIndex": tab_index,
+        "tabs": 0,
+    }
+    items_json, code = _request(items_params)
+    if not items_json:
+        raise HTTPException(status_code=502, detail="Failed to fetch stash tab items from PoE API")
+
+    # Build response with minimal helpful structure.
+    return {
+        "league": league,
+        "account": account,
+        "tab_name": target.get("n") or target.get("name") or tab_name,
+        "tab_index": tab_index,
+        "metadata": {
+            k: target.get(k) for k in ["type", "colour", "hidden", "selected", "id"] if k in target
+        },
+        "items_count": len(items_json.get("items", [])),
+        "items": items_json.get("items", []),
+    }
+
+
+@app.get("/api/value/latest")
+def latest_currency_values():
+    """Return latest divine-equivalent value for each configured unique currency.
+
+    Logic:
+    For currency X (excluding divine):
+      If we have snapshots for pay=X get=divine: best_rate = X per 1 divine => value_per_unit = 1 / best_rate.
+      Else if pay=divine get=X: best_rate = divine per 1 X => value_per_unit = best_rate.
+      Else value unknown.
+    Divine itself is 1.
+    """
+    cfg = _load_config()
+    league = cfg.league
+    from trade_logic import historical_cache  # lazy import to avoid circulars
+
+    # Unique currencies from config trades
+    currencies = set()
+    for t in cfg.trades:
+        currencies.add(t.get)
+        currencies.add(t.pay)
+    # Ensure ordering (stable for clients)
+    sorted_currencies = sorted(currencies)
+
+    results = []
+    for cur in sorted_currencies:
+        if cur == "divine":
+            results.append({
+                "currency": cur,
+                "source": None,
+                "raw_best_rate": 1.0,
+                "divine_per_unit": 1.0,
+                "timestamp": datetime.utcnow().isoformat() + 'Z'
+            })
+            continue
+        # Try pay=cur get=divine first
+        key_pay_div = (league, cur, "divine")
+        key_div_pay = (league, "divine", cur)
+        snapshot = None
+        direction = None
+        if key_pay_div in historical_cache._history and historical_cache._history[key_pay_div]:
+            snapshot = historical_cache._history[key_pay_div][-1]
+            direction = "pay->divine"  # X per divine
+            raw = snapshot.best_rate
+            divine_per_unit = (1 / raw) if raw > 0 else None
+            results.append({
+                "currency": cur,
+                "source": {"pay": cur, "get": "divine"},
+                "direction": direction,
+                "raw_best_rate": raw,
+                "divine_per_unit": divine_per_unit,
+                "timestamp": snapshot.timestamp.isoformat() + 'Z'
+            })
+            continue
+        if key_div_pay in historical_cache._history and historical_cache._history[key_div_pay]:
+            snapshot = historical_cache._history[key_div_pay][-1]
+            direction = "divine->pay"  # divine per X
+            raw = snapshot.best_rate
+            divine_per_unit = raw
+            results.append({
+                "currency": cur,
+                "source": {"pay": "divine", "get": cur},
+                "direction": direction,
+                "raw_best_rate": raw,
+                "divine_per_unit": divine_per_unit,
+                "timestamp": snapshot.timestamp.isoformat() + 'Z'
+            })
+            continue
+        # Unknown value
+        results.append({
+            "currency": cur,
+            "source": None,
+            "direction": None,
+            "raw_best_rate": None,
+            "divine_per_unit": None,
+            "timestamp": None
+        })
+
+    return {
+        "league": league,
+        "currencies": results,
+        "count": len(results)
+    }
+
+
+# ============================================================================
+# Portfolio Snapshot Endpoints
+# ============================================================================
+
+_NAME_TO_KEY = {
+    'chaos orb': 'chaos',
+    'divine orb': 'divine',
+    'exalted orb': 'exalted',
+    'mirror of kalandra': 'mirror',
+    'mirror shard': 'mirror-shard',
+    "hinekora's lock": 'hinekoras-lock',
+}
+
+def _compute_portfolio_breakdown(account: str, league: str):
+    """Fetch stash 'currency' tab and produce quantity map + valuations."""
+    # Reuse stash logic
+    tab_resp = get_stash_tab('currency')  # will raise if missing
+    items = tab_resp.get('items', [])
+    quantities = {}
+    for it in items:
+        key_candidate = (it.get('typeLine') or it.get('name') or '').lower()
+        cur_key = _NAME_TO_KEY.get(key_candidate)
+        if not cur_key:
+            continue
+        qty = it.get('stackSize') or 1
+        quantities[cur_key] = (quantities.get(cur_key, 0) + qty)
+
+    # Get valuations
+    vals = latest_currency_values()
+    val_map = {c['currency']: c for c in vals['currencies']}
+
+    breakdown = []
+    for cur, qty in sorted(quantities.items()):
+        meta = val_map.get(cur)
+        divine_per = meta['divine_per_unit'] if meta else None
+        total = divine_per * qty if (divine_per is not None) else None
+        breakdown.append({
+            'currency': cur,
+            'quantity': qty,
+            'divine_per_unit': divine_per,
+            'total_divine': total,
+            'source_pair': (meta['source']['pay'] + '->' + meta['source']['get']) if (meta and meta['source']) else None,
+        })
+    return breakdown
+
+@app.post("/api/portfolio/snapshot")
+def create_portfolio_snapshot():
+    """Compute and persist a portfolio snapshot, returning breakdown + total."""
+    cfg = _load_config()
+    if not cfg.account_name:
+        raise HTTPException(status_code=400, detail="No account_name configured")
+    breakdown = _compute_portfolio_breakdown(cfg.account_name, cfg.league)
+    total = sum(b['total_divine'] for b in breakdown if b['total_divine'] is not None)
+    from persistence import db
+    ts = datetime.utcnow()
+    saved = db.save_portfolio_snapshot(ts, total, breakdown)
+    return {
+        'saved': saved,
+        'timestamp': ts.isoformat() + 'Z',
+        'total_divines': total,
+        'breakdown': breakdown,
+        'league': cfg.league,
+    }
+
+@app.get("/api/portfolio/history")
+def portfolio_history(limit: int = Query(None, ge=1, le=1000)):
+    from persistence import db
+    rows = db.load_portfolio_history(limit)
+    return {
+        'count': len(rows),
+        'snapshots': rows,
+    }

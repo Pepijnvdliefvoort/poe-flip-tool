@@ -104,3 +104,63 @@ export type DatabaseStats = {
   oldest_snapshot: string | null
   newest_snapshot: string | null
 }
+
+// Latest currency divine-equivalent valuation response
+export type LatestValuesResponse = {
+  league: string
+  count: number
+  currencies: {
+    currency: string
+    source: { pay: string; get: string } | null
+    direction: string | null
+    raw_best_rate: number | null
+    divine_per_unit: number | null
+    timestamp: string | null
+  }[]
+}
+
+// Stash tab response (subset of backend fields used)
+export type StashTabResponse = {
+  league: string
+  account: string
+  tab_name: string
+  tab_index: number
+  items_count: number
+  items: {
+    id?: string
+    name?: string
+    typeLine?: string
+    stackSize?: number
+    baseType?: string
+    icon?: string
+  }[]
+}
+
+export type PortfolioSnapshot = {
+  saved: boolean
+  timestamp: string
+  total_divines: number
+  league: string
+  breakdown: {
+    currency: string
+    quantity: number
+    divine_per_unit: number | null
+    total_divine: number | null
+    source_pair: string | null
+  }[]
+}
+
+export type PortfolioHistoryResponse = {
+  count: number
+  snapshots: {
+    timestamp: string
+    total_divines: number
+    breakdown: {
+      currency: string
+      quantity: number
+      divine_per_unit: number | null
+      total_divine: number | null
+      source_pair?: string | null
+    }[]
+  }[]
+}

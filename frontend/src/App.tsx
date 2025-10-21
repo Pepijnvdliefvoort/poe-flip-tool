@@ -5,6 +5,7 @@ import type { TradesResponse } from './types'
 import { TradesTable } from './components/TradesTable'
 import { ConfigPanel } from './components/ConfigPanel'
 import { SystemDashboard } from './components/SystemDashboard'
+import ProfitTracker from './components/ProfitTracker'
 
 const BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000' // vite dev proxy handles /api
 
@@ -16,7 +17,7 @@ export default function App() {
   const [rateLimit, setRateLimit] = useState<{ blocked: boolean; block_remaining: number; rules: Record<string, { current: number; limit: number; reset_s: number }[]> } | null>(null)
   const [nearLimit, setNearLimit] = useState(false)
   const [rateLimitDisplay, setRateLimitDisplay] = useState<{ blocked: boolean; block_remaining: number; rules: Record<string, { current: number; limit: number; reset_s: number }[]> } | null>(null)
-  const [view, setView] = useState<'trades' | 'system'>('trades')
+  const [view, setView] = useState<'trades' | 'system' | 'profit'>('trades')
   const [accountName, setAccountName] = useState<string | null>(null)
 
   // Helper to update rate limit info after every API call
@@ -342,6 +343,11 @@ export default function App() {
             onClick={() => setView('system')}
             style={{ padding: '6px 16px', minWidth: 90 }}
           >System</button>
+          <button
+            className={`btn ${view === 'profit' ? 'primary' : 'ghost'}`}
+            onClick={() => setView('profit')}
+            style={{ padding: '6px 16px', minWidth: 90 }}
+          >Profit</button>
         </div>
         <div style={{ justifySelf: 'end', display: 'flex', alignItems: 'center', gap: 12 }}>
           {rateLimit && (rateLimit.blocked || nearLimit) && (
@@ -375,9 +381,13 @@ export default function App() {
             />
           </aside>
         </div>
-      ) : (
+      ) : view === 'system' ? (
         <div style={{ padding: '0 12px 40px' }}>
           <SystemDashboard />
+        </div>
+      ) : (
+        <div style={{ padding: '0 12px 40px' }}>
+          <ProfitTracker />
         </div>
       )}
 
