@@ -250,17 +250,43 @@ export function ConfigPanel({
                                     style={{
                                         padding: '2px 5px',
                                         fontSize: '13px',
-                                        background: t.hot ? 'rgba(245, 158, 11, 0.2)' : 'rgba(59, 130, 246, 0.1)',
+                                        background: t.hot ? 'rgba(245, 158, 11, 0.2)' : 'transparent',
                                         border: '1px solid var(--border)',
                                         borderRadius: '4px',
                                         cursor: 'pointer',
-                                        transition: 'background 0.3s ease',
+                                        transition: 'all 0.2s ease',
                                         flexShrink: 0,
-                                        lineHeight: 1.2
+                                        lineHeight: 1.2,
+                                        opacity: t.hot ? 1 : 0.4,
+                                        filter: t.hot ? 'none' : 'grayscale(0.7)',
+                                        position: 'relative'
                                     }}
-                                    title={t.hot ? "Hot" : "Cold"}
+                                    onMouseEnter={(e) => {
+                                        if (!t.hot) {
+                                            e.currentTarget.style.opacity = '0.7';
+                                            e.currentTarget.style.transform = 'scale(1.05)';
+                                        }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        if (!t.hot) {
+                                            e.currentTarget.style.opacity = '0.4';
+                                            e.currentTarget.style.transform = 'scale(1)';
+                                        }
+                                    }}
+                                    title={t.hot ? "Mark as normal" : "Mark as hot (priority)"}
                                 >
-                                    {t.hot ? '🔥' : '❄️'}
+                                    🔥
+                                    {!t.hot && (
+                                        <span style={{ 
+                                            position: 'absolute', 
+                                            top: '-2px', 
+                                            right: '2px', 
+                                            fontSize: '10px',
+                                            opacity: 0.5
+                                        }}>
+                                            💨
+                                        </span>
+                                    )}
                                 </button>
                                 <button 
                                     onClick={() => removePair(i)} 
