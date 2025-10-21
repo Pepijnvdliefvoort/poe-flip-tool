@@ -12,8 +12,8 @@ A modern, real-time market analysis tool for **Path of Exile** currency trading.
 
 - **Real-time Market Data**: Stream trade data asynchronously with Server-Sent Events (SSE)
 - **Smart Caching**: Intelligent TTL-based caching to avoid rate limits and reduce API load
-- **Price Trend Indicators**: Visual indicators (📈📉➡️) showing if prices are rising, falling, or stable
-- **Historical Price Tracking**: 24-hour price history with automatic snapshot recording
+- **Price Trend Indicators**: Inline micro sparkline + % change (direction colored) showing recent momentum
+- **Historical Price Tracking**: 7-day (configurable) price history with automatic snapshot recording
 - **Hot/Cold Trade Marking**: Mark specific trade pairs as "hot" for closer monitoring with visual indicators
 - **Whisper Messages**: Click-to-copy whisper messages for quick seller contact with fade animations
 - **Account Information**: View account names for each listing
@@ -22,6 +22,7 @@ A modern, real-time market analysis tool for **Path of Exile** currency trading.
 - **Async Loading**: Trades load one-by-one with visual feedback (spinners & placeholder rows)
 - **Professional Design**: Dark theme, smooth transitions, custom scrollbars with SVG styling
 - **Rate Limit Protection**: Soft throttling and hard blocking to prevent API lockouts
+ - **System Dashboard**: In-app view to inspect cache entries, expirations, and historical snapshot counts
 
 ---
 
@@ -73,8 +74,9 @@ python -m uvicorn main:app --reload
 
 **Configuration Options** (Optional - edit `.env` file):
 - `CACHE_TTL_SECONDS` - Cache expiration time (default: 900 = 15 min)
-- `HISTORY_RETENTION_HOURS` - How long to keep price history (default: 24)
-- `HISTORY_MAX_POINTS` - Max snapshots per pair (default: 100)
+- `HISTORY_RETENTION_HOURS` - How long to keep price history (default: 168 = 7 days)
+- `HISTORY_MAX_POINTS` - Max snapshots per pair retained in memory (default: 100)
+- `SPARKLINE_POINTS` - Down-sampled points used for inline sparkline (default: 30)
 - `LOG_LEVEL` - Logging verbosity: DEBUG, INFO, WARNING (default: INFO)
 - `POE_SOFT_RATIO` - Rate limit soft throttle threshold (default: 0.8)
 - `POE_SOFT_SLEEP_FACTOR` - Throttle sleep factor (default: 0.05)
@@ -126,6 +128,15 @@ The frontend will be available at `http://localhost:5173`
 
 #### System
 - `GET /api/rate_limit` - Current rate limit state (blocked flag, remaining seconds, parsed rule states)
+- `GET /api/cache/status` - Per-configured pair cache presence and seconds until expiry
+- `GET /api/cache/summary` - Aggregate cache + historical statistics (entries, soonest expiry, snapshot counts)
+
+### In-App System Dashboard
+Switch to the "System" tab in the header to view:
+- Live cache summary (auto refresh every 15s)
+- Cache entry table with remaining TTL per pair
+- Historical snapshot counts and retention parameters
+- Interactive history viewer (select pair -> mini chart + table)
 
 ---
 

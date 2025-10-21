@@ -18,6 +18,7 @@ export type PriceTrend = {
   data_points: number
   oldest?: string | null
   newest?: string | null
+  sparkline?: number[]
 }
 
 export type PairSummary = {
@@ -41,4 +42,52 @@ export type TradesResponse = {
 export type ConfigData = {
   league: string
   trades: TradePair[]
+}
+
+// Cache status (lightweight per pair)
+export type CacheStatus = {
+  pairs: {
+    index: number
+    have: string
+    want: string
+    cached: boolean
+    expired: boolean
+    seconds_remaining: number
+  }[]
+}
+
+// Detailed cache + historical summary
+export type CacheSummary = {
+  league: string
+  trade_cache: {
+    ttl_seconds: number
+    entries: number
+    soonest_expiry: string | null
+    entries_detail: {
+      league: string
+      have: string
+      want: string
+      expires_at: string
+      seconds_remaining: number
+      expired: boolean
+      listing_count: number
+    }[]
+  }
+  historical: {
+    pairs_tracked: number
+    total_snapshots: number
+    retention_hours: number
+    max_points_per_pair: number
+    oldest_timestamp: string | null
+    newest_timestamp: string | null
+    age_seconds: number
+  }
+}
+
+export type HistoryResponse = {
+  league: string
+  have: string
+  want: string
+  history: { timestamp: string; best_rate: number; avg_rate: number; listing_count: number }[]
+  trend: PriceTrend
 }

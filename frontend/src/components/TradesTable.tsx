@@ -1,6 +1,114 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, memo } from 'react'
 import '../spinner.css'
 import { PairSummary } from '../types'
+
+// Tiny sparkline component using SVG with optional baseline alignment
+interface SparklineProps {
+    values: number[]
+    width?: number
+    height?: number
+    stroke?: string
+    relativeFirst?: boolean
+    globalMaxAbsDelta?: number
+    showMinMax?: boolean
+}
+const Sparkline = memo(function Sparkline({ values, width = 70, height = 24, stroke = 'var(--accent)', relativeFirst = false, globalMaxAbsDelta, showMinMax = true }: SparklineProps) {
+    const [hover, setHover] = useState(false)
+    if (!values || values.length < 2) return null
+
+    // Stats
+    const min = Math.min(...values)
+    const max = Math.max(...values)
+    const last = values[values.length - 1]
+    const base = values[0]
+    const changePct = base !== 0 ? ((last - base) / base) * 100 : 0
+
+    const stepX = width / (values.length - 1)
+
+    // Build path based on hover state: relative (baseline mid) vs absolute (fill)
+    let d: string
+    let area: string | null = null
+    if (!hover && relativeFirst && globalMaxAbsDelta && globalMaxAbsDelta > 0) {
+        const deltas = values.map(v => v - base)
+        d = deltas.map((dv, i) => {
+            const x = i * stepX
+            const y = (height / 2) - (dv / globalMaxAbsDelta) * (height / 2)
+            const cy = Math.min(height, Math.max(0, y))
+            return `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${cy.toFixed(2)}`
+        }).join(' ')
+    } else {
+        const range = max - min || 1
+        d = values.map((v, i) => {
+            const x = i * stepX
+            const y = height - ((v - min) / range) * height
+            return `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`
+        }).join(' ')
+        area = `${d} L${width},${height} L0,${height} Z`
+    }
+
+    // Recompute coordinates for min/max markers and last point (using whichever coordinate system currently displayed)
+    const computeY = (v: number) => {
+        if (!hover && relativeFirst && globalMaxAbsDelta && globalMaxAbsDelta > 0) {
+            const dv = v - base
+            const y = (height / 2) - (dv / globalMaxAbsDelta) * (height / 2)
+            return Math.min(height, Math.max(0, y))
+        } else {
+            const range = max - min || 1
+            return height - ((v - min) / range) * height
+        }
+    }
+    const minIndex = values.indexOf(min)
+    const maxIndex = values.indexOf(max)
+    const lastIndex = values.length - 1
+
+    const tooltip = `Min: ${min.toFixed(4)}\nMax: ${max.toFixed(4)}\nStart: ${base.toFixed(4)}\nLast: ${last.toFixed(4)}\nChange: ${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%\nMode: ${hover ? 'Absolute' : 'Relative'}`
+
+    return (
+        <div
+            style={{ position: 'relative', width, height }}
+            onMouseEnter={() => setHover(true)}
+            onMouseLeave={() => setHover(false)}
+            title={tooltip}
+        >
+            <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: 'block', overflow: 'visible' }}>
+                {!hover && relativeFirst && globalMaxAbsDelta && globalMaxAbsDelta > 0 && (
+                    <line
+                        x1={0}
+                        x2={width}
+                        y1={height / 2}
+                        y2={height / 2}
+                        stroke="rgba(255,255,255,0.15)"
+                        strokeWidth={1}
+                        strokeDasharray="2 2"
+                    />
+                )}
+                {area && (
+                    <path
+                        d={area}
+                        fill={hover ? 'rgba(99,102,241,0.25)' : 'rgba(99,102,241,0.15)'}
+                        stroke="none"
+                    />
+                )}
+                <path
+                    d={d}
+                    fill="none"
+                    stroke={hover ? stroke : 'var(--accent)'}
+                    strokeWidth={hover ? 2 : 1.5}
+                    strokeLinecap="round"
+                    style={{ transition: 'stroke 120ms ease, stroke-width 120ms ease' }}
+                />
+                {showMinMax && !hover && (
+                    <>
+                        <circle cx={minIndex * stepX} cy={computeY(min)} r={1.8} fill="#10b981" />
+                        <circle cx={maxIndex * stepX} cy={computeY(max)} r={1.8} fill="#ef4444" />
+                    </>
+                )}
+                {/* Last point highlight */}
+                <circle cx={lastIndex * stepX} cy={computeY(last)} r={hover ? 3 : 2} fill={hover ? stroke : 'var(--accent)'} stroke="#111827" strokeWidth={1} />
+            </svg>
+        </div>
+    )
+})
 import { CurrencyIcon } from './CurrencyIcon'
 
 // Format rate: show as integer if whole, otherwise as fraction if < 0.01, else 2 decimals
@@ -14,7 +122,7 @@ function formatRate(num: number, have?: string, want?: string): string {
     return num.toFixed(2);
 }
 
-function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: PairSummary; defaultExpanded: boolean; loading: boolean; onReload: (index: number) => void }) {
+function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAbsDelta }: { pair: PairSummary; defaultExpanded: boolean; loading: boolean; onReload: (index: number) => void; globalMaxAbsDelta: number }) {
     const [isExpanded, setIsExpanded] = useState(defaultExpanded)
     const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
     const timeoutRef = useRef<number | null>(null)
@@ -82,7 +190,7 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
                         </span>
 
                     {/* Summary - always shown in header row */}
-                    <div className="collapsed-summary">
+                    <div className="collapsed-summary" style={{ display: 'grid', gridAutoFlow: 'column', alignItems: 'center', gap: 4 }}>
                         {loading && pair.listings.length === 0 ? (
                             <>
                                 <span className="row-spinner"><span className="spinner small"></span></span>
@@ -91,35 +199,45 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
                                 <span className="blurred-line" style={{ width: 24 }}></span>
                             </>
                         ) : <>
-                            {pair.best_rate && (
-                                <span className="summary-item">
-                                    <span className="summary-label" style={{ fontWeight: 600 }}>Best:</span>
-                                    <span className="summary-value" style={{ color: 'var(--accent)', fontWeight: 700, fontSize: '15px' }}>{formatRate(pair.best_rate, pair.pay, pair.get)}</span>
-                                </span>
-                            )}
-                            {pair.trend && pair.trend.data_points >= 2 && (
-                                <span className="summary-item" title={`${pair.trend.change_percent > 0 ? '+' : ''}${pair.trend.change_percent.toFixed(1)}% (${pair.trend.data_points} data points)`}>
-                                    {pair.trend.direction === 'up' && <span style={{ color: '#ef4444', fontSize: '14px' }}>📈</span>}
-                                    {pair.trend.direction === 'down' && <span style={{ color: '#10b981', fontSize: '14px' }}>📉</span>}
-                                    {pair.trend.direction === 'neutral' && <span style={{ color: '#6b7280', fontSize: '14px' }}>➡️</span>}
-                                </span>
-                            )}
-                            {avgRate && (
-                                <span className="summary-item">
-                                    <span className="summary-label">Avg:</span>
-                                    <span className="summary-value">{formatRate(avgRate, pair.pay, pair.get)}</span>
-                                </span>
-                            )}
-                            <span className="summary-item">
+                            {/* Fixed-width columns to align sparkline start across rows */}
+                            <span className="summary-item" style={{ width: 120, display: 'inline-flex', gap: 4, alignItems: 'center', whiteSpace: 'nowrap' }}>
+                                {pair.best_rate ? (
+                                    <>
+                                        <span className="summary-label" style={{ fontWeight: 600 }}>Best:</span>
+                                        <span className="summary-value" style={{ color: 'var(--accent)', fontWeight: 700, fontSize: '15px' }}>{formatRate(pair.best_rate, pair.pay, pair.get)}</span>
+                                    </>
+                                ) : null}
+                            </span>
+                            <span className="summary-item" style={{ width: 140, display: 'inline-flex', gap: 6, alignItems: 'center', justifyContent: 'flex-start' }}>
+                                {pair.trend && pair.trend.sparkline && pair.trend.sparkline.length >= 2 ? (
+                                    <>
+                                        <Sparkline values={pair.trend.sparkline} width={70} relativeFirst={true} globalMaxAbsDelta={globalMaxAbsDelta} />
+                                        <span style={{ fontSize: '11px', minWidth: 10, textAlign: 'right', color: pair.trend.direction === 'up' ? '#ef4444' : pair.trend.direction === 'down' ? '#10b981' : '#6b7280', whiteSpace: 'nowrap' }}>
+                                            {pair.trend.change_percent > 0 ? '+' : ''}{pair.trend.change_percent.toFixed(1)}%
+                                        </span>
+                                    </>
+                                ) : null}
+                            </span>
+                            <span className="summary-item" style={{ width: 90, display: 'inline-flex', gap: 4, alignItems: 'center', whiteSpace: 'nowrap' }}>
+                                {avgRate ? (
+                                    <>
+                                        <span className="summary-label">Avg:</span>
+                                        <span className="summary-value">{formatRate(avgRate, pair.pay, pair.get)}</span>
+                                    </>
+                                ) : null}
+                            </span>
+                            <span className="summary-item" style={{ width: 95, display: 'inline-flex', gap: 4, alignItems: 'center' }}>
                                 <span className="summary-label">Listings:</span>
                                 <span className="summary-value">{pair.listings.length}</span>
                             </span>
-                            {totalStock > 0 && (
-                                <span className="summary-item">
-                                    <span className="summary-label">Stock:</span>
-                                    <span className="summary-value">{totalStock}</span>
-                                </span>
-                            )}
+                            <span className="summary-item" style={{ width: 80, display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+                                {totalStock > 0 ? (
+                                    <>
+                                        <span className="summary-label">Stock:</span>
+                                        <span className="summary-value">{totalStock}</span>
+                                    </>
+                                ) : null}
+                            </span>
                         </>}
                     </div>
                 </div>
@@ -240,6 +358,22 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload }: { pair: P
 export function TradesTable({ data, loading, onReload }: { data: PairSummary[]; loading: boolean; onReload: (index: number) => void }) {
     const [allExpanded, setAllExpanded] = useState(false)
 
+    // Compute global max absolute delta for baseline-aligned sparklines
+    const globalMaxAbsDelta = (() => {
+        let maxAbs = 0
+        for (const p of data) {
+            const s = p.trend?.sparkline
+            if (s && s.length > 1) {
+                const base = s[0]
+                for (const v of s) {
+                    const delta = Math.abs(v - base)
+                    if (delta > maxAbs) maxAbs = delta
+                }
+            }
+        }
+        return maxAbs || 0
+    })()
+
     // Find the index currently loading (first with empty listings)
     const loadingIndex = loading ? data.findIndex(p => p.listings.length === 0) : -1
 
@@ -260,7 +394,7 @@ export function TradesTable({ data, loading, onReload }: { data: PairSummary[]; 
 
             <div className="pairs-grid">
                 {data.map((p, i) => (
-                    <CollapsiblePair key={p.index} pair={p} defaultExpanded={allExpanded} loading={loading && i === loadingIndex} onReload={onReload} />
+                    <CollapsiblePair key={p.index} pair={p} defaultExpanded={allExpanded} loading={loading && i === loadingIndex} onReload={onReload} globalMaxAbsDelta={globalMaxAbsDelta} />
                 ))}
             </div>
         </div>

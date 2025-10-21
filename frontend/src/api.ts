@@ -1,4 +1,4 @@
-import type { TradesResponse, ConfigData, TradePair, PairSummary } from './types'
+import type { TradesResponse, ConfigData, TradePair, PairSummary, CacheSummary, CacheStatus, HistoryResponse } from './types'
 
 const BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000' // vite dev proxy handles /api
 
@@ -32,8 +32,18 @@ export const Api = {
     },
     async rateLimitStatus(): Promise<{ blocked: boolean; block_remaining: number; rules: Record<string, { current: number; limit: number; reset_s: number }[]> }> {
         return j(await fetch(`${BASE}/api/rate_limit`))
-    }
-    ,async refreshOne(index: number, top_n = 5): Promise<PairSummary> {
+    },
+    async refreshOne(index: number, top_n = 5): Promise<PairSummary> {
         return j(await fetch(`${BASE}/api/trades/refresh_one?index=${index}&top_n=${top_n}`, { method: 'POST' }))
+    },
+    async cacheStatus(): Promise<CacheStatus> {
+        return j(await fetch(`${BASE}/api/cache/status`))
+    },
+    async cacheSummary(): Promise<CacheSummary> {
+        return j(await fetch(`${BASE}/api/cache/summary`))
+    },
+    async history(have: string, want: string, maxPoints?: number): Promise<HistoryResponse> {
+        const qp = maxPoints ? `?max_points=${maxPoints}` : ''
+        return j(await fetch(`${BASE}/api/history/${encodeURIComponent(have)}/${encodeURIComponent(want)}${qp}`))
     }
 }

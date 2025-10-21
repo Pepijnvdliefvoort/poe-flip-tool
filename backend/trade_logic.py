@@ -22,9 +22,10 @@ if not POESESSID or not CF_CLEARANCE:
 
 # Configurable settings from .env
 CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "900"))  # Default: 15 minutes
-HISTORY_RETENTION_HOURS = int(os.getenv("HISTORY_RETENTION_HOURS", "24"))  # Default: 24 hours
+HISTORY_RETENTION_HOURS = int(os.getenv("HISTORY_RETENTION_HOURS", "168"))  # Default: 7 days (168 hours)
 HISTORY_MAX_POINTS = int(os.getenv("HISTORY_MAX_POINTS", "100"))  # Default: 100 snapshots per pair
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()  # Default: INFO
+SPARKLINE_POINTS = int(os.getenv("SPARKLINE_POINTS", "30"))  # Points to return for inline sparkline
 
 # Configure logging level
 logging.getLogger("poe-backend").setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
@@ -256,6 +257,7 @@ class HistoricalCache:
                 "direction": "neutral",
                 "change_percent": 0.0,
                 "data_points": len(snapshots),
+                "sparkline": [s.best_rate for s in snapshots],
             }
         
         # Compare recent average to older average
@@ -272,18 +274,54 @@ class HistoricalCache:
         else:
             direction = "neutral"
         
+        # Build sparkline values of best_rate, down-sampled to SPARKLINE_POINTS
+        series = [s.best_rate for s in snapshots]
+        if len(series) > SPARKLINE_POINTS:
+            # Evenly sample across series
+            step = len(series) / SPARKLINE_POINTS
+            indices = [int(i * step) for i in range(SPARKLINE_POINTS)]
+            # Ensure last index included
+            if indices[-1] != len(series) - 1:
+                indices[-1] = len(series) - 1
+            series = [series[i] for i in indices]
+
         return {
             "direction": direction,
             "change_percent": round(change_percent, 2),
             "data_points": len(snapshots),
             "oldest": snapshots[0].timestamp.isoformat(),
             "newest": snapshots[-1].timestamp.isoformat(),
+            "sparkline": series,
         }
     
     def clear_all(self):
         """Clear all historical data"""
         self._history.clear()
         log.info("Historical cache CLEARED")
+
+    def stats(self) -> Dict[str, Any]:
+        """Return aggregate statistics about historical storage"""
+        total_pairs = len(self._history)
+        total_points = sum(len(v) for v in self._history.values())
+        now = datetime.utcnow()
+        oldest = None
+        newest = None
+        for snaps in self._history.values():
+            if not snaps:
+                continue
+            if oldest is None or snaps[0].timestamp < oldest:
+                oldest = snaps[0].timestamp
+            if newest is None or snaps[-1].timestamp > newest:
+                newest = snaps[-1].timestamp
+        return {
+            "pairs_tracked": total_pairs,
+            "total_snapshots": total_points,
+            "retention_hours": self.retention_hours,
+            "max_points_per_pair": self.max_points,
+            "oldest_timestamp": oldest.isoformat() if oldest else None,
+            "newest_timestamp": newest.isoformat() if newest else None,
+            "age_seconds": (now - oldest).total_seconds() if oldest else 0,
+        }
 
 
 class TradeCache:
@@ -318,6 +356,30 @@ class TradeCache:
         """Clear entire cache"""
         self._store.clear()
         log.info("Cache CLEARED")
+
+    def stats(self) -> Dict[str, Any]:
+        now = datetime.utcnow()
+        entries = []
+        soonest_expiry = None
+        for (league, have, want), entry in self._store.items():
+            remaining = max(0, (entry.expires_at - now).total_seconds())
+            entries.append({
+                "league": league,
+                "have": have,
+                "want": want,
+                "expires_at": entry.expires_at.isoformat(),
+                "seconds_remaining": round(remaining, 1),
+                "expired": remaining == 0,
+                "listing_count": len(entry.data),
+            })
+            if soonest_expiry is None or entry.expires_at < soonest_expiry:
+                soonest_expiry = entry.expires_at
+        return {
+            "ttl_seconds": self.ttl,
+            "entries": len(self._store),
+            "soonest_expiry": soonest_expiry.isoformat() if soonest_expiry else None,
+            "entries_detail": entries,
+        }
 
 
 cache = TradeCache(ttl_seconds=CACHE_TTL_SECONDS)

@@ -32,6 +32,7 @@ class PriceTrend(BaseModel):
     data_points: int
     oldest: Optional[str] = None
     newest: Optional[str] = None
+    sparkline: Optional[List[float]] = None  # Down-sampled best_rate history for inline chart
 
 
 class PairSummary(BaseModel):

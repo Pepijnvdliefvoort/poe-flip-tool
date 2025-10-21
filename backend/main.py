@@ -364,5 +364,26 @@ def rate_limit_status():
     }
 
 
+@app.get("/api/cache/summary")
+def cache_summary():
+    """Aggregate cache + historical stats including per-entry expirations and snapshot counts."""
+    from trade_logic import cache, historical_cache
+    cfg = _load_config()
+
+    trade_cache_stats = cache.stats()
+    history_stats = historical_cache.stats()
+
+    # Filter entry details to only configured pairs (in case of stale)
+    configured_keys = {(cfg.league, t.pay, t.get) for t in cfg.trades}
+    filtered_entries = [e for e in trade_cache_stats.get("entries_detail", []) if (e["league"], e["have"], e["want"]) in configured_keys]
+    trade_cache_stats["entries_detail"] = filtered_entries
+
+    return {
+        "league": cfg.league,
+        "trade_cache": trade_cache_stats,
+        "historical": history_stats,
+    }
+
+
 
 

@@ -4,6 +4,7 @@ import { Api } from './api'
 import type { TradesResponse } from './types'
 import { TradesTable } from './components/TradesTable'
 import { ConfigPanel } from './components/ConfigPanel'
+import { SystemDashboard } from './components/SystemDashboard'
 
 const BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000' // vite dev proxy handles /api
 
@@ -15,6 +16,7 @@ export default function App() {
   const [rateLimit, setRateLimit] = useState<{ blocked: boolean; block_remaining: number; rules: Record<string, { current: number; limit: number; reset_s: number }[]> } | null>(null)
   const [nearLimit, setNearLimit] = useState(false)
   const [rateLimitDisplay, setRateLimitDisplay] = useState<{ blocked: boolean; block_remaining: number; rules: Record<string, { current: number; limit: number; reset_s: number }[]> } | null>(null)
+  const [view, setView] = useState<'trades' | 'system'>('trades')
 
   // Helper to update rate limit info after every API call
   const updateRateLimit = async () => {
@@ -303,41 +305,63 @@ export default function App() {
 
   return (
     <div className="container">
-      <header className="app-header">
-        <h1>PoE Currency Flip Tool</h1>
-        {rateLimit && (rateLimit.blocked || nearLimit) && (
-          <div className={`rate-limit-banner ${rateLimit.blocked ? 'blocked' : 'near'}`}>
-            {rateLimit.blocked ? (
-              <span>Rate limited. Resuming in {rateLimit.block_remaining.toFixed(1)}s…</span>
-            ) : (
-              <span>Approaching limit – requests are being throttled.</span>
-            )}
-          </div>
-        )}
-        <div className="controls">
-          <button className="btn primary" onClick={() => load(true)} disabled={loading}>
-            {loading ? 'Loading...' : 'Refresh Trades'}
-          </button>
+      <header className="app-header" style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 12 }}>
+        <div style={{ justifySelf: 'start' }}>
+          <h1 style={{ margin: 0 }}>PoE Currency Flip Tool</h1>
+        </div>
+        <div style={{ justifySelf: 'center', display: 'flex', gap: 8 }}>
+          <button
+            className={`btn ${view === 'trades' ? 'primary' : 'ghost'}`}
+            onClick={() => setView('trades')}
+            style={{ padding: '6px 16px', minWidth: 90 }}
+          >Trades</button>
+          <button
+            className={`btn ${view === 'system' ? 'primary' : 'ghost'}`}
+            onClick={() => setView('system')}
+            style={{ padding: '6px 16px', minWidth: 90 }}
+          >System</button>
+        </div>
+        <div style={{ justifySelf: 'end', display: 'flex', alignItems: 'center', gap: 12 }}>
+          {rateLimit && (rateLimit.blocked || nearLimit) && (
+            <div className={`rate-limit-banner ${rateLimit.blocked ? 'blocked' : 'near'}`} style={{ whiteSpace: 'nowrap' }}>
+              {rateLimit.blocked ? (
+                <span>Rate limited. {rateLimit.block_remaining.toFixed(1)}s…</span>
+              ) : (
+                <span>Near limit – throttling.</span>
+              )}
+            </div>
+          )}
+          {view === 'trades' && (
+            <button className="btn primary" onClick={() => load(true)} disabled={loading} style={{ padding: '6px 16px' }}>
+              {loading ? 'Loading...' : 'Refresh'}
+            </button>
+          )}
         </div>
       </header>
 
-      <div className="main-layout">
-        <div className="trades-section">
-          <TradesTable data={data?.results || []} loading={loading} onReload={reloadPair} />
+      {view === 'trades' ? (
+        <div className="main-layout">
+          <div className="trades-section">
+            <TradesTable data={data?.results || []} loading={loading} onReload={reloadPair} />
+          </div>
+          <aside className="config-sidebar">
+            <ConfigPanel 
+              onChanged={() => load(false)} 
+              onHotToggled={updateHotStatus} 
+              onPairAdded={addNewPair} 
+              onPairRemoved={removePair} 
+              topN={topN} 
+              onTopNChanged={setTopN}
+              autoRefresh={autoRefresh}
+              onAutoRefreshChanged={setAutoRefresh}
+            />
+          </aside>
         </div>
-        <aside className="config-sidebar">
-          <ConfigPanel 
-            onChanged={() => load(false)} 
-            onHotToggled={updateHotStatus} 
-            onPairAdded={addNewPair} 
-            onPairRemoved={removePair} 
-            topN={topN} 
-            onTopNChanged={setTopN}
-            autoRefresh={autoRefresh}
-            onAutoRefreshChanged={setAutoRefresh}
-          />
-        </aside>
-      </div>
+      ) : (
+        <div style={{ padding: '0 12px 40px' }}>
+          <SystemDashboard />
+        </div>
+      )}
 
       {/* Small rate limit info box, bottom right */}
       {rateLimitDisplay && (
