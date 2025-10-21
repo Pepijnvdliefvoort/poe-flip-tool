@@ -185,20 +185,33 @@ class HistoricalCache:
             snapshots_dict = db.load_all_snapshots(self.retention_hours)
             for key, snapshot_data_list in snapshots_dict.items():
                 # Convert dicts to PriceSnapshot objects
-                snapshots = [
-                    PriceSnapshot(
-                        timestamp=datetime.fromisoformat(s["timestamp"]),
-                        best_rate=s["best_rate"],
-                        avg_rate=s["avg_rate"],
-                        listing_count=s["listing_count"]
-                    )
-                    for s in snapshot_data_list
-                ]
-                self._history[key] = snapshots
+                snapshots = []
+                for s in snapshot_data_list:
+                    try:
+                        # Handle timestamp - might be datetime or string
+                        ts = s["timestamp"]
+                        if isinstance(ts, str):
+                            ts = datetime.fromisoformat(ts)
+                        elif not isinstance(ts, datetime):
+                            log.warning(f"Skipping snapshot with invalid timestamp type: {type(ts)}")
+                            continue
+                        
+                        snapshots.append(PriceSnapshot(
+                            timestamp=ts,
+                            best_rate=s["best_rate"],
+                            avg_rate=s["avg_rate"],
+                            listing_count=s["listing_count"]
+                        ))
+                    except Exception as e:
+                        log.warning(f"Failed to parse snapshot: {e}")
+                        continue
+                
+                if snapshots:
+                    self._history[key] = snapshots
             
             if snapshots_dict:
-                total_points = sum(len(v) for v in snapshots_dict.values())
-                log.info(f"Restored {len(snapshots_dict)} pairs with {total_points} total snapshots from database")
+                total_points = sum(len(v) for v in self._history.values())
+                log.info(f"Restored {len(self._history)} pairs with {total_points} total snapshots from database")
             
             # Cleanup old snapshots in database
             db.cleanup_old_snapshots(self.retention_hours)

@@ -275,8 +275,16 @@ class DatabasePersistence:
                 if key not in snapshots_by_pair:
                     snapshots_by_pair[key] = []
                 
+                # Handle timestamp - it might be string or datetime
+                ts = row['timestamp']
+                if isinstance(ts, str):
+                    ts = datetime.fromisoformat(ts)
+                elif not isinstance(ts, datetime):
+                    log.warning(f"Unexpected timestamp type: {type(ts)}")
+                    continue
+                
                 snapshots_by_pair[key].append({
-                    'timestamp': datetime.fromisoformat(row['timestamp']),
+                    'timestamp': ts,
                     'best_rate': row['best_rate'],
                     'avg_rate': row['avg_rate'],
                     'listing_count': row['listing_count']
@@ -320,24 +328,39 @@ class DatabasePersistence:
             cursor.execute('SELECT COUNT(*) as count FROM price_snapshots')
             snapshot_count = cursor.fetchone()['count']
             
-            # Unique pairs tracked
-            cursor.execute('SELECT COUNT(DISTINCT league || have || want) as count FROM price_snapshots')
-            pairs_tracked = cursor.fetchone()['count']
+            # Oldest and newest snapshots
+            cursor.execute('SELECT MIN(timestamp) as oldest, MAX(timestamp) as newest FROM price_snapshots')
+            row = cursor.fetchone()
+            oldest_snapshot = row['oldest'] if row['oldest'] else None
+            newest_snapshot = row['newest'] if row['newest'] else None
+            
+            # Oldest cache entry
+            cursor.execute('SELECT MIN(expires_at) as oldest FROM cache_entries')
+            oldest_cache = cursor.fetchone()['oldest']
             
             # Database file size
             file_size = self.db_path.stat().st_size if self.db_path.exists() else 0
             
             return {
+                'database_file': str(self.db_path),
+                'database_size_bytes': file_size,
                 'cache_entries': cache_count,
-                'total_snapshots': snapshot_count,
-                'pairs_tracked': pairs_tracked,
-                'file_size_bytes': file_size,
-                'file_size_mb': round(file_size / (1024 * 1024), 2),
-                'db_path': str(self.db_path)
+                'price_snapshots': snapshot_count,
+                'oldest_cache_entry': oldest_cache,
+                'oldest_snapshot': oldest_snapshot,
+                'newest_snapshot': newest_snapshot,
             }
         except Exception as e:
             log.error(f"Failed to get database stats: {e}")
-            return {}
+            return {
+                'database_file': str(self.db_path),
+                'database_size_bytes': 0,
+                'cache_entries': 0,
+                'price_snapshots': 0,
+                'oldest_cache_entry': None,
+                'oldest_snapshot': None,
+                'newest_snapshot': None,
+            }
     
     def close(self):
         """Close the database connection."""
