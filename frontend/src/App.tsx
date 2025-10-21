@@ -11,6 +11,7 @@ export default function App() {
   const [data, setData] = useState<TradesResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [topN, setTopN] = useState(5)
+  const [autoRefresh, setAutoRefresh] = useState(true) // Auto-refresh enabled by default
   const [rateLimit, setRateLimit] = useState<{ blocked: boolean; block_remaining: number; rules: Record<string, { current: number; limit: number; reset_s: number }[]> } | null>(null)
   const [nearLimit, setNearLimit] = useState(false)
   const [rateLimitDisplay, setRateLimitDisplay] = useState<{ blocked: boolean; block_remaining: number; rules: Record<string, { current: number; limit: number; reset_s: number }[]> } | null>(null)
@@ -89,6 +90,71 @@ export default function App() {
     }
     return () => { eventSourceRef.current?.close() } 
   }, [load])
+
+  // Auto-refresh functionality - poll cache status and refresh expired pairs
+  useEffect(() => {
+    if (!autoRefresh) return;
+
+    const checkInterval = 10000; // Check every 10 seconds
+    
+    const checkCacheStatus = async () => {
+      try {
+        const response = await fetch(`${BASE}/api/cache/status`);
+        if (!response.ok) return;
+        
+        const status = await response.json();
+        const expiredPairs = status.pairs.filter((p: any) => p.expired);
+        
+        if (expiredPairs.length > 0 && data) {
+          console.log(`[Auto-refresh] Found ${expiredPairs.length} expired cache entries, refreshing...`);
+          
+          // Refresh each expired pair individually
+          for (const pair of expiredPairs) {
+            // Update UI to show loading
+            setData(prev => {
+              if (!prev) return prev;
+              const results = [...prev.results];
+              const p = results[pair.index];
+              if (p) {
+                results[pair.index] = { ...p, status: 'loading', listings: [], best_rate: null, count_returned: 0 };
+              }
+              return { ...prev, results };
+            });
+            
+            try {
+              const refreshed = await Api.refreshOne(pair.index, topN);
+              setData(prev => {
+                if (!prev) return prev;
+                const results = [...prev.results];
+                results[pair.index] = refreshed;
+                return { ...prev, results };
+              });
+            } catch (e) {
+              setData(prev => {
+                if (!prev) return prev;
+                const results = [...prev.results];
+                const p = results[pair.index];
+                if (p) {
+                  results[pair.index] = { ...p, status: 'error' };
+                }
+                return { ...prev, results };
+              });
+            }
+            
+            // Small delay between refreshes to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+          
+          updateRateLimit();
+        }
+      } catch (e) {
+        console.error('[Auto-refresh] Failed to check cache status:', e);
+      }
+    };
+
+    const timer = setInterval(checkCacheStatus, checkInterval);
+    return () => clearInterval(timer);
+  }, [autoRefresh, data, topN])
 
   const reloadPair = async (index: number) => {
     if (!data) return;
@@ -239,7 +305,16 @@ export default function App() {
           <TradesTable data={data?.results || []} loading={loading} onReload={reloadPair} />
         </div>
         <aside className="config-sidebar">
-          <ConfigPanel onChanged={() => load(false)} onHotToggled={updateHotStatus} onPairAdded={addNewPair} onPairRemoved={removePair} topN={topN} onTopNChanged={setTopN} />
+          <ConfigPanel 
+            onChanged={() => load(false)} 
+            onHotToggled={updateHotStatus} 
+            onPairAdded={addNewPair} 
+            onPairRemoved={removePair} 
+            topN={topN} 
+            onTopNChanged={setTopN}
+            autoRefresh={autoRefresh}
+            onAutoRefreshChanged={setAutoRefresh}
+          />
         </aside>
       </div>
 

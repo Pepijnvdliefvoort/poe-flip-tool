@@ -3,13 +3,24 @@ import { Api } from '../api'
 import type { ConfigData } from '../types'
 import { CurrencyIcon } from './CurrencyIcon'
 
-export function ConfigPanel({ onChanged, onHotToggled, onPairAdded, onPairRemoved, topN, onTopNChanged }: { 
+export function ConfigPanel({ 
+    onChanged, 
+    onHotToggled, 
+    onPairAdded, 
+    onPairRemoved, 
+    topN, 
+    onTopNChanged,
+    autoRefresh,
+    onAutoRefreshChanged
+}: { 
     onChanged: () => void; 
     onHotToggled?: (index: number, hot: boolean) => void;
     onPairAdded?: (get: string, pay: string) => void;
     onPairRemoved?: (index: number) => void;
     topN: number;
     onTopNChanged: (value: number) => void;
+    autoRefresh: boolean;
+    onAutoRefreshChanged: (value: boolean) => void;
 }) {
     const [cfg, setCfg] = useState<ConfigData | null>(null)
     const [get, setGet] = useState('')
@@ -175,6 +186,22 @@ export function ConfigPanel({ onChanged, onHotToggled, onPairAdded, onPairRemove
                             </button>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            {/* Auto-refresh controls */}
+            <div style={{ marginBottom: 16, padding: '12px', background: 'rgba(59, 130, 246, 0.05)', borderRadius: '8px', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                        type="checkbox"
+                        checked={autoRefresh}
+                        onChange={(e) => onAutoRefreshChanged(e.target.checked)}
+                        style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                    />
+                    <span style={{ fontSize: '13px', fontWeight: 500 }}>Auto-refresh expired trades</span>
+                </label>
+                <div className="muted" style={{ fontSize: '11px', marginTop: '6px', marginLeft: '24px' }}>
+                    Automatically refreshes trades when their cache expires (every 15 minutes)
                 </div>
             </div>
 

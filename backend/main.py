@@ -301,6 +301,45 @@ def get_price_history(
     }
 
 
+@app.get("/api/cache/status")
+def get_cache_status():
+    """Get cache expiration status for all configured pairs"""
+    from trade_logic import cache
+    from datetime import datetime
+    
+    cfg = _load_config()
+    result = []
+    
+    for idx, trade in enumerate(cfg.trades):
+        key = (cfg.league, trade.pay, trade.get)
+        entry = cache._store.get(key)
+        
+        if entry:
+            now = datetime.utcnow()
+            is_expired = now >= entry.expires_at
+            seconds_remaining = max(0, (entry.expires_at - now).total_seconds())
+            
+            result.append({
+                "index": idx,
+                "have": trade.pay,
+                "want": trade.get,
+                "cached": True,
+                "expired": is_expired,
+                "seconds_remaining": round(seconds_remaining, 1),
+            })
+        else:
+            result.append({
+                "index": idx,
+                "have": trade.pay,
+                "want": trade.get,
+                "cached": False,
+                "expired": True,
+                "seconds_remaining": 0,
+            })
+    
+    return {"pairs": result}
+
+
 @app.get("/api/rate_limit")
 def rate_limit_status():
     """Return current rate limit status and parsed rule states for observability."""
