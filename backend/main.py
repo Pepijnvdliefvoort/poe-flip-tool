@@ -6,9 +6,11 @@ import os
 from pathlib import Path
 from typing import List
 import requests
+import secrets
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Query, HTTPException, Request, Body
+from fastapi import FastAPI, Query, HTTPException, Request, Body, Security, Depends
+from fastapi.security import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
@@ -33,6 +35,36 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(message)s",
 )
 log = logging.getLogger("poe-backend")
+
+# ============================================================================
+# Security
+# ============================================================================
+
+API_KEY = os.getenv("API_KEY")
+if not API_KEY:
+    # Generate a random key if not set (for dev/testing)
+    API_KEY = secrets.token_urlsafe(32)
+    log.warning(f"No API_KEY set in environment. Using generated key for this session: {API_KEY}")
+    log.warning("Set API_KEY environment variable in production!")
+
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+async def verify_api_key(
+    request: Request,
+    api_key_header: str = Security(api_key_header),
+    api_key_query: str = Query(None, alias="api_key")
+):
+    """Verify the API key from request headers or query parameters (for EventSource)."""
+    # Check header first, then query parameter (for EventSource compatibility)
+    api_key = api_key_header or api_key_query
+    
+    if api_key != API_KEY:
+        log.warning(f"Unauthorized access attempt with key: {api_key[:8] if api_key else 'None'}...")
+        raise HTTPException(
+            status_code=403,
+            detail="Invalid or missing API key"
+        )
+    return api_key
 
 # ============================================================================
 # Configuration
@@ -139,20 +171,20 @@ def root():
 
 
 @app.get("/api/config", response_model=ConfigData)
-def get_config():
+def get_config(api_key: str = Depends(verify_api_key)):
     """Get current configuration"""
     return _load_config()
 
 
 @app.put("/api/config", response_model=ConfigData)
-def put_config(cfg: ConfigData):
+def put_config(cfg: ConfigData, api_key: str = Depends(verify_api_key)):
     """Replace entire configuration"""
     _save_config(cfg)
     return cfg
 
 
 @app.patch("/api/config/league", response_model=ConfigData)
-def patch_league(league: str):
+def patch_league(league: str, api_key: str = Depends(verify_api_key)):
     """Update only the league setting"""
     cfg = _load_config()
     cfg.league = league
@@ -161,7 +193,7 @@ def patch_league(league: str):
 
 
 @app.patch("/api/config/account_name", response_model=ConfigData)
-def patch_account_name(account_name: str = Body(..., embed=True)):
+def patch_account_name(account_name: str = Body(..., embed=True), api_key: str = Depends(verify_api_key)):
     """Update only the account_name setting used for highlighting listings"""
     cfg = _load_config()
     cfg.account_name = account_name.strip() or None
@@ -169,7 +201,7 @@ def patch_account_name(account_name: str = Body(..., embed=True)):
     return cfg
 
 @app.patch("/api/config/trades", response_model=ConfigData)
-def patch_trades(patch: TradesPatch = Body(...)):
+def patch_trades(patch: TradesPatch = Body(...), api_key: str = Depends(verify_api_key)):
     """
     Edit the trades list via JSON body.
 
@@ -198,6 +230,7 @@ def patch_trades(patch: TradesPatch = Body(...)):
 def refresh_one_trade(
     index: int = Query(..., ge=0),
     top_n: int = Query(5, ge=1, le=20),
+    api_key: str = Depends(verify_api_key)
 ):
     """
     Force refresh a single trade pair by index.
@@ -264,6 +297,7 @@ async def stream_trades(
     delay_s: float = Query(2, ge=0.0, le=5.0),
     top_n: int = Query(5, ge=1, le=20),
     force: bool = Query(False),
+    api_key: str = Depends(verify_api_key)
 ):
     """
     SSE endpoint for incremental trades loading.
@@ -355,7 +389,8 @@ async def stream_trades(
 def get_price_history(
     have: str,
     want: str,
-    max_points: int = Query(default=None, description="Limit number of datapoints returned")
+    max_points: int = Query(default=None, description="Limit number of datapoints returned"),
+    api_key: str = Depends(verify_api_key)
 ):
     """Get historical price snapshots for a currency pair"""
     from trade_logic import historical_cache
@@ -374,7 +409,7 @@ def get_price_history(
 
 
 @app.get("/api/cache/status")
-def get_cache_status():
+def get_cache_status(api_key: str = Depends(verify_api_key)):
     """Get cache expiration status for all configured pairs"""
     from trade_logic import cache
     from datetime import datetime
@@ -413,7 +448,7 @@ def get_cache_status():
 
 
 @app.get("/api/rate_limit")
-def rate_limit_status():
+def rate_limit_status(api_key: str = Depends(verify_api_key)):
     """Return current rate limit status and parsed rule states for observability."""
     state = rate_limiter.debug_state()
     return {
@@ -430,7 +465,7 @@ def rate_limit_status():
 
 
 @app.get("/api/cache/summary")
-def cache_summary():
+def cache_summary(api_key: str = Depends(verify_api_key)):
     """Aggregate cache + historical stats including per-entry expirations and snapshot counts."""
     from trade_logic import cache, historical_cache
     from persistence import db
@@ -452,7 +487,7 @@ def cache_summary():
 
 
 @app.get("/api/database/stats")
-def database_stats():
+def database_stats(api_key: str = Depends(verify_api_key)):
     """Get SQLite database statistics and health info."""
     from persistence import db
     
@@ -472,7 +507,7 @@ def database_stats():
 # ============================================================================
 
 @app.get("/api/stash/{tab_name}")
-def get_stash_tab(tab_name: str):
+def get_stash_tab(tab_name: str, api_key: str = Depends(verify_api_key)):
     """Retrieve contents of a specific stash tab by name.
 
     Uses the configured account_name from config.json and current league.
@@ -563,7 +598,7 @@ def get_stash_tab(tab_name: str):
 
 
 @app.get("/api/value/latest")
-def latest_currency_values():
+def latest_currency_values(api_key: str = Depends(verify_api_key)):
     """Return latest divine-equivalent value for each configured unique currency.
 
     Logic:
@@ -692,7 +727,7 @@ def _compute_portfolio_breakdown(account: str, league: str):
     return breakdown
 
 @app.post("/api/portfolio/snapshot")
-def create_portfolio_snapshot():
+def create_portfolio_snapshot(api_key: str = Depends(verify_api_key)):
     """Compute and persist a portfolio snapshot, returning breakdown + total."""
     cfg = _load_config()
     if not cfg.account_name:
@@ -711,7 +746,7 @@ def create_portfolio_snapshot():
     }
 
 @app.get("/api/portfolio/history")
-def portfolio_history(limit: int = Query(None, ge=1, le=1000)):
+def portfolio_history(limit: int = Query(None, ge=1, le=1000), api_key: str = Depends(verify_api_key)):
     from persistence import db
     rows = db.load_portfolio_history(limit)
     return {

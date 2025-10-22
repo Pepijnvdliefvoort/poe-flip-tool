@@ -15,6 +15,8 @@ const BASE =
     ? 'https://poe-flip-backend.fly.dev'
     : 'http://localhost:8000');
 
+const API_KEY = import.meta.env.VITE_API_KEY || '';
+
 // Helper function to calculate profit margins for linked pairs
 function calculateProfitMargins(pairs: PairSummary[]): PairSummary[] {
   const result = pairs.map(p => ({ ...p })); // Clone to avoid mutation
@@ -128,7 +130,9 @@ export default function App() {
         eventSourceRef.current.close();
       }
       // Use force parameter: true for manual refresh, false for initial load
-      const url = `${BASE}/api/trades/stream?top_n=${topN}&force=${forceRefresh}`;
+      // Include API key as query param for EventSource (doesn't support headers)
+      const apiKeyParam = API_KEY ? `&api_key=${encodeURIComponent(API_KEY)}` : '';
+      const url = `${BASE}/api/trades/stream?top_n=${topN}&force=${forceRefresh}${apiKeyParam}`;
       const es = new window.EventSource(url);
       eventSourceRef.current = es;
       let league = cfg.league;
