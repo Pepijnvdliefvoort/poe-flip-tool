@@ -6,6 +6,7 @@ import { TradesTable } from './components/TradesTable'
 import { ConfigPanel } from './components/ConfigPanel'
 import { SystemDashboard } from './components/SystemDashboard'
 import ProfitTracker from './components/ProfitTracker'
+import { Login } from './components/Login'
 
 // Backend base resolution (same logic as api.ts)
 const BASE =
@@ -15,7 +16,8 @@ const BASE =
     ? 'https://poe-flip-backend.fly.dev'
     : 'http://localhost:8000');
 
-const API_KEY = import.meta.env.VITE_API_KEY || '';
+// Get API key from env or sessionStorage
+const getApiKey = () => import.meta.env.VITE_API_KEY || sessionStorage.getItem('api_key') || '';
 
 // Helper function to calculate profit margins for linked pairs
 function calculateProfitMargins(pairs: PairSummary[]): PairSummary[] {
@@ -71,6 +73,7 @@ function calculateProfitMargins(pairs: PairSummary[]): PairSummary[] {
 }
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [data, setData] = useState<TradesResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [topN, setTopN] = useState(5)
@@ -80,6 +83,27 @@ export default function App() {
   const [rateLimitDisplay, setRateLimitDisplay] = useState<{ blocked: boolean; block_remaining: number; rules: Record<string, { current: number; limit: number; reset_s: number }[]> } | null>(null)
   const [view, setView] = useState<'trades' | 'system' | 'profit'>('trades')
   const [accountName, setAccountName] = useState<string | null>(null)
+
+  // Check if already authenticated on mount
+  useEffect(() => {
+    const hasApiKey = !!getApiKey();
+    setIsAuthenticated(hasApiKey);
+  }, []);
+
+  const handleLogin = (apiKey: string) => {
+    sessionStorage.setItem('api_key', apiKey);
+    setIsAuthenticated(true);
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('api_key');
+    setIsAuthenticated(false);
+  };
+
+  // Show login if not authenticated
+  if (!isAuthenticated) {
+    return <Login onLogin={handleLogin} />;
+  }
 
   // Helper to update rate limit info after every API call
   const updateRateLimit = async () => {
@@ -131,7 +155,8 @@ export default function App() {
       }
       // Use force parameter: true for manual refresh, false for initial load
       // Include API key as query param for EventSource (doesn't support headers)
-      const apiKeyParam = API_KEY ? `&api_key=${encodeURIComponent(API_KEY)}` : '';
+      const apiKey = getApiKey();
+      const apiKeyParam = apiKey ? `&api_key=${encodeURIComponent(apiKey)}` : '';
       const url = `${BASE}/api/trades/stream?top_n=${topN}&force=${forceRefresh}${apiKeyParam}`;
       const es = new window.EventSource(url);
       eventSourceRef.current = es;
@@ -434,6 +459,14 @@ export default function App() {
               )}
             </div>
           )}
+          <button
+            onClick={handleLogout}
+            className="btn ghost"
+            style={{ padding: '6px 12px', fontSize: '13px' }}
+            title="Logout"
+          >
+            Logout
+          </button>
         </div>
       </header>
 
