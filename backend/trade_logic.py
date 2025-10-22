@@ -435,12 +435,15 @@ class TradeCache:
                 "have": have,
                 "want": want,
                 "expires_at": entry.expires_at.isoformat() + 'Z',  # Append Z to indicate UTC
-                "seconds_remaining": round(remaining, 1),
+                # Round to whole seconds per user request
+                "seconds_remaining": int(round(remaining)),
                 "expired": remaining == 0,
                 "listing_count": len(entry.data),
             })
             if soonest_expiry is None or entry.expires_at < soonest_expiry:
                 soonest_expiry = entry.expires_at
+        # Sort ascending by remaining seconds for UI convenience
+        entries.sort(key=lambda e: e["seconds_remaining"])
         return {
             "ttl_seconds": self.ttl,
             "entries": len(self._store),

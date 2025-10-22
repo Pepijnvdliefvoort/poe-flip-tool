@@ -32,10 +32,15 @@ const ProfitTracker: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  async function takeSnapshot() {
+  const lastSnapshotRef = useRef<string | null>(null);
+
+  async function takeSnapshot(source: 'initial' | 'interval' | 'visibility') {
+    console.log(`[ProfitTracker] (${source}) snapshot request starting @ ${new Date().toISOString()}`);
     setLoading(true); setError(null);
     try {
       const snap = await Api.portfolioSnapshot();
+      lastSnapshotRef.current = snap.timestamp;
+      console.log(`[ProfitTracker] (${source}) snapshot saved total=${snap.total_divines.toFixed(3)} timestamp=${snap.timestamp}`);
       setSnapshot(snap);
       setHistory(h => {
         if (!h) return h;
@@ -43,6 +48,7 @@ const ProfitTracker: React.FC = () => {
         return { ...h, snapshots: [...h.snapshots, { timestamp: snap.timestamp, total_divines: snap.total_divines, breakdown: snap.breakdown }] };
       });
     } catch (e: any) {
+      console.error(`[ProfitTracker] (${source}) snapshot error:`, e);
       setError(e.message || 'Failed to create snapshot');
     } finally {
       setLoading(false);
@@ -64,11 +70,33 @@ const ProfitTracker: React.FC = () => {
   useEffect(() => { loadHistory(); }, []);
 
   useEffect(() => {
-    takeSnapshot();
-    const intervalId = setInterval(() => {
-      takeSnapshot();
-    }, 15 * 60 * 1000);
-    return () => clearInterval(intervalId);
+    // Initial snapshot
+    takeSnapshot('initial');
+    // 15 minute interval
+    const intervalMs = 15 * 60 * 1000;
+    const id = setInterval(() => {
+      console.log('[ProfitTracker] interval tick');
+      takeSnapshot('interval');
+    }, intervalMs);
+    // Visibility re-check (if user was away longer than interval, take an immediate one)
+    const onVis = () => {
+      if (document.visibilityState === 'visible') {
+        if (!lastSnapshotRef.current) {
+          takeSnapshot('visibility');
+          return;
+        }
+        const last = new Date(lastSnapshotRef.current).getTime();
+        if (Date.now() - last > intervalMs - 5000) { // grace window
+          console.log('[ProfitTracker] visibility snapshot trigger');
+          takeSnapshot('visibility');
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVis);
+    };
   }, []);
 
   const grandTotal = snapshot?.total_divines ?? null;
