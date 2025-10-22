@@ -73,7 +73,7 @@ const Sparkline = memo(function Sparkline({ values, width = 70, height = 24, str
     const maxIndex = values.indexOf(max)
     const lastIndex = values.length - 1
 
-    const tooltip = `Min: ${min.toFixed(4)}\nMax: ${max.toFixed(4)}\nStart: ${base.toFixed(4)}\nLast: ${last.toFixed(4)}\nChange: ${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%`
+    const tooltip = `Min: ${formatNumberEU(min, 4, 4)}\nMax: ${formatNumberEU(max, 4, 4)}\nStart: ${formatNumberEU(base, 4, 4)}\nLast: ${formatNumberEU(last, 4, 4)}\nChange: ${changePct >= 0 ? '+' : ''}${formatNumberEU(changePct, 2, 2)}%`
 
     return (
         <div
@@ -113,15 +113,39 @@ const Sparkline = memo(function Sparkline({ values, width = 70, height = 24, str
 })
 import { CurrencyIcon } from './CurrencyIcon'
 
-// Format rate: show as integer if whole, otherwise as fraction if < 0.01, else 2 decimals
+// European formatting helper: thousands separator '.' and decimal comma ','
+function formatNumberEU(value: number, minDecimals = 0, maxDecimals = minDecimals): string {
+    return value.toLocaleString('nl-NL', {
+        minimumFractionDigits: minDecimals,
+        maximumFractionDigits: maxDecimals,
+    })
+}
+
+// Format rate: show as integer if whole, otherwise as fraction if < 0.01, else 2 decimals (EU style)
 function formatRate(num: number, have?: string, want?: string): string {
-    if (num % 1 === 0) return num.toString();
+    if (!Number.isFinite(num)) return '—'
+    // Whole numbers
+    if (num % 1 === 0) return formatNumberEU(num)
+    // Fraction style for any 0 < num < 1 when we have currency context
     if (num > 0 && num < 1 && have && want) {
-        // Try to show as 1/x with up to 2 decimals
-        const denom = 1 / num;
-        return `1/${denom.toFixed(2).replace(/\.?0+$/, '')}`;
+        const denom = 1 / num
+        const rounded = Math.round(denom)
+        // If denom is very close to an integer, prefer the clean integer
+        if (Math.abs(denom - rounded) < 0.0005) {
+            return `1/${formatNumberEU(rounded)}`
+        }
+        // Choose decimals based on magnitude for readability
+        let decimals: number
+        if (denom < 10) decimals = 2
+        else if (denom < 100) decimals = 1
+        else decimals = 0
+        let denomStr = formatNumberEU(denom, decimals, decimals)
+        // Trim trailing zero decimals if any remain (e.g., ,10 -> ,1)
+        denomStr = denomStr.replace(/,(\d*?[1-9])0+$/, ',$1').replace(/,00$/, '')
+        return `1/${denomStr}`
     }
-    return num.toFixed(2);
+    // Default localized 2 decimals
+    return formatNumberEU(num, 2, 2)
 }
 
 function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAbsDelta, accountName, selectedMetrics }: { pair: PairSummary; defaultExpanded: boolean; loading: boolean; onReload: (index: number) => void; globalMaxAbsDelta: number; accountName?: string | null; selectedMetrics: readonly string[] }) {
@@ -177,7 +201,7 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
     const metricRenderers: Record<string, { label: string; value: JSX.Element | null; tooltip: string }> = {
         spread: {
             label: 'Spread',
-            value: spreadPct !== null ? <span className="summary-value">{spreadPct.toFixed(1)}%</span> : null,
+            value: spreadPct !== null ? <span className="summary-value">{formatNumberEU(spreadPct, 1, 1)}%</span> : null,
             tooltip: 'Spread: (highest rate - lowest rate) / lowest rate. Indicates dispersion; higher spread may mean opportunity.'
         },
         median: {
@@ -192,10 +216,10 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
                     color: pair.profit_margin_pct > 0 ? '#10b981' : pair.profit_margin_pct < 0 ? '#ef4444' : undefined,
                     fontWeight: pair.profit_margin_pct !== 0 ? 600 : undefined 
                 }}>
-                    {pair.profit_margin_pct > 0 ? '+' : ''}{pair.profit_margin_pct.toFixed(1)}%
+                    {pair.profit_margin_pct > 0 ? '+' : ''}{formatNumberEU(pair.profit_margin_pct, 1, 1)}%
                 </span>
             ) : null,
-            tooltip: `Profit margin: ${pair.profit_margin_pct?.toFixed(2)}% (${pair.profit_margin_raw !== null && pair.profit_margin_raw !== undefined ? (pair.profit_margin_raw > 0 ? '+' : '') + pair.profit_margin_raw.toFixed(2) + ' ' + pair.get : 'N/A'})`
+            tooltip: `Profit margin: ${pair.profit_margin_pct !== null && pair.profit_margin_pct !== undefined ? formatNumberEU(pair.profit_margin_pct, 2, 2) : 'N/A'}% (${pair.profit_margin_raw !== null && pair.profit_margin_raw !== undefined ? (pair.profit_margin_raw > 0 ? '+' : '') + formatNumberEU(pair.profit_margin_raw, 2, 2) + ' ' + pair.get : 'N/A'})`
         }
     }
 
@@ -237,11 +261,11 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
                             </>
                         ) : <>
                             {/* Fixed-width columns to align sparkline start across rows */}
-                            <span className="summary-item" style={{ width: 100, display: 'inline-flex', gap: 4, alignItems: 'center', whiteSpace: 'nowrap' }}>
+                            <span className="summary-item" style={{ width: 120, display: 'inline-flex', gap: 4, alignItems: 'center', whiteSpace: 'nowrap', paddingRight: 8 }}>
                                 {pair.best_rate ? (
                                     <>
                                         <span className="summary-label" style={{ fontWeight: 600 }}>Best:</span>
-                                        <span className="summary-value" style={{ color: 'var(--accent)', fontWeight: 700, fontSize: '14px' }}>{formatRate(pair.best_rate, pair.pay, pair.get)}</span>
+                                        <span className="summary-value" style={{ color: 'var(--accent)', fontWeight: 700, fontSize: '14px', display: 'inline-block', paddingRight: 4 }}>{formatRate(pair.best_rate, pair.pay, pair.get)}</span>
                                     </>
                                 ) : null}
                             </span>
@@ -250,7 +274,7 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
                                     <>
                                         <Sparkline values={pair.trend.sparkline} width={70} relativeFirst={true} globalMaxAbsDelta={globalMaxAbsDelta} adaptive={true} visualCapPct={40} />
                                         <span style={{ fontSize: '11px', minWidth: 10, textAlign: 'right', color: pair.trend.direction === 'up' ? '#ef4444' : pair.trend.direction === 'down' ? '#10b981' : '#6b7280', whiteSpace: 'nowrap' }}>
-                                            {pair.trend.change_percent > 0 ? '+' : ''}{pair.trend.change_percent.toFixed(1)}%
+                                            {pair.trend.change_percent > 0 ? '+' : ''}{formatNumberEU(pair.trend.change_percent, 1, 1)}%
                                         </span>
                                     </>
                                 ) : null}
