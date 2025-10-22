@@ -232,10 +232,7 @@ export default function App() {
           return;
         }
         
-        const response = await fetch(`${BASE}/api/cache/status`);
-        if (!response.ok) return;
-        
-        const status = await response.json();
+        const status = await Api.cacheStatus();
         const expiredPairs = status.pairs.filter((p: any) => p.expired);
         
         if (expiredPairs.length > 0 && data) {
