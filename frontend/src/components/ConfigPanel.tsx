@@ -243,21 +243,18 @@ export function ConfigPanel({
 
             {/* Auto-refresh toggle (legacy 60s refresh) */}
             <div style={{ marginBottom: 16 }}>
-                <label className="muted" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '8px' }}>Auto Refresh</label>
                 <label 
                     style={{ 
-                        display: 'inline-flex', 
+                        display: 'flex', 
                         alignItems: 'center', 
                         gap: 10, 
                         cursor: 'pointer', 
-                        userSelect: 'none',
-                        padding: '8px 12px',
-                        background: 'var(--bg-secondary)',
-                        borderRadius: '8px',
-                        border: '1px solid var(--border)',
-                        color: '#cbd5e1'
+                        userSelect: 'none'
                     }}
                 >
+                    <span className="muted" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        Auto Refresh <span style={{ fontWeight: 400, opacity: 0.7 }}>(60s)</span>
+                    </span>
                     <div style={{ position: 'relative', width: 42, height: 22 }}>
                         <input
                             type="checkbox"
@@ -303,10 +300,6 @@ export function ConfigPanel({
                             }}
                         />
                     </div>
-                    <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.05 }}>
-                        <span style={{ fontWeight: 600, letterSpacing: '.5px' }}>Auto Refresh</span>
-                        <span style={{ fontSize: 10, opacity: 0.55 }}>Interval: 60s</span>
-                    </span>
                 </label>
             </div>
 
