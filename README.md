@@ -6,6 +6,10 @@ A modern, real-time market analysis tool for **Path of Exile** currency trading.
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
 ![React](https://img.shields.io/badge/react-18+-61DAFB.svg)
 
+[![Backend CI](https://github.com/Pepijnvdliefvoort/poe-flip-tool/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/Pepijnvdliefvoort/poe-flip-tool/actions/workflows/backend-ci.yml)
+[![Deploy to Fly.io](https://github.com/Pepijnvdliefvoort/poe-flip-tool/actions/workflows/deploy-fly.yml/badge.svg)](https://github.com/Pepijnvdliefvoort/poe-flip-tool/actions/workflows/deploy-fly.yml)
+[![Frontend Pages](https://github.com/Pepijnvdliefvoort/poe-flip-tool/actions/workflows/frontend-pages.yml/badge.svg)](https://github.com/Pepijnvdliefvoort/poe-flip-tool/actions/workflows/frontend-pages.yml)
+
 ---
 
 ## 🚀 Features
