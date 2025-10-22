@@ -2,6 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Api } from '../api';
 import type { PortfolioSnapshot, PortfolioHistoryResponse } from '../types';
 
+// Format numbers with thousand/million separators and fixed decimals
+function formatNumber(value: number | null | undefined, decimals = 2) {
+  if (value == null || isNaN(value)) return '—';
+  return value.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+
 const ProfitTracker: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -106,21 +112,6 @@ const ProfitTracker: React.FC = () => {
     return ticks;
   }, [points]);
 
-  const xAxisHours = useMemo(() => {
-    if (!points.length) return [];
-    const hours: { x: number; label: string }[] = [];
-    let lastDay = '';
-    points.forEach((p, i) => {
-      const date = new Date(p.ts);
-      const day = date.toDateString();
-      if (day !== lastDay && i > 0) {
-        hours.push({ x: p.x, label: date.getHours().toString().padStart(2, '0') + ':00' });
-      }
-      lastDay = day;
-    });
-    return hours;
-  }, [points]);
-
   function onMouseMove(e: React.MouseEvent<SVGSVGElement>) {
     if (!points.length) return;
     const rect = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
@@ -203,7 +194,7 @@ const ProfitTracker: React.FC = () => {
             {yAxisTicks.map((tick, i) => (
               <g key={i}>
                 <line x1={65} x2={70} y1={tick.y} y2={tick.y} stroke="#334155" strokeWidth={1.5} />
-                <text x={60} y={tick.y + 4} fontSize={10} fill="#94a3b8" textAnchor="end">{tick.value.toFixed(1)}</text>
+                <text x={60} y={tick.y + 4} fontSize={10} fill="#94a3b8" textAnchor="end">{formatNumber(tick.value, 1)}</text>
               </g>
             ))}
             <line x1={70} x2={chartWidth-70} y1={220} y2={220} stroke="#334155" strokeWidth={1.5} />
@@ -211,12 +202,6 @@ const ProfitTracker: React.FC = () => {
               <g key={i}>
                 <line x1={tick.x} x2={tick.x} y1={220} y2={225} stroke="#334155" strokeWidth={1.5} />
                 <text x={tick.x} y={237} fontSize={10} fill="#94a3b8" textAnchor="middle" fontWeight={600}>{tick.label}</text>
-              </g>
-            ))}
-            {xAxisHours.map((hour, i) => (
-              <g key={`h-${i}`}>
-                <line x1={hour.x} x2={hour.x} y1={220} y2={223} stroke="#475569" strokeWidth={1} />
-                <text x={hour.x} y={250} fontSize={9} fill="#64748b" textAnchor="middle">{hour.label}</text>
               </g>
             ))}
             <text x={20} y={140} fontSize={11} fill="#cbd5e1" textAnchor="middle" transform={`rotate(-90, 20, 140)`}>Divine Orbs</text>
@@ -230,7 +215,7 @@ const ProfitTracker: React.FC = () => {
                 <line x1={points[hoverIdx].x} x2={points[hoverIdx].x} y1={60} y2={220} stroke="#3b82f6" strokeDasharray="3 3" />
                 <rect x={points[hoverIdx].x - 70} y={points[hoverIdx].y - 48} width={140} height={42} rx={6} fill="#1e293b" stroke="#3b82f6" />
                 <text x={points[hoverIdx].x} y={points[hoverIdx].y - 28} fontSize={12} fill="#e2e8f0" textAnchor="middle">{new Date(points[hoverIdx].ts).toLocaleTimeString()}</text>
-                <text x={points[hoverIdx].x} y={points[hoverIdx].y - 12} fontSize={14} fill="#3b82f6" fontWeight={600} textAnchor="middle">{points[hoverIdx].v.toFixed(2)} Div</text>
+                <text x={points[hoverIdx].x} y={points[hoverIdx].y - 12} fontSize={15} fill="#3b82f6" fontWeight={700} textAnchor="middle" style={{letterSpacing:0.5}}>{formatNumber(points[hoverIdx].v, 2)} Div</text>
               </g>
             )}
           </svg>
@@ -265,7 +250,7 @@ const ProfitTracker: React.FC = () => {
                     <img src={iconFor(d.currency)} alt={d.currency} style={{ width:20, height:20, flexShrink:0 }} />
                     <div style={{ flex:1, overflow:'hidden' }}>
                       <div style={{ fontSize:12, fontWeight:600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{d.currency}</div>
-                      <div style={{ fontSize:11, opacity:0.65 }}>{(d.pct*100).toFixed(1)}% • {d.value.toFixed(2)} Div</div>
+                      <div style={{ fontSize:11, opacity:0.7, fontVariantNumeric:'tabular-nums' }}>{(d.pct*100).toFixed(1)}% • {formatNumber(d.value, 2)} Div</div>
                     </div>
                   </div>
                 ))}
@@ -291,8 +276,11 @@ const ProfitTracker: React.FC = () => {
                   )}
                 </g>
               ))}
-              <text x={donutSvg.cx} y={donutSvg.cy} textAnchor="middle" fontSize={18} fill="#e2e8f0" dy={-6} fontWeight={600}>{grandTotal?.toFixed(2)} Div</text>
-              <text x={donutSvg.cx} y={donutSvg.cy+18} textAnchor="middle" fontSize={14} fill="#94a3b8">Total</text>
+              <text x={donutSvg.cx} y={donutSvg.cy - 14} textAnchor="middle" fontSize={22} fill="#e2e8f0" fontWeight={700} style={{letterSpacing:1,dominantBaseline:'middle'}}>
+                {formatNumber(grandTotal, 2)}
+              </text>
+              <image href="/currency/divine.webp" x={donutSvg.cx - 16} y={donutSvg.cy + 4} width="32" height="32" />
+              <text x={donutSvg.cx} y={donutSvg.cy + 54} textAnchor="middle" fontSize={14} fill="#94a3b8">Total</text>
             </svg>
           </div>
         </div>
@@ -317,8 +305,8 @@ const ProfitTracker: React.FC = () => {
                   {b.currency}
                 </td>
                 <td style={{ padding: 6, textAlign: 'right' }}>{b.quantity}</td>
-                <td style={{ padding: 6, textAlign: 'right' }}>{b.divine_per_unit != null ? b.divine_per_unit.toFixed(4) : '—'}</td>
-                <td style={{ padding: 6, textAlign: 'right' }}>{b.total_divine != null ? b.total_divine.toFixed(3) : '—'}</td>
+                <td style={{ padding: 6, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{formatNumber(b.divine_per_unit, 4)}</td>
+                <td style={{ padding: 6, textAlign: 'right', fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: '#38bdf8' }}>{formatNumber(b.total_divine, 3)}</td>
                 <td style={{ padding: 6, fontSize: 12, opacity: 0.65 }}>{b.source_pair || '—'}</td>
               </tr>
             ))}
@@ -326,7 +314,7 @@ const ProfitTracker: React.FC = () => {
           <tfoot>
             <tr>
               <td colSpan={3} style={{ textAlign: 'right', padding: 6, fontWeight: 600 }}>Grand Total</td>
-              <td style={{ textAlign: 'right', padding: 6, fontWeight: 600 }}>{grandTotal != null ? grandTotal.toFixed(3) : '—'}</td>
+              <td style={{ textAlign: 'right', padding: 6, fontWeight: 700, color: '#38bdf8', fontVariantNumeric: 'tabular-nums' }}>{formatNumber(grandTotal, 3)}</td>
               <td />
             </tr>
           </tfoot>
