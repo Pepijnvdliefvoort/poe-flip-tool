@@ -84,6 +84,10 @@ export default function App() {
   const [view, setView] = useState<'trades' | 'system' | 'profit'>('trades')
   const [accountName, setAccountName] = useState<string | null>(null)
 
+  // SSE trades loading
+  const eventSourceRef = useRef<EventSource | null>(null)
+  const initialLoadRef = useRef(true) // Track if this is the initial load
+
   // Check if already authenticated on mount
   useEffect(() => {
     const hasApiKey = !!getApiKey();
@@ -99,11 +103,6 @@ export default function App() {
     sessionStorage.removeItem('api_key');
     setIsAuthenticated(false);
   };
-
-  // Show login if not authenticated
-  if (!isAuthenticated) {
-    return <Login onLogin={handleLogin} />;
-  }
 
   // Helper to update rate limit info after every API call
   const updateRateLimit = async () => {
@@ -131,10 +130,6 @@ export default function App() {
     }
   };
 
-  // SSE trades loading
-  const eventSourceRef = useRef<EventSource | null>(null)
-  const initialLoadRef = useRef(true) // Track if this is the initial load
-  
   const load = useCallback((forceRefresh = false) => {
     setLoading(true)
     // Pre-populate results with empty rows for each trade
@@ -425,6 +420,11 @@ export default function App() {
     }, 1000);
     return () => clearInterval(interval);
   }, [rateLimit]);
+
+  // Show login if not authenticated
+  if (!isAuthenticated) {
+    return <Login onLogin={handleLogin} />;
+  }
 
   return (
     <div className="container">
