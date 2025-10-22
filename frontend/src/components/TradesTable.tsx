@@ -582,7 +582,7 @@ export function TradesTable({ data, loading, onReload, onRefresh, accountName }:
                     marginBottom: '6px'
                 }}>
                     {/* Spacer for Best column */}
-                    <div style={{ width: '140px' }}></div>
+                    <div style={{ width: '170px' }}></div>
                     
                     {/* Change column header */}
                     <div 
@@ -610,7 +610,7 @@ export function TradesTable({ data, loading, onReload, onRefresh, accountName }:
                     </div>
                     
                     {/* Metrics table headers */}
-                    <div style={{ width: '570px', display: 'flex', gap: 0 }}>
+                    <div style={{ width: '540px', display: 'flex', gap: 0 }}>
                         <div 
                             style={{ 
                                 width: '130px',
