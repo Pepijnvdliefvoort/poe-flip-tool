@@ -53,8 +53,10 @@ jobs:
 
       - name: Build & Push Image
         run: |
-          IMAGE=ghcr.io/${{ github.repository_owner }}/poe-flip-backend:latest
-          docker build -f backend/Dockerfile -t $IMAGE .
-          docker push $IMAGE
+          OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          IMAGE=ghcr.io/${OWNER_LC}/poe-flip-backend:latest
+          echo "Building image $IMAGE"
+          docker build -f backend/Dockerfile -t "$IMAGE" .
+          docker push "$IMAGE"
 
     # You can add a deploy job (Render/Fly.io/Railway) referencing this image.
