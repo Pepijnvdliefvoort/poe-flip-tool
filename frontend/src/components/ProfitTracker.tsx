@@ -9,6 +9,15 @@ function formatNumber(value: number | null | undefined, decimals = 2) {
   return value.toLocaleString('nl-NL', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
+// Ensure timestamps without timezone are treated as UTC by appending 'Z'
+function parseUtcTimestamp(ts: string): number {
+  // If already ends with Z or has timezone offset (+/-), rely on Date parsing.
+  if (/[zZ]$/.test(ts) || /[+-]\d{2}:?\d{2}$/.test(ts)) {
+    return new Date(ts).getTime();
+  }
+  return new Date(ts + 'Z').getTime();
+}
+
 const ProfitTracker: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -101,7 +110,7 @@ const ProfitTracker: React.FC = () => {
     const onVis = () => {
       if (document.visibilityState === 'visible') {
         if (!lastSnapshotRef.current) { takeSnapshot('visibility'); return; }
-        const last = new Date(lastSnapshotRef.current).getTime();
+        const last = parseUtcTimestamp(lastSnapshotRef.current);
         if (Date.now() - last > intervalMs - 5000) {
           console.log('[ProfitTracker] visibility snapshot trigger');
           takeSnapshot('visibility');
@@ -113,7 +122,7 @@ const ProfitTracker: React.FC = () => {
   }, []);
 
   function updateSnapshotAge(ts: string) {
-  const then = new Date(ts + (ts.endsWith('Z') ? '' : 'Z')).getTime();
+    const then = parseUtcTimestamp(ts);
     const diffMs = Date.now() - then;
     const diffSec = Math.floor(diffMs / 1000);
     if (diffSec < 60) {
@@ -273,7 +282,7 @@ const ProfitTracker: React.FC = () => {
             boxShadow:'0 2px 4px rgba(0,0,0,0.4)'
           }}>
             <span style={{ opacity:0.65 }}>Last Snapshot:</span>
-            <span style={{ color:'#38bdf8', fontVariant:'tabular-nums' }}>{new Date(snapshot.timestamp + (snapshot.timestamp.endsWith('Z') ? '' : 'Z')).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' })}</span>
+            <span style={{ color:'#38bdf8', fontVariant:'tabular-nums' }}>{new Date(parseUtcTimestamp(snapshot.timestamp)).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' })}</span>
             <span style={{ opacity:0.6 }}>({snapshotAge})</span>
             <span style={{ opacity:0.35 }}>•</span>
             <span style={{ opacity:0.65 }}>Next:</span>
@@ -369,7 +378,7 @@ const ProfitTracker: React.FC = () => {
               <g>
                 <line x1={points[hoverIdx].x} x2={points[hoverIdx].x} y1={60} y2={220} stroke="#3b82f6" strokeDasharray="3 3" />
                 <rect x={points[hoverIdx].x - 70} y={points[hoverIdx].y - 48} width={140} height={42} rx={6} fill="#1e293b" stroke="#3b82f6" />
-                <text x={points[hoverIdx].x} y={points[hoverIdx].y - 28} fontSize={12} fill="#e2e8f0" textAnchor="middle">{new Date(points[hoverIdx].ts + (points[hoverIdx].ts.endsWith('Z') ? '' : 'Z')).toLocaleTimeString()}</text>
+                <text x={points[hoverIdx].x} y={points[hoverIdx].y - 28} fontSize={12} fill="#e2e8f0" textAnchor="middle">{new Date(parseUtcTimestamp(points[hoverIdx].ts)).toLocaleTimeString()}</text>
                 <text x={points[hoverIdx].x} y={points[hoverIdx].y - 12} fontSize={15} fill="#3b82f6" fontWeight={700} textAnchor="middle" style={{letterSpacing:0.5}}>{formatNumber(points[hoverIdx].v, 2)} Div</text>
               </g>
             )}
