@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, memo } from 'react'
 import '../spinner.css'
 import { PairSummary } from '../types'
-import { Api } from '../api'
+// (Reverted) Removed cache watch specific imports/logic
 
 // Tiny sparkline component using SVG with optional baseline alignment
 interface SparklineProps {
@@ -447,9 +447,6 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
 
 export function TradesTable({ data, loading, onReload, onRefresh, accountName }: { data: PairSummary[]; loading: boolean; onReload: (index: number) => void; onRefresh?: () => void; accountName?: string | null }) {
     const [allExpanded, setAllExpanded] = useState(false)
-    const [cacheWatch, setCacheWatch] = useState(true)
-    const pollingRef = useRef(false)
-    const lastTriggeredRef = useRef<Record<number, number>>({})
     
     // Always display all metrics
     const selectedMetrics = ['spread', 'median', 'profit'] as const
@@ -547,46 +544,12 @@ export function TradesTable({ data, loading, onReload, onRefresh, accountName }:
     // Find the index currently loading (first with empty listings)
     const loadingIndex = loading ? sortedData.findIndex(p => p.listings.length === 0) : -1
 
-    // Cache validity polling every 5s when enabled (replaces legacy auto-refresh logic)
-    useEffect(() => {
-        if (!cacheWatch) return
-        let cancelled = false
-        const intervalMs = 5000
-        const tick = async () => {
-            if (cancelled) return
-            if (pollingRef.current) {
-                setTimeout(tick, intervalMs)
-                return
-            }
-            pollingRef.current = true
-            try {
-                const status = await Api.cacheStatus()
-                // For each expired entry trigger reload (throttle per index ~5s)
-                const now = Date.now()
-                status.pairs.forEach((entry: any) => {
-                    if (!entry.cached || entry.expired || entry.seconds_remaining <= 0) {
-                        const last = lastTriggeredRef.current[entry.index] || 0
-                        if (now - last > 5000) { // throttle refresh attempts
-                            onReload(entry.index)
-                            lastTriggeredRef.current[entry.index] = now
-                        }
-                    }
-                })
-            } catch (e) {
-                // silent
-            } finally {
-                pollingRef.current = false
-                if (!cancelled) setTimeout(tick, intervalMs)
-            }
-        }
-        tick()
-        return () => { cancelled = true }
-    }, [cacheWatch, onReload])
+    // (Reverted) Removed cache watch polling logic – handled by legacy 60s auto-refresh in App.
 
     return (
         <>
             <div className="trades-container">
-                <div className="section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+                <div className="section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: '16px' }}>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                         <button
                             className="btn ghost"
@@ -607,59 +570,6 @@ export function TradesTable({ data, loading, onReload, onRefresh, accountName }:
                             </button>
                         )}
                     </div>
-                    <label
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 10,
-                            cursor: 'pointer',
-                            fontSize: 12,
-                            userSelect: 'none',
-                            fontWeight: 500,
-                            color: '#cbd5e1'
-                        }}
-                        title="Automatically re-fetch a trade when its cache entry expires (checks every 2s)."
-                    >
-                        <div style={{ position: 'relative', width: 42, height: 22 }}>
-                            <input
-                                type="checkbox"
-                                checked={cacheWatch}
-                                onChange={e => setCacheWatch(e.target.checked)}
-                                aria-label="Toggle cache watch"
-                                style={{ position: 'absolute', inset: 0, opacity: 0, margin: 0, cursor: 'pointer' }}
-                            />
-                            <span
-                                aria-hidden="true"
-                                style={{
-                                    position: 'absolute',
-                                    inset: 0,
-                                    background: cacheWatch ? 'linear-gradient(90deg,#2563eb,#3b82f6)' : 'rgba(255,255,255,0.08)',
-                                    border: '1px solid var(--border)',
-                                    borderRadius: 30,
-                                    boxShadow: cacheWatch ? '0 0 0 1px rgba(59,130,246,0.4), 0 4px 10px -2px rgba(59,130,246,0.4)' : '0 1px 2px rgba(0,0,0,0.5) inset',
-                                    transition: 'background .25s, box-shadow .25s'
-                                }}
-                            />
-                            <span
-                                aria-hidden="true"
-                                style={{
-                                    position: 'absolute',
-                                    top: 2,
-                                    left: cacheWatch ? 22 : 2,
-                                    width: 18,
-                                    height: 18,
-                                    background: '#fff',
-                                    borderRadius: '50%',
-                                    boxShadow: '0 1px 3px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,0,0,0.25)',
-                                    transition: 'left .25s cubic-bezier(.4,0,.2,1)'
-                                }}
-                            />
-                        </div>
-                        <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.05 }}>
-                            <span style={{ fontWeight: 600, letterSpacing: '.5px' }}>Cache Watch</span>
-                                <span style={{ fontSize: 10, opacity: 0.55 }}>5s check</span>
-                        </span>
-                    </label>
                 </div>
                 
                 {/* Column Headers - matches data row structure exactly */}

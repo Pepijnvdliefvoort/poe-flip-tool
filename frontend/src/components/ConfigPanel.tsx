@@ -241,7 +241,74 @@ export function ConfigPanel({
                 </div>
             </div>
 
-            {/* Auto-refresh controls removed: functionality superseded by Trades page 'Cache Watch' toggle */}
+            {/* Auto-refresh toggle (legacy 60s refresh) */}
+            <div style={{ marginBottom: 16 }}>
+                <label className="muted" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '8px' }}>Auto Refresh</label>
+                <label 
+                    style={{ 
+                        display: 'inline-flex', 
+                        alignItems: 'center', 
+                        gap: 10, 
+                        cursor: 'pointer', 
+                        userSelect: 'none',
+                        padding: '8px 12px',
+                        background: 'var(--bg-secondary)',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border)',
+                        color: '#cbd5e1'
+                    }}
+                >
+                    <div style={{ position: 'relative', width: 42, height: 22 }}>
+                        <input
+                            type="checkbox"
+                            checked={autoRefresh}
+                            onChange={e => onAutoRefreshChanged(e.target.checked)}
+                            aria-label="Toggle auto refresh"
+                            style={{
+                                position: 'absolute',
+                                inset: 0,
+                                opacity: 0,
+                                margin: 0,
+                                cursor: 'pointer'
+                            }}
+                        />
+                        <span
+                            aria-hidden="true"
+                            style={{
+                                position: 'absolute',
+                                inset: 0,
+                                background: autoRefresh
+                                    ? 'linear-gradient(90deg,#2563eb,#3b82f6)'
+                                    : 'rgba(255,255,255,0.08)',
+                                border: '1px solid var(--border)',
+                                borderRadius: 30,
+                                boxShadow: autoRefresh
+                                    ? '0 0 0 1px rgba(59,130,246,0.4), 0 4px 10px -2px rgba(59,130,246,0.4)'
+                                    : '0 1px 2px rgba(0,0,0,0.5) inset',
+                                transition: 'background .25s, box-shadow .25s'
+                            }}
+                        />
+                        <span
+                            aria-hidden="true"
+                            style={{
+                                position: 'absolute',
+                                top: 2,
+                                left: autoRefresh ? 22 : 2,
+                                width: 18,
+                                height: 18,
+                                background: '#fff',
+                                borderRadius: '50%',
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,0,0,0.25)',
+                                transition: 'left .25s cubic-bezier(.4,0,.2,1)'
+                            }}
+                        />
+                    </div>
+                    <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.05 }}>
+                        <span style={{ fontWeight: 600, letterSpacing: '.5px' }}>Auto Refresh</span>
+                        <span style={{ fontSize: 10, opacity: 0.55 }}>Interval: 60s</span>
+                    </span>
+                </label>
+            </div>
 
             {/* Trade pairs list - compact */}
             <div style={{ marginBottom: 16 }}>

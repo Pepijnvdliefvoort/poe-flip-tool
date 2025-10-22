@@ -77,7 +77,8 @@ export default function App() {
   const [data, setData] = useState<TradesResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [topN, setTopN] = useState(5)
-  // Removed legacy autoRefresh (replaced by per-page Cache Watch toggle in TradesTable)
+  // Restored legacy autoRefresh (60s interval) after reverting Cache Watch toggle
+  const [autoRefresh, setAutoRefresh] = useState(true)
   const [rateLimit, setRateLimit] = useState<{ blocked: boolean; block_remaining: number; rules: Record<string, { current: number; limit: number; reset_s: number }[]> } | null>(null)
   const [nearLimit, setNearLimit] = useState(false)
   const [rateLimitDisplay, setRateLimitDisplay] = useState<{ blocked: boolean; block_remaining: number; rules: Record<string, { current: number; limit: number; reset_s: number }[]> } | null>(null)
@@ -206,6 +207,33 @@ export default function App() {
     }
     return () => { eventSourceRef.current?.close() } 
   }, [load, isAuthenticated])
+
+  // Legacy 60s auto-refresh loop (lightweight: forces new SSE cycle)
+  useEffect(() => {
+    if (!isAuthenticated || !autoRefresh || view !== 'trades') return;
+    let cancelled = false;
+    let timer: number | null = null;
+    const tick = () => {
+      if (cancelled) return;
+      // Skip if currently rate limited hard
+      if (rateLimit && rateLimit.blocked) {
+        schedule();
+        return;
+      }
+      // Trigger a forced refresh of all pairs
+      load(true);
+      schedule();
+    };
+    const schedule = () => {
+      if (cancelled) return;
+      timer = window.setTimeout(tick, 60000); // 60s
+    };
+    schedule();
+    return () => {
+      cancelled = true;
+      if (timer !== null) clearTimeout(timer);
+    };
+  }, [autoRefresh, load, isAuthenticated, view, rateLimit]);
 
 
   const reloadPair = async (index: number) => {
@@ -400,8 +428,8 @@ export default function App() {
               onPairRemoved={removePair} 
               topN={topN} 
               onTopNChanged={setTopN}
-              autoRefresh={false}
-              onAutoRefreshChanged={() => { /* deprecated – handled by TradesTable Cache Watch */ }}
+                autoRefresh={autoRefresh}
+                onAutoRefreshChanged={setAutoRefresh}
               onAccountNameChanged={setAccountName}
             />
           </aside>
