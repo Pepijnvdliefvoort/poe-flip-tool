@@ -159,6 +159,7 @@ def summarize_exchange_json(data: Dict[str, Any], top_n: int = 5) -> List[Listin
 class CacheEntry:
     data: List[ListingSummary]
     expires_at: datetime
+    fetched_at: datetime
 
 
 @dataclass
@@ -391,23 +392,24 @@ class TradeCache:
         except Exception as e:
             log.error(f"Failed to load cache from database: {e}")
 
-    def get(self, league: str, have: str, want: str) -> Optional[List[ListingSummary]]:
+    def get(self, league: str, have: str, want: str) -> Optional[Tuple[List[ListingSummary], datetime]]:
         key = (league, have, want)
         entry = self._store.get(key)
         if entry and datetime.utcnow() < entry.expires_at:
             log.info(f"Cache HIT: {have}->{want} (expires in {(entry.expires_at - datetime.utcnow()).total_seconds():.0f}s)")
-            return entry.data
+            return entry.data, entry.fetched_at
         if entry:
             log.info(f"Cache EXPIRED: {have}->{want}")
         return None
 
-    def set(self, league: str, have: str, want: str, data: List[ListingSummary]):
+    def set(self, league: str, have: str, want: str, data: List[ListingSummary], fetched_at: datetime = None):
         key = (league, have, want)
         expires_at = datetime.utcnow() + timedelta(seconds=self.ttl)
-        self._store[key] = CacheEntry(data=data, expires_at=expires_at)
-        log.info(f"Cache SET: {have}->{want} (expires at {expires_at.strftime('%H:%M:%S')})")
-        
-        # Persist to database
+        if fetched_at is None:
+            fetched_at = datetime.utcnow()
+        self._store[key] = CacheEntry(data=data, expires_at=expires_at, fetched_at=fetched_at)
+        log.info(f"Cache SET: {have}->{want} (expires at {expires_at.strftime('%H:%M:%S')}, fetched_at {fetched_at.strftime('%H:%M:%S')})")
+        # Persist to database (update this if you persist fetched_at)
         db.save_cache_entry(league, have, want, data, expires_at)
 
     def invalidate(self, league: str, have: str, want: str):
@@ -453,16 +455,16 @@ historical_cache = HistoricalCache(retention_hours=HISTORY_RETENTION_HOURS, max_
 
 def fetch_listings_with_cache(
     *, league: str, have: str, want: str, top_n: int = 5, retries: int = 2, backoff_s: float = 0.8
-) -> Tuple[Optional[List[ListingSummary]], bool]:
+) -> Tuple[Optional[List[ListingSummary]], bool, Optional[datetime]]:
     """
     Fetch listings from cache if available, otherwise fetch from API and cache result.
-    Returns: (listings, was_cached)
+    Returns: (listings, was_cached, fetched_at)
     """
     # Check cache first
     cached = cache.get(league, have, want)
     if cached is not None:
-        # Return cached data, but slice to top_n
-        return (cached[:top_n], True)
+        listings, fetched_at = cached
+        return (listings[:top_n], True, fetched_at)
 
     # Not in cache, fetch from API
     for attempt in range(retries + 1):
@@ -470,41 +472,37 @@ def fetch_listings_with_cache(
         if raw:
             # Fetch more than top_n so we have good cache data
             listings = summarize_exchange_json(raw, top_n=20)  # Always fetch 20 for cache
-            cache.set(league, have, want, listings)
-            
+            fetched_at = datetime.utcnow()
+            cache.set(league, have, want, listings, fetched_at=fetched_at)
             # Add to historical tracking
             historical_cache.add_snapshot(league, have, want, listings)
-            
-            return (listings[:top_n], False)
+            return (listings[:top_n], False, fetched_at)
         if attempt < retries:
             time.sleep(backoff_s * (2 ** attempt))
 
-    return (None, False)
+    return (None, False, None)
 
 
 def fetch_listings_force(
     *, league: str, have: str, want: str, top_n: int = 5, retries: int = 2, backoff_s: float = 0.8
-) -> Tuple[Optional[List[ListingSummary]], bool]:
+) -> Tuple[Optional[List[ListingSummary]], bool, Optional[datetime]]:
     """
     Force fetch listings from API, bypassing and updating cache.
-    Returns: (listings, was_cached) - was_cached is always False for this function
+    Returns: (listings, was_cached, fetched_at) - was_cached is always False for this function
     """
     # Invalidate cache for this pair
     cache.invalidate(league, have, want)
-    
     # Fetch fresh data from API
     for attempt in range(retries + 1):
         raw = _post_exchange(league, have, want)
         if raw:
             # Fetch more than top_n so we have good cache data
             listings = summarize_exchange_json(raw, top_n=20)  # Always fetch 20 for cache
-            cache.set(league, have, want, listings)
-            
+            fetched_at = datetime.utcnow()
+            cache.set(league, have, want, listings, fetched_at=fetched_at)
             # Add to historical tracking
             historical_cache.add_snapshot(league, have, want, listings)
-            
-            return (listings[:top_n], False)
+            return (listings[:top_n], False, fetched_at)
         if attempt < retries:
             time.sleep(backoff_s * (2 ** attempt))
-    
-    return (None, False)
+    return (None, False, None)

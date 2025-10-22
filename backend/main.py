@@ -222,13 +222,12 @@ def refresh_one_trade(
             fetched_at=datetime.utcnow().isoformat() + 'Z',
         )
     
-    listings, was_cached = fetch_listings_force(
+    listings, was_cached, fetched_at = fetch_listings_force(
         league=cfg.league,
         have=t.pay,
         want=t.get,
         top_n=top_n,
     )
-    
     if listings is None:
         return PairSummary(
             index=index,
@@ -239,15 +238,12 @@ def refresh_one_trade(
             listings=[],
             best_rate=None,
             count_returned=0,
-            fetched_at=datetime.utcnow().isoformat() + 'Z',
+            fetched_at=(fetched_at.isoformat() + 'Z') if fetched_at else datetime.utcnow().isoformat() + 'Z',
         )
-    
-    # Record snapshot and get trend data from historical cache
     from trade_logic import historical_cache
     if listings:
         historical_cache.add_snapshot(cfg.league, t.pay, t.get, listings)
     trend_data = historical_cache.get_trend(cfg.league, t.pay, t.get)
-    
     return PairSummary(
         index=index,
         get=t.get,
@@ -258,7 +254,7 @@ def refresh_one_trade(
         best_rate=(listings[0].rate if listings else None),
         count_returned=len(listings),
         trend=trend_data,
-        fetched_at=datetime.utcnow().isoformat() + 'Z',
+        fetched_at=(fetched_at.isoformat() + 'Z') if fetched_at else datetime.utcnow().isoformat() + 'Z',
     )
 
 
@@ -281,7 +277,7 @@ async def stream_trades(
                 break
             
             was_cached = False
-            
+            fetched_at = None
             if rate_limiter.blocked:
                 summary = PairSummary(
                     index=idx,
@@ -297,20 +293,19 @@ async def stream_trades(
             else:
                 # Use force or cache based on parameter
                 if force:
-                    listings, was_cached = fetch_listings_force(
+                    listings, was_cached, fetched_at = fetch_listings_force(
                         league=cfg.league,
                         have=t.pay,
                         want=t.get,
                         top_n=top_n,
                     )
                 else:
-                    listings, was_cached = fetch_listings_with_cache(
+                    listings, was_cached, fetched_at = fetch_listings_with_cache(
                         league=cfg.league,
                         have=t.pay,
                         want=t.get,
                         top_n=top_n,
                     )
-                
                 if listings is None:
                     summary = PairSummary(
                         index=idx,
@@ -321,15 +316,13 @@ async def stream_trades(
                         listings=[],
                         best_rate=None,
                         count_returned=0,
-                        fetched_at=datetime.utcnow().isoformat() + 'Z',
+                        fetched_at=(fetched_at.isoformat() + 'Z') if fetched_at else datetime.utcnow().isoformat() + 'Z',
                     )
                 else:
-                    # Record snapshot and get trend data from historical cache
                     from trade_logic import historical_cache
                     if not was_cached and listings:
                         historical_cache.add_snapshot(cfg.league, t.pay, t.get, listings)
                     trend_data = historical_cache.get_trend(cfg.league, t.pay, t.get)
-                    
                     summary = PairSummary(
                         index=idx,
                         get=t.get,
@@ -340,7 +333,7 @@ async def stream_trades(
                         best_rate=(listings[0].rate if listings else None),
                         count_returned=len(listings),
                         trend=trend_data,
-                        fetched_at=datetime.utcnow().isoformat() + 'Z',
+                        fetched_at=(fetched_at.isoformat() + 'Z') if fetched_at else datetime.utcnow().isoformat() + 'Z',
                     )
             
             log.info(

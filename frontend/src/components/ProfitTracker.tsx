@@ -3,9 +3,10 @@ import { Api } from '../api';
 import type { PortfolioSnapshot, PortfolioHistoryResponse } from '../types';
 
 // Format numbers with thousand/million separators and fixed decimals
+// Uses European format: dots for thousands, commas for decimals (e.g., 12.330,91)
 function formatNumber(value: number | null | undefined, decimals = 2) {
   if (value == null || isNaN(value)) return '—';
-  return value.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  return value.toLocaleString('nl-NL', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
 const ProfitTracker: React.FC = () => {
@@ -203,7 +204,7 @@ const ProfitTracker: React.FC = () => {
                     color: profitStats.isPositive ? '#10b981' : '#ef4444',
                     letterSpacing: 0.3
                   }}>
-                    {profitStats.isPositive ? '+' : ''}{profitStats.percentChange.toFixed(2)}%
+                    {profitStats.isPositive ? '+' : ''}{formatNumber(profitStats.percentChange, 2)}%
                   </div>
                 </div>
                 <div style={{ 
@@ -270,7 +271,6 @@ const ProfitTracker: React.FC = () => {
 
       {snapshot && donutSvg && (
         <div style={{ marginBottom: 34 }}>
-          <h3 style={{ margin:'0 0 12px', fontSize:16 }}>Portfolio Composition</h3>
           <div style={{ display:'flex', gap:24, alignItems:'center', justifyContent:'center', flexWrap:'wrap' }}>
             <div style={{ flex:'0 0 auto', maxWidth:350 }}>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
@@ -296,7 +296,7 @@ const ProfitTracker: React.FC = () => {
                     <img src={iconFor(d.currency)} alt={d.currency} style={{ width:20, height:20, flexShrink:0 }} />
                     <div style={{ flex:1, overflow:'hidden' }}>
                       <div style={{ fontSize:12, fontWeight:600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{d.currency}</div>
-                      <div style={{ fontSize:11, opacity:0.7, fontVariantNumeric:'tabular-nums' }}>{(d.pct*100).toFixed(1)}% • {formatNumber(d.value, 2)} Div</div>
+                      <div style={{ fontSize:11, opacity:0.7, fontVariantNumeric:'tabular-nums' }}>{formatNumber(d.pct*100, 1)}% • {formatNumber(d.value, 2)} Div</div>
                     </div>
                   </div>
                 ))}
@@ -317,7 +317,7 @@ const ProfitTracker: React.FC = () => {
                   {donutHoverIdx===i && (
                     <g>
                       <text x={seg.labelPos.x} y={seg.labelPos.y} textAnchor="middle" fontSize={13} fill="#fff" fontWeight={600}>{seg.data.currency}</text>
-                      <text x={seg.labelPos.x} y={seg.labelPos.y+16} textAnchor="middle" fontSize={12} fill="#e2e8f0">{(seg.data.pct*100).toFixed(1)}%</text>
+                      <text x={seg.labelPos.x} y={seg.labelPos.y+16} textAnchor="middle" fontSize={12} fill="#e2e8f0">{formatNumber(seg.data.pct*100, 1)}%</text>
                     </g>
                   )}
                 </g>
