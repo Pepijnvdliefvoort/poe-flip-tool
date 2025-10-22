@@ -8,6 +8,7 @@ from typing import List, Dict
 import requests
 import secrets
 import hashlib
+import asyncio  # Added for background scheduling
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Query, HTTPException, Request, Body, Security, Depends
@@ -117,6 +118,74 @@ async def verify_api_key(
 # ============================================================================
 
 CONFIG_PATH = Path(__file__).parent / "config.json"
+
+# ============================================================================
+# Background Portfolio Snapshot Scheduler
+# ============================================================================
+
+ENABLE_PORTFOLIO_SCHEDULER = os.getenv("ENABLE_PORTFOLIO_SCHEDULER", "1") == "1"
+PORTFOLIO_SNAPSHOT_INTERVAL_SECONDS = int(os.getenv("PORTFOLIO_SNAPSHOT_INTERVAL_SECONDS", "900"))  # default 15m
+
+# Track last run metadata for observability endpoint
+_portfolio_scheduler_state = {
+    "enabled": ENABLE_PORTFOLIO_SCHEDULER,
+    "interval_seconds": PORTFOLIO_SNAPSHOT_INTERVAL_SECONDS,
+    "last_success": None,          # ISO timestamp of last successful snapshot
+    "last_error": None,            # Last error message (if any)
+    "last_total_divines": None,    # Last computed total
+    "runs": 0,                     # Number of attempts (success or fail)
+}
+
+async def _portfolio_snapshot_loop():
+    """Background loop that records portfolio snapshots every interval.
+
+    Runs independently of any active frontend tab so progress is tracked even when UI is closed.
+    Skips if no account_name configured or if snapshot logic raises an exception.
+    """
+    # Small initial delay to allow app startup to settle
+    await asyncio.sleep(5)
+    log.info("Portfolio snapshot scheduler loop started")
+    while True:
+        started = datetime.utcnow()
+        _portfolio_scheduler_state["runs"] += 1
+        try:
+            cfg = _load_config()
+            if not cfg.account_name:
+                log.debug("Portfolio scheduler: skipping (no account_name configured)")
+            else:
+                # Reuse existing helper for breakdown
+                breakdown = _compute_portfolio_breakdown(cfg.account_name, cfg.league)
+                total = sum(b['total_divine'] for b in breakdown if b.get('total_divine') is not None)
+                from persistence import db  # local import to avoid circulars at module import time
+                saved = db.save_portfolio_snapshot(started, total, breakdown)
+                if saved:
+                    _portfolio_scheduler_state["last_success"] = started.isoformat() + 'Z'
+                    _portfolio_scheduler_state["last_total_divines"] = round(total, 6)
+                    _portfolio_scheduler_state["last_error"] = None
+                    log.info(f"[PortfolioScheduler] Snapshot saved total={total:.3f} at {started.isoformat()}Z")
+                else:
+                    msg = "DB persist returned False"
+                    _portfolio_scheduler_state["last_error"] = msg
+                    log.error(f"[PortfolioScheduler] Failed to persist snapshot: {msg}")
+        except Exception as e:  # broad catch to prevent loop exit
+            err = str(e)
+            _portfolio_scheduler_state["last_error"] = err
+            log.error(f"[PortfolioScheduler] Error during snapshot: {err}")
+        # Sleep remaining interval (guard minimum 5s to avoid hammering on negative intervals)
+        elapsed = (datetime.utcnow() - started).total_seconds()
+        remaining = max(5, PORTFOLIO_SNAPSHOT_INTERVAL_SECONDS - elapsed)
+        await asyncio.sleep(remaining)
+
+@app.on_event("startup")
+async def _start_portfolio_scheduler():
+    if ENABLE_PORTFOLIO_SCHEDULER:
+        try:
+            asyncio.create_task(_portfolio_snapshot_loop())
+            log.info(f"Portfolio snapshot scheduler enabled (interval={PORTFOLIO_SNAPSHOT_INTERVAL_SECONDS}s)")
+        except Exception as e:
+            log.error(f"Failed to start portfolio snapshot scheduler: {e}")
+    else:
+        log.info("Portfolio snapshot scheduler disabled via ENABLE_PORTFOLIO_SCHEDULER=0")
 
 # ============================================================================
 # Middleware
@@ -822,3 +891,10 @@ def portfolio_history(limit: int = Query(None, ge=1, le=1000), api_key: str = De
         'count': len(rows),
         'snapshots': rows,
     }
+
+
+@app.get("/api/portfolio/scheduler_status")
+def portfolio_scheduler_status(api_key: str = Depends(verify_api_key)):
+    """Return runtime status for the background portfolio snapshot scheduler."""
+    # Provide a copy so internal dict can't be mutated from outside
+    return dict(_portfolio_scheduler_state)

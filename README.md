@@ -161,6 +161,7 @@ The Profit Tracker tab ("Profit" in the header) lets you take manual portfolio s
 New Portfolio Endpoints:
 - `POST /api/portfolio/snapshot` – Computes current stash quantities + valuations and stores a snapshot row (returns the snapshot payload).
 - `GET /api/portfolio/history?limit=120` – Returns most recent N stored snapshots with breakdowns.
+- `GET /api/portfolio/scheduler_status` – Returns runtime metadata for the background snapshot scheduler (enabled flag, last success, last error, last total, run count, interval).
 
 Snapshot Workflow:
 1. Click "Snapshot Now".
@@ -192,6 +193,29 @@ Failure Modes & Notes:
 - If no `account_name` configured, snapshot endpoint returns 400.
 - If stash tab named `currency` not found, snapshot fails (ensure tab name matches exactly, case-insensitive match performed server-side).
 - Valuations may be partially null if insufficient historical trade data yet.
+
+#### Automatic Background Snapshots (Headless Tracking)
+As of the latest update, the backend now maintains portfolio snapshots automatically even when the Profit Tracker tab (or the entire frontend) is closed.
+
+Scheduler Behavior:
+- Starts on backend startup (can be disabled via env var below)
+- Runs every 15 minutes by default (interval configurable)
+- Skips if `account_name` is not set in `backend/config.json`
+- Persists a snapshot exactly like the manual endpoint
+- Logs success or errors; most recent metadata available via `/api/portfolio/scheduler_status`
+
+Environment Variables:
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ENABLE_PORTFOLIO_SCHEDULER` | `1` | Set to `0` to disable background snapshots |
+| `PORTFOLIO_SNAPSHOT_INTERVAL_SECONDS` | `900` | Interval between automatic snapshots (seconds) |
+
+Example override (Windows Powershell):
+```powershell
+$env:ENABLE_PORTFOLIO_SCHEDULER="1"; $env:PORTFOLIO_SNAPSHOT_INTERVAL_SECONDS="600"; uvicorn main:app --reload
+```
+
+The frontend will still take an immediate snapshot on page load (and every 15 minutes while open) — the background scheduler simply ensures continuity if the UI is not active.
 
 ### Data Persistence
 
