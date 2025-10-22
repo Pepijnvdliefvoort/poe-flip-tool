@@ -19,6 +19,9 @@ const ProfitTracker: React.FC = () => {
   const [donutHoverIdx, setDonutHoverIdx] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [chartWidth, setChartWidth] = useState<number>(800);
+  const [snapshotAge, setSnapshotAge] = useState<string>('');
+  const [nextCountdown, setNextCountdown] = useState<string>('');
+  const nextSnapshotAtRef = useRef<number | null>(null);
 
   useEffect(() => {
     function handleResize() {
@@ -39,9 +42,12 @@ const ProfitTracker: React.FC = () => {
     setLoading(true); setError(null);
     try {
       const snap = await Api.portfolioSnapshot();
-      lastSnapshotRef.current = snap.timestamp;
+  lastSnapshotRef.current = snap.timestamp;
+  // schedule next snapshot 15 minutes from NOW (not from saved timestamp to avoid drift)
+  nextSnapshotAtRef.current = Date.now() + 15 * 60 * 1000;
       console.log(`[ProfitTracker] (${source}) snapshot saved total=${snap.total_divines.toFixed(3)} timestamp=${snap.timestamp}`);
-      setSnapshot(snap);
+  setSnapshot(snap);
+  updateSnapshotAge(snap.timestamp);
       setHistory(h => {
         if (!h) return h;
         if (h.snapshots.find(s => s.timestamp === snap.timestamp)) return h;
@@ -72,32 +78,82 @@ const ProfitTracker: React.FC = () => {
   useEffect(() => {
     // Initial snapshot
     takeSnapshot('initial');
-    // 15 minute interval
+    // Use self-rescheduling timer to reduce drift
+    let cancelled = false;
+    const scheduleNext = () => {
+      if (cancelled) return;
+      const now = Date.now();
+      // ensure nextSnapshotAtRef is set (initial snapshot sets it; guard here if snapshot fails)
+      if (!nextSnapshotAtRef.current) {
+        nextSnapshotAtRef.current = now + 15 * 60 * 1000;
+      }
+      const delay = Math.max(1000, nextSnapshotAtRef.current - now);
+      setTimeout(async () => {
+        if (cancelled) return;
+        console.log('[ProfitTracker] interval tick');
+        await takeSnapshot('interval');
+        scheduleNext();
+      }, delay);
+    };
+    scheduleNext();
+    // Visibility re-check (if user was away longer than interval, take immediate one)
     const intervalMs = 15 * 60 * 1000;
-    const id = setInterval(() => {
-      console.log('[ProfitTracker] interval tick');
-      takeSnapshot('interval');
-    }, intervalMs);
-    // Visibility re-check (if user was away longer than interval, take an immediate one)
     const onVis = () => {
       if (document.visibilityState === 'visible') {
-        if (!lastSnapshotRef.current) {
-          takeSnapshot('visibility');
-          return;
-        }
+        if (!lastSnapshotRef.current) { takeSnapshot('visibility'); return; }
         const last = new Date(lastSnapshotRef.current).getTime();
-        if (Date.now() - last > intervalMs - 5000) { // grace window
+        if (Date.now() - last > intervalMs - 5000) {
           console.log('[ProfitTracker] visibility snapshot trigger');
           takeSnapshot('visibility');
         }
       }
     };
     document.addEventListener('visibilitychange', onVis);
-    return () => {
-      clearInterval(id);
-      document.removeEventListener('visibilitychange', onVis);
-    };
+    return () => { cancelled = true; document.removeEventListener('visibilitychange', onVis); };
   }, []);
+
+  function updateSnapshotAge(ts: string) {
+    const then = new Date(ts).getTime();
+    const diffMs = Date.now() - then;
+    const diffSec = Math.floor(diffMs / 1000);
+    if (diffSec < 60) {
+      setSnapshotAge(`${diffSec}s ago`);
+      return;
+    }
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) {
+      setSnapshotAge(`${diffMin}m ago`);
+      return;
+    }
+    const diffHr = Math.floor(diffMin / 60);
+    setSnapshotAge(`${diffHr}h ago`);
+  }
+
+  function updateCountdown() {
+    if (!nextSnapshotAtRef.current) { setNextCountdown('—'); return; }
+    const remainingMs = nextSnapshotAtRef.current - Date.now();
+    if (remainingMs <= 0) { setNextCountdown('due'); return; }
+    const sec = Math.floor(remainingMs / 1000) % 60;
+    const minTotal = Math.floor(remainingMs / 60000);
+    const min = minTotal % 60;
+    const hr = Math.floor(minTotal / 60);
+    if (hr > 0) {
+      setNextCountdown(`${hr}h ${min}m ${sec}s`);
+    } else if (min > 0) {
+      setNextCountdown(`${min}m ${sec}s`);
+    } else {
+      setNextCountdown(`${sec}s`);
+    }
+  }
+
+  // Periodically refresh age + countdown display
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (snapshot?.timestamp) updateSnapshotAge(snapshot.timestamp);
+      updateCountdown();
+    }, 5000); // update every 5s for a smoother countdown
+    return () => clearInterval(id);
+  }, [snapshot]);
 
   const grandTotal = snapshot?.total_divines ?? null;
 
@@ -200,7 +256,31 @@ const ProfitTracker: React.FC = () => {
 
   return (
     <div ref={containerRef} style={{ padding: '10px 14px 60px' }}>
-      <h2 style={{ marginTop: 0 }}>Profit Tracker</h2>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:12 }}>
+        <h2 style={{ marginTop: 0, marginBottom: 4 }}>Profit Tracker</h2>
+        {snapshot && (
+          <div style={{
+            display:'flex',
+            alignItems:'center',
+            gap:8,
+            background:'linear-gradient(90deg, rgba(30,41,59,0.7), rgba(15,23,42,0.7))',
+            border:'1px solid #334155',
+            padding:'6px 12px',
+            borderRadius:8,
+            fontSize:12,
+            fontWeight:500,
+            letterSpacing:'.3px',
+            boxShadow:'0 2px 4px rgba(0,0,0,0.4)'
+          }}>
+            <span style={{ opacity:0.65 }}>Last Snapshot:</span>
+            <span style={{ color:'#38bdf8', fontVariant:'tabular-nums' }}>{new Date(snapshot.timestamp).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' })}</span>
+            <span style={{ opacity:0.6 }}>({snapshotAge})</span>
+            <span style={{ opacity:0.35 }}>•</span>
+            <span style={{ opacity:0.65 }}>Next:</span>
+            <span style={{ color:'#94a3b8', fontVariant:'tabular-nums' }}>{nextCountdown}</span>
+          </div>
+        )}
+      </div>
       <p style={{ margin: '4px 0 20px', fontSize: 14, opacity: 0.85 }}>
         Automatic snapshots of your portfolio every 15 minutes. Track your total divine value and currency composition over time.
       </p>
