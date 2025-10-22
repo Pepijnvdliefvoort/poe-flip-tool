@@ -73,6 +73,61 @@ def _save_config(cfg: ConfigData) -> None:
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(cfg.dict(), f, indent=2)
 
+
+def _calculate_profit_margins(pairs: List[PairSummary]) -> None:
+    """
+    Calculate profit margins for linked trade pairs in-place.
+    
+    For each pair, finds its reverse pair (e.g., divine->chaos has chaos->divine as reverse).
+    Calculates the profit margin if both pairs have valid best_rate values.
+    
+    Example: If buying 1 divine for 280 chaos (divine->chaos rate=280) and
+             selling 250 chaos for 1 divine (chaos->divine rate=1/250=0.004),
+             profit = 280 - 250 = 30 chaos per cycle (10.71% margin).
+    """
+    for i, pair_a in enumerate(pairs):
+        # Skip if already calculated or no valid rate
+        if pair_a.linked_pair_index is not None or pair_a.best_rate is None:
+            continue
+        
+        # Find the reverse pair
+        for j, pair_b in enumerate(pairs):
+            if i == j:
+                continue
+            
+            # Check if this is the reverse pair (get/pay swapped)
+            if pair_a.get == pair_b.pay and pair_a.pay == pair_b.get:
+                if pair_b.best_rate is not None and pair_b.best_rate > 0:
+                    # Link them together
+                    pair_a.linked_pair_index = j
+                    pair_b.linked_pair_index = i
+                    
+                    # Calculate profit margin
+                    # pair_a: pay X to get Y (rate = Y/X)
+                    # pair_b: pay Y to get X (rate = X/Y)
+                    # If we execute both: spend X to get Y, then spend Y to get X back
+                    # We should end up with more X than we started with
+                    
+                    # Amount of pair_a.get currency we receive per 1 pair_a.pay
+                    receive_per_cycle = pair_a.best_rate
+                    
+                    # Amount of pair_a.pay currency we need to get back 1 pair_a.pay
+                    # pair_b.best_rate is pair_a.pay per pair_a.get, so we need 1/pair_b.best_rate of pair_a.get
+                    spend_to_get_back = 1.0 / pair_b.best_rate if pair_b.best_rate > 0 else 0
+                    
+                    # Raw profit in pair_a.get currency per 1 pair_a.pay spent
+                    raw_profit = receive_per_cycle - spend_to_get_back
+                    
+                    # Percentage profit margin
+                    profit_pct = (raw_profit / spend_to_get_back * 100) if spend_to_get_back > 0 else 0
+                    
+                    pair_a.profit_margin_raw = round(raw_profit, 4)
+                    pair_a.profit_margin_pct = round(profit_pct, 2)
+                    pair_b.profit_margin_raw = round(raw_profit, 4)
+                    pair_b.profit_margin_pct = round(profit_pct, 2)
+                
+                break
+
 # ============================================================================
 # Route Handlers
 # ============================================================================

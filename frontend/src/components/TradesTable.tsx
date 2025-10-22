@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, memo } from 'react'
-import { createPortal } from 'react-dom'
 import '../spinner.css'
 import { PairSummary } from '../types'
 
@@ -125,7 +124,7 @@ function formatRate(num: number, have?: string, want?: string): string {
     return num.toFixed(2);
 }
 
-function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAbsDelta, accountName, selectedMetrics }: { pair: PairSummary; defaultExpanded: boolean; loading: boolean; onReload: (index: number) => void; globalMaxAbsDelta: number; accountName?: string | null; selectedMetrics: string[] }) {
+function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAbsDelta, accountName, selectedMetrics }: { pair: PairSummary; defaultExpanded: boolean; loading: boolean; onReload: (index: number) => void; globalMaxAbsDelta: number; accountName?: string | null; selectedMetrics: readonly string[] }) {
     const [isExpanded, setIsExpanded] = useState(defaultExpanded)
     const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
     const timeoutRef = useRef<number | null>(null)
@@ -185,6 +184,18 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
             label: 'Median',
             value: medianRate !== null ? <span className="summary-value">{formatRate(medianRate, pair.pay, pair.get)}</span> : null,
             tooltip: 'Median: Middle value of sorted listing rates. More robust than average against outliers.'
+        },
+        profit: {
+            label: 'Profit',
+            value: pair.profit_margin_pct !== null && pair.profit_margin_pct !== undefined ? (
+                <span className="summary-value" style={{ 
+                    color: pair.profit_margin_pct > 0 ? '#10b981' : pair.profit_margin_pct < 0 ? '#ef4444' : undefined,
+                    fontWeight: pair.profit_margin_pct !== 0 ? 600 : undefined 
+                }}>
+                    {pair.profit_margin_pct > 0 ? '+' : ''}{pair.profit_margin_pct.toFixed(1)}%
+                </span>
+            ) : null,
+            tooltip: `Profit margin: ${pair.profit_margin_pct?.toFixed(2)}% (${pair.profit_margin_raw !== null && pair.profit_margin_raw !== undefined ? (pair.profit_margin_raw > 0 ? '+' : '') + pair.profit_margin_raw.toFixed(2) + ' ' + pair.get : 'N/A'})`
         }
     }
 
@@ -226,15 +237,15 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
                             </>
                         ) : <>
                             {/* Fixed-width columns to align sparkline start across rows */}
-                            <span className="summary-item" style={{ width: 120, display: 'inline-flex', gap: 4, alignItems: 'center', whiteSpace: 'nowrap' }}>
+                            <span className="summary-item" style={{ width: 100, display: 'inline-flex', gap: 4, alignItems: 'center', whiteSpace: 'nowrap' }}>
                                 {pair.best_rate ? (
                                     <>
                                         <span className="summary-label" style={{ fontWeight: 600 }}>Best:</span>
-                                        <span className="summary-value" style={{ color: 'var(--accent)', fontWeight: 700, fontSize: '15px' }}>{formatRate(pair.best_rate, pair.pay, pair.get)}</span>
+                                        <span className="summary-value" style={{ color: 'var(--accent)', fontWeight: 700, fontSize: '14px' }}>{formatRate(pair.best_rate, pair.pay, pair.get)}</span>
                                     </>
                                 ) : null}
                             </span>
-                            <span className="summary-item" style={{ width: 140, display: 'inline-flex', gap: 6, alignItems: 'center', justifyContent: 'flex-start' }}>
+                            <span className="summary-item" style={{ width: 130, display: 'inline-flex', gap: 6, alignItems: 'center', justifyContent: 'flex-start' }}>
                                 {pair.trend && pair.trend.sparkline && pair.trend.sparkline.length >= 2 ? (
                                     <>
                                         <Sparkline values={pair.trend.sparkline} width={70} relativeFirst={true} globalMaxAbsDelta={globalMaxAbsDelta} adaptive={true} visualCapPct={40} />
@@ -244,18 +255,18 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
                                     </>
                                 ) : null}
                             </span>
-                            {/* Selected metrics (max 2) - always 2 equal columns */}
-                            <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 240, border: 'none', height: 20 }}>
+                            {/* Selected metrics (max 3) - always 3 equal columns */}
+                            <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 390, border: 'none', height: 20 }}>
                                 <tbody>
                                     <tr>
-                                        {Array.from({ length: 2 }).map((_, idx) => {
+                                        {Array.from({ length: 3 }).map((_, idx) => {
                                             const key = selectedMetrics[idx]
-                                            if (!key) return <td key={idx} style={{ width: 120, border: 'none', height: 20, padding: 0 }}></td>
+                                            if (!key) return <td key={idx} style={{ width: 130, border: 'none', height: 20, padding: 0 }}></td>
                                             const def = metricRenderers[key]
-                                            if (!def || !def.value) return <td key={idx} style={{ width: 120, border: 'none', height: 20, padding: 0 }}></td>
+                                            if (!def || !def.value) return <td key={idx} style={{ width: 130, border: 'none', height: 20, padding: 0 }}></td>
                                             return (
-                                                <td key={idx} style={{ width: 120, border: 'none', height: 20, padding: 0 }} title={def.tooltip}>
-                                                    <span className="summary-item" style={{ display: 'inline-flex', gap: 4, alignItems: 'center', whiteSpace: 'nowrap' }}>
+                                                <td key={idx} style={{ width: 130, border: 'none', height: 20, padding: 0 }} title={def.tooltip}>
+                                                    <span className="summary-item" style={{ display: 'inline-flex', gap: 4, alignItems: 'center', whiteSpace: 'nowrap', fontSize: '12px' }}>
                                                         <span className="summary-label">{def.label}:</span>
                                                         {def.value}
                                                     </span>
@@ -411,61 +422,23 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
 
 export function TradesTable({ data, loading, onReload, onRefresh, accountName }: { data: PairSummary[]; loading: boolean; onReload: (index: number) => void; onRefresh?: () => void; accountName?: string | null }) {
     const [allExpanded, setAllExpanded] = useState(false)
-    const METRIC_KEYS = ['spread','median'] as const
-    type MetricKey = typeof METRIC_KEYS[number]
-    const [selectedMetrics, setSelectedMetrics] = useState<MetricKey[]>(() => {
-        try {
-            const raw = localStorage.getItem('selectedMetrics')
-            if (raw) {
-                const arr = JSON.parse(raw)
-                if (Array.isArray(arr)) {
-                    return arr.filter(k => METRIC_KEYS.includes(k)) as MetricKey[]
-                }
-            }
-        } catch {}
-        return []
-    })
-    useEffect(() => {
-        localStorage.setItem('selectedMetrics', JSON.stringify(selectedMetrics))
-    }, [selectedMetrics])
-    const toggleMetric = (key: MetricKey) => {
-        setSelectedMetrics(prev => {
-            const has = prev.includes(key)
-            if (has) return prev.filter(k => k !== key)
-            if (prev.length >= 2) return prev // enforce max 2
-            const updated = [...prev, key]
-            if (updated.length === 2) {
-                // Auto close when hitting max selection for quicker UX
-                setTimeout(() => setMetricsOpen(false), 0)
-            }
-            return updated
-        })
+    
+    // Always display all metrics
+    const selectedMetrics = ['spread', 'median', 'profit'] as const
+    
+    // Sort state
+    type SortKey = 'none' | 'change' | 'spread' | 'median' | 'profit'
+    const [sortBy, setSortBy] = useState<SortKey>('none')
+    const [sortAsc, setSortAsc] = useState(false)
+    
+    const handleSort = (key: SortKey) => {
+        if (sortBy === key) {
+            setSortAsc(!sortAsc)
+        } else {
+            setSortBy(key)
+            setSortAsc(false)
+        }
     }
-    const metricsButtonRef = useRef<HTMLButtonElement | null>(null)
-    const menuRef = useRef<HTMLDivElement | null>(null)
-    const [metricsOpen, setMetricsOpen] = useState(false)
-    const [menuPos, setMenuPos] = useState<{top:number;left:number}>({top:0,left:0})
-    useEffect(() => {
-        const handler = (e: MouseEvent) => {
-            const btn = metricsButtonRef.current
-            const menuEl = menuRef.current
-            if (!btn) return
-            if (btn.contains(e.target as Node)) return
-            if (menuEl && menuEl.contains(e.target as Node)) return
-            setMetricsOpen(false)
-        }
-        if (metricsOpen) {
-            // compute position
-            const rect = metricsButtonRef.current?.getBoundingClientRect()
-            if (rect) {
-                setMenuPos({ top: rect.bottom + 6, left: rect.left })
-            }
-            document.addEventListener('mousedown', handler)
-            window.addEventListener('resize', () => setMetricsOpen(false), { once: true })
-            window.addEventListener('scroll', () => setMetricsOpen(false), { once: true })
-        }
-        return () => { document.removeEventListener('mousedown', handler) }
-    }, [metricsOpen])
 
     // Compute global max absolute delta for baseline-aligned sparklines
     const globalMaxAbsDelta = (() => {
@@ -485,25 +458,72 @@ export function TradesTable({ data, loading, onReload, onRefresh, accountName }:
         return maxAbsPct || 0
     })()
 
+    // Sort data based on selected sort key
+    const sortedData = (() => {
+        if (sortBy === 'none') return data
+        
+        const sorted = [...data].sort((a, b) => {
+            let aVal: number | null = null
+            let bVal: number | null = null
+            
+            switch (sortBy) {
+                case 'change':
+                    aVal = a.trend?.change_percent ?? null
+                    bVal = b.trend?.change_percent ?? null
+                    break
+                case 'spread':
+                    if (a.listings.length >= 2) {
+                        const rates = a.listings.map(l => l.rate)
+                        const min = Math.min(...rates)
+                        const max = Math.max(...rates)
+                        aVal = min !== 0 ? ((max - min) / min) * 100 : null
+                    }
+                    if (b.listings.length >= 2) {
+                        const rates = b.listings.map(l => l.rate)
+                        const min = Math.min(...rates)
+                        const max = Math.max(...rates)
+                        bVal = min !== 0 ? ((max - min) / min) * 100 : null
+                    }
+                    break
+                case 'median':
+                    if (a.listings.length > 0) {
+                        const rates = a.listings.map(l => l.rate)
+                        const sorted = [...rates].sort((x, y) => x - y)
+                        const mid = Math.floor(sorted.length / 2)
+                        aVal = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
+                    }
+                    if (b.listings.length > 0) {
+                        const rates = b.listings.map(l => l.rate)
+                        const sorted = [...rates].sort((x, y) => x - y)
+                        const mid = Math.floor(sorted.length / 2)
+                        bVal = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
+                    }
+                    break
+                case 'profit':
+                    aVal = a.profit_margin_pct ?? null
+                    bVal = b.profit_margin_pct ?? null
+                    break
+            }
+            
+            // Handle null values (push to end)
+            if (aVal === null && bVal === null) return 0
+            if (aVal === null) return 1
+            if (bVal === null) return -1
+            
+            return sortAsc ? aVal - bVal : bVal - aVal
+        })
+        
+        return sorted
+    })()
+
     // Find the index currently loading (first with empty listings)
-    const loadingIndex = loading ? data.findIndex(p => p.listings.length === 0) : -1
+    const loadingIndex = loading ? sortedData.findIndex(p => p.listings.length === 0) : -1
 
     return (
         <>
             <div className="trades-container">
-                <div className="section-header">
-                    <h2>Market Listings</h2>
+                <div className="section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: '16px' }}>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <button
-                            ref={metricsButtonRef}
-                            className="btn ghost"
-                            style={{ padding: '6px 10px', fontSize: '13px', display:'inline-flex', alignItems:'center', gap:5 }}
-                            onClick={() => setMetricsOpen(o => !o)}
-                            title="Select up to 2 metrics to display"
-                        >
-                            <span style={{fontSize:14}}>⚙</span>
-                            <span>Metrics{selectedMetrics.length ? ` (${selectedMetrics.length})` : ''}</span>
-                        </button>
                         <button
                             className="btn ghost"
                             onClick={() => setAllExpanded(!allExpanded)}
@@ -524,9 +544,123 @@ export function TradesTable({ data, loading, onReload, onRefresh, accountName }:
                         )}
                     </div>
                 </div>
+                
+                {/* Column Headers - matches data row structure exactly */}
+                <div style={{ 
+                    display: 'grid', 
+                    gridAutoFlow: 'column', 
+                    alignItems: 'center', 
+                    gap: 4,
+                    padding: '8px 24px 8px 0px',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    marginBottom: '6px'
+                }}>
+                    {/* Spacer for Best column */}
+                    <div style={{ width: '140px' }}></div>
+                    
+                    {/* Change column header */}
+                    <div 
+                        style={{ 
+                            width: '0px',
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: 4,
+                            cursor: 'pointer',
+                            userSelect: 'none',
+                            fontSize: '13px',
+                            fontWeight: 500,
+                            color: sortBy === 'change' ? 'var(--accent)' : 'var(--muted)',
+                            transition: 'color 0.2s'
+                        }}
+                        onClick={() => handleSort('change')}
+                        title="Sort by price change percentage"
+                    >
+                        <span style={{ textTransform: 'capitalize' }}>change</span>
+                        {sortBy === 'change' && (
+                            <span style={{ fontSize: '10px' }}>
+                                {sortAsc ? '▲' : '▼'}
+                            </span>
+                        )}
+                    </div>
+                    
+                    {/* Metrics table headers */}
+                    <div style={{ width: '570px', display: 'flex', gap: 0 }}>
+                        <div 
+                            style={{ 
+                                width: '130px',
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: 4,
+                                cursor: 'pointer',
+                                userSelect: 'none',
+                                fontSize: '13px',
+                                fontWeight: 500,
+                                color: sortBy === 'spread' ? 'var(--accent)' : 'var(--muted)',
+                                transition: 'color 0.2s'
+                            }}
+                            onClick={() => handleSort('spread')}
+                            title="Sort by spread"
+                        >
+                            <span style={{ textTransform: 'capitalize' }}>spread</span>
+                            {sortBy === 'spread' && (
+                                <span style={{ fontSize: '10px' }}>
+                                    {sortAsc ? '▲' : '▼'}
+                                </span>
+                            )}
+                        </div>
+                        <div 
+                            style={{ 
+                                width: '130px',
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: 4,
+                                cursor: 'pointer',
+                                userSelect: 'none',
+                                fontSize: '13px',
+                                fontWeight: 500,
+                                color: sortBy === 'median' ? 'var(--accent)' : 'var(--muted)',
+                                transition: 'color 0.2s'
+                            }}
+                            onClick={() => handleSort('median')}
+                            title="Sort by median rate"
+                        >
+                            <span style={{ textTransform: 'capitalize' }}>median</span>
+                            {sortBy === 'median' && (
+                                <span style={{ fontSize: '10px' }}>
+                                    {sortAsc ? '▲' : '▼'}
+                                </span>
+                            )}
+                        </div>
+                        <div 
+                            style={{ 
+                                width: '310px',
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: 4,
+                                cursor: 'pointer',
+                                userSelect: 'none',
+                                fontSize: '13px',
+                                fontWeight: 500,
+                                color: sortBy === 'profit' ? 'var(--accent)' : 'var(--muted)',
+                                transition: 'color 0.2s'
+                            }}
+                            onClick={() => handleSort('profit')}
+                            title="Sort by profit margin"
+                        >
+                            <span style={{ textTransform: 'capitalize' }}>profit</span>
+                            {sortBy === 'profit' && (
+                                <span style={{ fontSize: '10px' }}>
+                                    {sortAsc ? '▲' : '▼'}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                </div>
 
                 <div className="pairs-grid">
-                    {data.map((p, i) => (
+                    {sortedData.map((p, i) => (
                         <CollapsiblePair
                             key={p.index}
                             pair={p}
@@ -540,34 +674,6 @@ export function TradesTable({ data, loading, onReload, onRefresh, accountName }:
                     ))}
                 </div>
             </div>
-            {metricsOpen && createPortal(
-                <div ref={menuRef} style={{ position:'fixed', top:menuPos.top, left:menuPos.left, background:'#1f2937', border:'1px solid #374151', borderRadius:8, padding:'10px 12px 8px', zIndex: 9999, width:180, boxShadow:'0 8px 24px rgba(0,0,0,0.3)' }}>
-                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:7 }}>
-                        <div style={{ fontSize: 12, color: '#9ca3af', fontWeight:500 }}>Select metrics (max 2)</div>
-                        <button onClick={() => setMetricsOpen(false)} style={{ background:'none', border:'none', color:'#9ca3af', cursor:'pointer', fontSize:13, padding:0, lineHeight:1 }}>✕</button>
-                    </div>
-                    <div style={{ display:'grid', gridTemplateColumns:'1fr', columnGap:8, rowGap:3, marginBottom:6 }}>
-                        {METRIC_KEYS.map(k => {
-                            const checked = selectedMetrics.includes(k)
-                            const disabled = !checked && selectedMetrics.length >= 2
-                            const labels: Record<MetricKey,string> = { spread:'Spread', median:'Median' }
-                            const tooltips: Record<MetricKey,string> = {
-                                spread: 'Dispersion between highest and lowest rate',
-                                median: 'Middle rate (robust to outliers)'
-                            }
-                            return (
-                                <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, cursor: disabled ? 'not-allowed' : 'pointer', background: checked ? 'rgba(59,130,246,0.12)' : 'transparent', padding: '4px 6px', borderRadius:4, transition:'background 0.15s ease' }} title={tooltips[k]}>
-                                    <input type="checkbox" checked={checked} disabled={disabled} onChange={() => toggleMetric(k)} style={{ cursor: disabled ? 'not-allowed' : 'pointer', margin:0, width:14, height:14, flexShrink:0 }} />
-                                    <span style={{ lineHeight:1 }}>{labels[k]}</span>
-                                </label>
-                            )
-                        })}
-                    </div>
-                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                        <button onClick={() => setSelectedMetrics([])} style={{ background:'none', border:'none', color:'#60a5fa', fontSize:11, cursor:'pointer', padding:0, fontWeight:500 }}>Clear all</button>
-                        {selectedMetrics.length >= 2 && <div style={{ fontSize: 11, color:'#fbbf24', fontWeight:500 }}>Max 2 selected</div>}
-                    </div>
-                </div>, document.body)}
         </>
     )
 }

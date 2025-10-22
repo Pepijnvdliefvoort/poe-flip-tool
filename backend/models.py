@@ -47,6 +47,9 @@ class PairSummary(BaseModel):
     count_returned: int = 0
     trend: Optional[PriceTrend] = None  # Price trend for sparkline
     fetched_at: Optional[str] = None  # ISO timestamp of when data was fetched
+    linked_pair_index: Optional[int] = None  # Index of reverse trade pair
+    profit_margin_pct: Optional[float] = None  # Profit margin in percentage
+    profit_margin_raw: Optional[float] = None  # Raw profit margin in "get" currency
 
 
 class TradesResponse(BaseModel):

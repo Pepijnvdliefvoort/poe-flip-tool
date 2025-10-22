@@ -253,7 +253,7 @@ export function ConfigPanel({
                     <span style={{ fontSize: '13px', fontWeight: 500 }}>Auto-refresh expired trades</span>
                 </label>
                 <div className="muted" style={{ fontSize: '11px', marginTop: '6px', marginLeft: '24px' }}>
-                    Checks every 60s, refreshes max 2 pairs at a time (respects rate limits)
+                    Checks every 60s to refresh trades (respects rate limits)
                 </div>
             </div>
 

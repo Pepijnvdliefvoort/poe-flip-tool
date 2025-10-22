@@ -32,6 +32,9 @@ export type PairSummary = {
   count_returned: number
   trend?: PriceTrend | null
   fetched_at?: string | null
+  linked_pair_index?: number | null
+  profit_margin_pct?: number | null
+  profit_margin_raw?: number | null
 }
 
 export type TradesResponse = {
