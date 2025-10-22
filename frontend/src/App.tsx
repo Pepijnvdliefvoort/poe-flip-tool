@@ -96,7 +96,8 @@ export default function App() {
 
   const handleLogin = (token: string) => {
     sessionStorage.setItem('api_key', token);
-    setIsAuthenticated(true);
+    // Reload the page to initialize the authenticated state
+    window.location.reload();
   };
 
   const handleLogout = async () => {
@@ -206,7 +207,7 @@ export default function App() {
 
   // Auto-refresh functionality - poll cache status and refresh expired pairs
   useEffect(() => {
-    if (!autoRefresh) return;
+    if (!autoRefresh || !isAuthenticated) return;
 
     const checkInterval = 60000; // Check every 60 seconds (very conservative)
     
@@ -294,7 +295,7 @@ export default function App() {
 
     const timer = setInterval(checkCacheStatus, checkInterval);
     return () => clearInterval(timer);
-  }, [autoRefresh, data, topN])
+  }, [autoRefresh, data, topN, isAuthenticated])
 
   const reloadPair = async (index: number) => {
     if (!data) return;
@@ -396,11 +397,13 @@ export default function App() {
 
   // Optionally, fallback poll every 30s in case no user actions
   useEffect(() => {
+    if (!isAuthenticated) return;
+    
     const interval = setInterval(() => {
       updateRateLimit();
     }, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isAuthenticated]);
 
   // Local countdown for rate limit display (updates every second, resets on API update)
   useEffect(() => {
