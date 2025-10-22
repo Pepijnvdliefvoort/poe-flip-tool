@@ -77,7 +77,7 @@ export function Login({ onLogin }: LoginProps) {
           marginBottom: '16px'
         }}>
           <img 
-            src={`${import.meta.env.BASE_URL}favicon.ico`} 
+            src={`${import.meta.env.BASE_URL}favicon.png`} 
             alt="PoE Logo" 
             style={{ width: '48px', height: '48px' }}
           />
