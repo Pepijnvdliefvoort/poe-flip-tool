@@ -113,7 +113,7 @@ const ProfitTracker: React.FC = () => {
   }, []);
 
   function updateSnapshotAge(ts: string) {
-    const then = new Date(ts).getTime();
+  const then = new Date(ts + (ts.endsWith('Z') ? '' : 'Z')).getTime();
     const diffMs = Date.now() - then;
     const diffSec = Math.floor(diffMs / 1000);
     if (diffSec < 60) {
