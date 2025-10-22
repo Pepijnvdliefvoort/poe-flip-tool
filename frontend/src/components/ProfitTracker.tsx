@@ -136,7 +136,7 @@ const ProfitTracker: React.FC = () => {
   }
   function clearHover() { setHoverIdx(null); }
 
-  function iconFor(currency: string) { return `/currency/${currency}.webp`; }
+  function iconFor(currency: string) { return `${import.meta.env.BASE_URL}currency/${currency}.webp`; }
 
   const donut = useMemo(() => {
     if (!snapshot) return [];
@@ -325,7 +325,7 @@ const ProfitTracker: React.FC = () => {
               <text x={donutSvg.cx} y={donutSvg.cy - 14} textAnchor="middle" fontSize={22} fill="#e2e8f0" fontWeight={700} style={{letterSpacing:1,dominantBaseline:'middle'}}>
                 {formatNumber(grandTotal, 2)}
               </text>
-              <image href="/currency/divine.webp" x={donutSvg.cx - 16} y={donutSvg.cy + 4} width="32" height="32" />
+              <image href={`${import.meta.env.BASE_URL}currency/divine.webp`} x={donutSvg.cx - 16} y={donutSvg.cy + 4} width="32" height="32" />
               <text x={donutSvg.cx} y={donutSvg.cy + 54} textAnchor="middle" fontSize={14} fill="#94a3b8">Total</text>
             </svg>
           </div>

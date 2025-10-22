@@ -4,13 +4,17 @@ import time
 import logging
 import os
 from pathlib import Path
-from typing import List
+from typing import List, Dict
 import requests
+import secrets
+import hashlib
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Query, HTTPException, Request, Body
+from fastapi import FastAPI, Query, HTTPException, Request, Body, Security, Depends
+from fastapi.security import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from models import ConfigData, PairSummary, TradesResponse, TradesPatch
 from trade_logic import fetch_listings_with_cache, fetch_listings_force
@@ -33,6 +37,80 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(message)s",
 )
 log = logging.getLogger("poe-backend")
+
+# ============================================================================
+# Security & Authentication
+# ============================================================================
+
+# Get username and password from environment
+AUTH_USERNAME = os.getenv("AUTH_USERNAME", "admin")
+AUTH_PASSWORD_HASH = os.getenv("AUTH_PASSWORD_HASH")
+
+# If no password hash is set, create one from plain password (for dev)
+if not AUTH_PASSWORD_HASH:
+    plain_password = os.getenv("AUTH_PASSWORD", "changeme")
+    AUTH_PASSWORD_HASH = hashlib.sha256(plain_password.encode()).hexdigest()
+    log.warning(f"No AUTH_PASSWORD_HASH set. Using password: {plain_password}")
+    log.warning("Set AUTH_PASSWORD_HASH in production! Generate with: echo -n 'yourpassword' | sha256sum")
+
+# Session storage (in-memory for simplicity)
+active_sessions: Dict[str, datetime] = {}
+SESSION_DURATION = 24 * 60 * 60  # 24 hours in seconds
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class LoginResponse(BaseModel):
+    token: str
+    expires_in: int
+
+def verify_password(username: str, password: str) -> bool:
+    """Verify username and password."""
+    if username != AUTH_USERNAME:
+        return False
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
+    return password_hash == AUTH_PASSWORD_HASH
+
+def create_session() -> str:
+    """Create a new session token."""
+    token = secrets.token_urlsafe(32)
+    active_sessions[token] = datetime.now(timezone.utc)
+    return token
+
+def verify_session(token: str) -> bool:
+    """Verify a session token is valid and not expired."""
+    if token not in active_sessions:
+        return False
+    
+    created_at = active_sessions[token]
+    age = (datetime.now(timezone.utc) - created_at).total_seconds()
+    
+    if age > SESSION_DURATION:
+        # Session expired, remove it
+        del active_sessions[token]
+        return False
+    
+    return True
+
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+async def verify_api_key(
+    request: Request,
+    api_key_header: str = Security(api_key_header),
+    api_key_query: str = Query(None, alias="api_key")
+):
+    """Verify the session token from request headers or query parameters (for EventSource)."""
+    # Check header first, then query parameter (for EventSource compatibility)
+    token = api_key_header or api_key_query
+    
+    if not token or not verify_session(token):
+        log.warning(f"Unauthorized access attempt with token: {token[:8] if token else 'None'}...")
+        raise HTTPException(
+            status_code=403,
+            detail="Invalid or missing session token"
+        )
+    return token
 
 # ============================================================================
 # Configuration
@@ -138,21 +216,44 @@ def root():
     return {"status": "ok", "message": "PoE Trade Backend running"}
 
 
+@app.post("/api/auth/login", response_model=LoginResponse)
+def login(credentials: LoginRequest):
+    """Authenticate with username and password, returns session token"""
+    if not verify_password(credentials.username, credentials.password):
+        log.warning(f"Failed login attempt for user: {credentials.username}")
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid username or password"
+        )
+    
+    token = create_session()
+    log.info(f"Successful login for user: {credentials.username}")
+    return LoginResponse(token=token, expires_in=SESSION_DURATION)
+
+
+@app.post("/api/auth/logout")
+def logout(api_key: str = Depends(verify_api_key)):
+    """Logout and invalidate session token"""
+    if api_key in active_sessions:
+        del active_sessions[api_key]
+    return {"status": "ok", "message": "Logged out"}
+
+
 @app.get("/api/config", response_model=ConfigData)
-def get_config():
+def get_config(api_key: str = Depends(verify_api_key)):
     """Get current configuration"""
     return _load_config()
 
 
 @app.put("/api/config", response_model=ConfigData)
-def put_config(cfg: ConfigData):
+def put_config(cfg: ConfigData, api_key: str = Depends(verify_api_key)):
     """Replace entire configuration"""
     _save_config(cfg)
     return cfg
 
 
 @app.patch("/api/config/league", response_model=ConfigData)
-def patch_league(league: str):
+def patch_league(league: str, api_key: str = Depends(verify_api_key)):
     """Update only the league setting"""
     cfg = _load_config()
     cfg.league = league
@@ -161,7 +262,7 @@ def patch_league(league: str):
 
 
 @app.patch("/api/config/account_name", response_model=ConfigData)
-def patch_account_name(account_name: str = Body(..., embed=True)):
+def patch_account_name(account_name: str = Body(..., embed=True), api_key: str = Depends(verify_api_key)):
     """Update only the account_name setting used for highlighting listings"""
     cfg = _load_config()
     cfg.account_name = account_name.strip() or None
@@ -169,7 +270,7 @@ def patch_account_name(account_name: str = Body(..., embed=True)):
     return cfg
 
 @app.patch("/api/config/trades", response_model=ConfigData)
-def patch_trades(patch: TradesPatch = Body(...)):
+def patch_trades(patch: TradesPatch = Body(...), api_key: str = Depends(verify_api_key)):
     """
     Edit the trades list via JSON body.
 
@@ -198,6 +299,7 @@ def patch_trades(patch: TradesPatch = Body(...)):
 def refresh_one_trade(
     index: int = Query(..., ge=0),
     top_n: int = Query(5, ge=1, le=20),
+    api_key: str = Depends(verify_api_key)
 ):
     """
     Force refresh a single trade pair by index.
@@ -264,6 +366,7 @@ async def stream_trades(
     delay_s: float = Query(2, ge=0.0, le=5.0),
     top_n: int = Query(5, ge=1, le=20),
     force: bool = Query(False),
+    api_key: str = Depends(verify_api_key)
 ):
     """
     SSE endpoint for incremental trades loading.
@@ -355,7 +458,8 @@ async def stream_trades(
 def get_price_history(
     have: str,
     want: str,
-    max_points: int = Query(default=None, description="Limit number of datapoints returned")
+    max_points: int = Query(default=None, description="Limit number of datapoints returned"),
+    api_key: str = Depends(verify_api_key)
 ):
     """Get historical price snapshots for a currency pair"""
     from trade_logic import historical_cache
@@ -374,7 +478,7 @@ def get_price_history(
 
 
 @app.get("/api/cache/status")
-def get_cache_status():
+def get_cache_status(api_key: str = Depends(verify_api_key)):
     """Get cache expiration status for all configured pairs"""
     from trade_logic import cache
     from datetime import datetime
@@ -413,7 +517,7 @@ def get_cache_status():
 
 
 @app.get("/api/rate_limit")
-def rate_limit_status():
+def rate_limit_status(api_key: str = Depends(verify_api_key)):
     """Return current rate limit status and parsed rule states for observability."""
     state = rate_limiter.debug_state()
     return {
@@ -430,7 +534,7 @@ def rate_limit_status():
 
 
 @app.get("/api/cache/summary")
-def cache_summary():
+def cache_summary(api_key: str = Depends(verify_api_key)):
     """Aggregate cache + historical stats including per-entry expirations and snapshot counts."""
     from trade_logic import cache, historical_cache
     from persistence import db
@@ -452,7 +556,7 @@ def cache_summary():
 
 
 @app.get("/api/database/stats")
-def database_stats():
+def database_stats(api_key: str = Depends(verify_api_key)):
     """Get SQLite database statistics and health info."""
     from persistence import db
     
@@ -472,7 +576,7 @@ def database_stats():
 # ============================================================================
 
 @app.get("/api/stash/{tab_name}")
-def get_stash_tab(tab_name: str):
+def get_stash_tab(tab_name: str, api_key: str = Depends(verify_api_key)):
     """Retrieve contents of a specific stash tab by name.
 
     Uses the configured account_name from config.json and current league.
@@ -563,7 +667,7 @@ def get_stash_tab(tab_name: str):
 
 
 @app.get("/api/value/latest")
-def latest_currency_values():
+def latest_currency_values(api_key: str = Depends(verify_api_key)):
     """Return latest divine-equivalent value for each configured unique currency.
 
     Logic:
@@ -692,7 +796,7 @@ def _compute_portfolio_breakdown(account: str, league: str):
     return breakdown
 
 @app.post("/api/portfolio/snapshot")
-def create_portfolio_snapshot():
+def create_portfolio_snapshot(api_key: str = Depends(verify_api_key)):
     """Compute and persist a portfolio snapshot, returning breakdown + total."""
     cfg = _load_config()
     if not cfg.account_name:
@@ -711,7 +815,7 @@ def create_portfolio_snapshot():
     }
 
 @app.get("/api/portfolio/history")
-def portfolio_history(limit: int = Query(None, ge=1, le=1000)):
+def portfolio_history(limit: int = Query(None, ge=1, le=1000), api_key: str = Depends(verify_api_key)):
     from persistence import db
     rows = db.load_portfolio_history(limit)
     return {

@@ -6,8 +6,18 @@ import { TradesTable } from './components/TradesTable'
 import { ConfigPanel } from './components/ConfigPanel'
 import { SystemDashboard } from './components/SystemDashboard'
 import ProfitTracker from './components/ProfitTracker'
+import { Login } from './components/Login'
 
-const BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000' // vite dev proxy handles /api
+// Backend base resolution (same logic as api.ts)
+const BASE =
+  import.meta.env.VITE_API_BASE ||
+  import.meta.env.VITE_BACKEND_URL ||
+  (typeof location !== 'undefined' && location.hostname.endsWith('github.io')
+    ? 'https://poe-flip-backend.fly.dev'
+    : 'http://localhost:8000');
+
+// Get API key from env or sessionStorage
+const getApiKey = () => import.meta.env.VITE_API_KEY || sessionStorage.getItem('api_key') || '';
 
 // Helper function to calculate profit margins for linked pairs
 function calculateProfitMargins(pairs: PairSummary[]): PairSummary[] {
@@ -63,6 +73,7 @@ function calculateProfitMargins(pairs: PairSummary[]): PairSummary[] {
 }
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [data, setData] = useState<TradesResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [topN, setTopN] = useState(5)
@@ -72,6 +83,33 @@ export default function App() {
   const [rateLimitDisplay, setRateLimitDisplay] = useState<{ blocked: boolean; block_remaining: number; rules: Record<string, { current: number; limit: number; reset_s: number }[]> } | null>(null)
   const [view, setView] = useState<'trades' | 'system' | 'profit'>('trades')
   const [accountName, setAccountName] = useState<string | null>(null)
+
+  // SSE trades loading
+  const eventSourceRef = useRef<EventSource | null>(null)
+  const initialLoadRef = useRef(true) // Track if this is the initial load
+
+  // Check if already authenticated on mount
+  useEffect(() => {
+    const hasToken = !!getApiKey();
+    setIsAuthenticated(hasToken);
+  }, []);
+
+  const handleLogin = (token: string) => {
+    sessionStorage.setItem('api_key', token);
+    // Reload the page to initialize the authenticated state
+    window.location.reload();
+  };
+
+  const handleLogout = async () => {
+    // Call logout endpoint to invalidate session
+    try {
+      await Api.logout();
+    } catch (err) {
+      console.error('Logout failed:', err);
+    }
+    sessionStorage.removeItem('api_key');
+    setIsAuthenticated(false);
+  };
 
   // Helper to update rate limit info after every API call
   const updateRateLimit = async () => {
@@ -99,10 +137,6 @@ export default function App() {
     }
   };
 
-  // SSE trades loading
-  const eventSourceRef = useRef<EventSource | null>(null)
-  const initialLoadRef = useRef(true) // Track if this is the initial load
-  
   const load = useCallback((forceRefresh = false) => {
     setLoading(true)
     // Pre-populate results with empty rows for each trade
@@ -122,7 +156,10 @@ export default function App() {
         eventSourceRef.current.close();
       }
       // Use force parameter: true for manual refresh, false for initial load
-      const url = `${BASE}/api/trades/stream?top_n=${topN}&force=${forceRefresh}`;
+      // Include API key as query param for EventSource (doesn't support headers)
+      const apiKey = getApiKey();
+      const apiKeyParam = apiKey ? `&api_key=${encodeURIComponent(apiKey)}` : '';
+      const url = `${BASE}/api/trades/stream?top_n=${topN}&force=${forceRefresh}${apiKeyParam}`;
       const es = new window.EventSource(url);
       eventSourceRef.current = es;
       let league = cfg.league;
@@ -161,16 +198,18 @@ export default function App() {
 
   // Initial load uses cache, subsequent manual refreshes force fresh data
   useEffect(() => { 
+    if (!isAuthenticated) return; // Don't load if not authenticated
+    
     if (initialLoadRef.current) {
       load(false); // Initial load from cache
       initialLoadRef.current = false;
     }
     return () => { eventSourceRef.current?.close() } 
-  }, [load])
+  }, [load, isAuthenticated])
 
   // Auto-refresh functionality - poll cache status and refresh expired pairs
   useEffect(() => {
-    if (!autoRefresh) return;
+    if (!autoRefresh || !isAuthenticated) return;
 
     const checkInterval = 60000; // Check every 60 seconds (very conservative)
     
@@ -202,10 +241,7 @@ export default function App() {
           return;
         }
         
-        const response = await fetch(`${BASE}/api/cache/status`);
-        if (!response.ok) return;
-        
-        const status = await response.json();
+        const status = await Api.cacheStatus();
         const expiredPairs = status.pairs.filter((p: any) => p.expired);
         
         if (expiredPairs.length > 0 && data) {
@@ -261,7 +297,7 @@ export default function App() {
 
     const timer = setInterval(checkCacheStatus, checkInterval);
     return () => clearInterval(timer);
-  }, [autoRefresh, data, topN])
+  }, [autoRefresh, data, topN, isAuthenticated])
 
   const reloadPair = async (index: number) => {
     if (!data) return;
@@ -363,11 +399,13 @@ export default function App() {
 
   // Optionally, fallback poll every 30s in case no user actions
   useEffect(() => {
+    if (!isAuthenticated) return;
+    
     const interval = setInterval(() => {
       updateRateLimit();
     }, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isAuthenticated]);
 
   // Local countdown for rate limit display (updates every second, resets on API update)
   useEffect(() => {
@@ -390,6 +428,11 @@ export default function App() {
     }, 1000);
     return () => clearInterval(interval);
   }, [rateLimit]);
+
+  // Show login if not authenticated
+  if (!isAuthenticated) {
+    return <Login onLogin={handleLogin} />;
+  }
 
   return (
     <div className="container">
@@ -424,6 +467,14 @@ export default function App() {
               )}
             </div>
           )}
+          <button
+            onClick={handleLogout}
+            className="btn ghost"
+            style={{ padding: '6px 12px', fontSize: '13px' }}
+            title="Logout"
+          >
+            Logout
+          </button>
         </div>
       </header>
 

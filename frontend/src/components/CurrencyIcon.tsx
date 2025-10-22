@@ -5,7 +5,7 @@ interface CurrencyIconProps {
 }
 
 export function CurrencyIcon({ currency, size = 24, showLabel = false }: CurrencyIconProps) {
-    const imagePath = `/currency/${currency.toLowerCase()}.webp`
+    const imagePath = `${import.meta.env.BASE_URL}currency/${currency.toLowerCase()}.webp`
     
     // Fallback if image doesn't exist
     const handleError = (e: React.SyntheticEvent<HTMLImageElement>) => {
