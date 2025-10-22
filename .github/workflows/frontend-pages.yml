@@ -2,7 +2,7 @@ name: Frontend Deploy (GitHub Pages)
 
 on:
   push:
-    branches: [ develop, main ]
+    branches: [ develop, main, feature/ci-cd ]
     paths:
       - 'frontend/**'
       - '.github/workflows/frontend-pages.yml'
@@ -37,6 +37,8 @@ jobs:
 
       - name: Build frontend
         working-directory: frontend
+        env:
+          VITE_BACKEND_URL: https://poe-flip-backend.fly.dev
         run: npm run build
 
       - name: Upload artifact

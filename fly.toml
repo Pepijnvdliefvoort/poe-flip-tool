@@ -8,9 +8,6 @@ primary_region = "ams"
 [build]
   image = "ghcr.io/pepijnvdliefvoort/poe-flip-backend:latest"
 
-[build.docker_credentials]
-  "ghcr.io" = { username = "pepijnvdliefvoort", password_secret = "REGISTRY_TOKEN" }
-
 [env]
   LOG_LEVEL = "INFO"
   CACHE_TTL_SECONDS = "900"
