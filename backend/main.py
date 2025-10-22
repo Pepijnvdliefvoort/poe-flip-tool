@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import time
 import logging
@@ -600,7 +600,7 @@ def latest_currency_values():
                 "source": None,
                 "raw_best_rate": 1.0,
                 "divine_per_unit": 1.0,
-                "timestamp": datetime.utcnow().isoformat() + 'Z'
+                "timestamp": datetime.now().isoformat()
             })
             continue
         # Try pay=cur get=divine first
@@ -619,7 +619,7 @@ def latest_currency_values():
                 "direction": direction,
                 "raw_best_rate": raw,
                 "divine_per_unit": divine_per_unit,
-                "timestamp": snapshot.timestamp.isoformat() + 'Z'
+                "timestamp": snapshot.timestamp.isoformat()
             })
             continue
         if key_div_pay in historical_cache._history and historical_cache._history[key_div_pay]:
@@ -633,7 +633,7 @@ def latest_currency_values():
                 "direction": direction,
                 "raw_best_rate": raw,
                 "divine_per_unit": divine_per_unit,
-                "timestamp": snapshot.timestamp.isoformat() + 'Z'
+                "timestamp": snapshot.timestamp.isoformat()
             })
             continue
         # Unknown value
@@ -707,11 +707,11 @@ def create_portfolio_snapshot():
     breakdown = _compute_portfolio_breakdown(cfg.account_name, cfg.league)
     total = sum(b['total_divine'] for b in breakdown if b['total_divine'] is not None)
     from persistence import db
-    ts = datetime.utcnow()
+    ts = datetime.now()
     saved = db.save_portfolio_snapshot(ts, total, breakdown)
     return {
         'saved': saved,
-        'timestamp': ts.isoformat() + 'Z',
+        'timestamp': ts.isoformat(),
         'total_divines': total,
         'breakdown': breakdown,
         'league': cfg.league,

@@ -86,6 +86,15 @@ const ProfitTracker: React.FC = () => {
     return { chartPath: path, points: pts, minVal: min, maxVal: max };
   }, [history, chartWidth]);
 
+  const profitStats = useMemo(() => {
+    if (!history || history.snapshots.length < 2) return null;
+    const firstValue = history.snapshots[0].total_divines;
+    const lastValue = history.snapshots[history.snapshots.length - 1].total_divines;
+    const absoluteChange = lastValue - firstValue;
+    const percentChange = ((lastValue - firstValue) / firstValue) * 100;
+    return { absoluteChange, percentChange, isPositive: absoluteChange >= 0 };
+  }, [history]);
+
   const yAxisTicks = useMemo(() => {
     if (!history || history.snapshots.length < 2) return [];
     const ticks: { value: number; y: number }[] = [];
@@ -170,10 +179,47 @@ const ProfitTracker: React.FC = () => {
 
       {history && history.snapshots.length > 0 && (
         <div style={{ marginBottom: 34 }}>
-          <h3 style={{ margin: '0 0 10px', fontSize: 16, display:'flex', alignItems:'center', gap:12 }}>
-            Total Divine Value Over Time
-            <span style={{ fontSize:12, opacity:0.6 }}>Range: {minVal.toFixed(2)} – {maxVal.toFixed(2)} Div</span>
-          </h3>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10, gap: 12, maxWidth: chartWidth }}>
+            <h3 style={{ margin: 0, fontSize: 16, display:'flex', alignItems:'center', gap:12, flexWrap: 'wrap', flex: 1 }}>
+              Total Divine Value Over Time
+              <span style={{ fontSize:12, opacity:0.6 }}>Range: {formatNumber(minVal, 2)} – {formatNumber(maxVal, 2)} Div</span>
+            </h3>
+            {profitStats && (
+              <div style={{
+                background: profitStats.isPositive ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                border: `1px solid ${profitStats.isPositive ? '#10b981' : '#ef4444'}`,
+                borderRadius: 6,
+                padding: '6px 12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                flexShrink: 0
+              }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                  <div style={{ fontSize: 9, opacity: 0.7, fontWeight: 500, marginBottom: 1 }}>Overall</div>
+                  <div style={{ 
+                    fontSize: 15, 
+                    fontWeight: 700, 
+                    color: profitStats.isPositive ? '#10b981' : '#ef4444',
+                    letterSpacing: 0.3
+                  }}>
+                    {profitStats.isPositive ? '+' : ''}{profitStats.percentChange.toFixed(2)}%
+                  </div>
+                </div>
+                <div style={{ 
+                  fontSize: 12, 
+                  fontWeight: 600,
+                  color: profitStats.isPositive ? '#10b981' : '#ef4444',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 3
+                }}>
+                  <span style={{ fontSize: 16 }}>{profitStats.isPositive ? '▲' : '▼'}</span>
+                  {profitStats.isPositive ? '+' : ''}{formatNumber(profitStats.absoluteChange, 2)}
+                </div>
+              </div>
+            )}
+          </div>
           <svg
             width={chartWidth}
             height={300}
