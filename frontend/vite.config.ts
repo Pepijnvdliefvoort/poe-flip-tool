@@ -10,6 +10,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    base: '/poe-flip-tool/', // GitHub Pages subdirectory path
     server: {
       port: 5173,
       proxy: {
