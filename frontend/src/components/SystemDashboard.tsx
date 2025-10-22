@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Api } from '../api'
 import type { CacheSummary, CacheStatus, HistoryResponse, ConfigData, DatabaseStats } from '../types'
 
@@ -12,6 +12,9 @@ export function SystemDashboard() {
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [autoRefresh, setAutoRefresh] = useState(true)
+  const inFlightRef = useRef(false)
+  // Faster refresh: 1s while on this page (component mounted)
+  const REFRESH_INTERVAL_MS = 1000
 
   // Fetch base data
   useEffect(() => {
@@ -37,22 +40,38 @@ export function SystemDashboard() {
     load()
   }, [])
 
-  // Auto refresh summary/status
+  // Auto refresh summary/status (now every second, skipping if previous still in-flight)
   useEffect(() => {
     if (!autoRefresh) return
-    const id = setInterval(async () => {
+    let cancelled = false
+    const tick = async () => {
+      if (cancelled) return
+      if (inFlightRef.current) {
+        // Try again shortly; prevents overlapping requests if a slow response
+        setTimeout(tick, REFRESH_INTERVAL_MS)
+        return
+      }
+      inFlightRef.current = true
       try {
         const [summary, status, db] = await Promise.all([
           Api.cacheSummary(),
           Api.cacheStatus(),
           Api.databaseStats()
         ])
-        setCacheSummary(summary)
-        setCacheStatus(status)
-        setDbStats(db)
-      } catch { /* ignore */ }
-    }, 15000)
-    return () => clearInterval(id)
+        if (!cancelled) {
+          setCacheSummary(summary)
+          setCacheStatus(status)
+          setDbStats(db)
+        }
+      } catch {
+        // swallow errors to keep loop running
+      } finally {
+        inFlightRef.current = false
+        if (!cancelled) setTimeout(tick, REFRESH_INTERVAL_MS)
+      }
+    }
+    tick()
+    return () => { cancelled = true }
   }, [autoRefresh])
 
   // Fetch history when selection changes
@@ -79,8 +98,67 @@ export function SystemDashboard() {
     <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2 style={{ margin: 0 }}>System Dashboard</h2>
-        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-          <input type="checkbox" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)} /> Auto refresh (15s)
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            cursor: 'pointer',
+            fontSize: 12,
+            userSelect: 'none',
+            fontWeight: 500,
+            color: '#cbd5e1'
+          }}
+        >
+          <div style={{ position: 'relative', width: 42, height: 22 }}>
+            <input
+              type="checkbox"
+              checked={autoRefresh}
+              onChange={e => setAutoRefresh(e.target.checked)}
+              aria-label="Toggle auto refresh"
+              style={{
+                position: 'absolute',
+                inset: 0,
+                opacity: 0,
+                margin: 0,
+                cursor: 'pointer'
+              }}
+            />
+            <span
+              aria-hidden="true"
+              style={{
+                position: 'absolute',
+                inset: 0,
+                background: autoRefresh
+                  ? 'linear-gradient(90deg,#2563eb,#3b82f6)'
+                  : 'rgba(255,255,255,0.08)',
+                border: '1px solid var(--border)',
+                borderRadius: 30,
+                boxShadow: autoRefresh
+                  ? '0 0 0 1px rgba(59,130,246,0.4), 0 4px 10px -2px rgba(59,130,246,0.4)'
+                  : '0 1px 2px rgba(0,0,0,0.5) inset',
+                transition: 'background .25s, box-shadow .25s'
+              }}
+            />
+            <span
+              aria-hidden="true"
+              style={{
+                position: 'absolute',
+                top: 2,
+                left: autoRefresh ? 22 : 2,
+                width: 18,
+                height: 18,
+                background: '#fff',
+                borderRadius: '50%',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,0,0,0.25)',
+                transition: 'left .25s cubic-bezier(.4,0,.2,1)'
+              }}
+            />
+          </div>
+          <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.05 }}>
+            <span style={{ fontWeight: 600, letterSpacing: '.5px' }}>Auto Refresh</span>
+            <span style={{ fontSize: 10, opacity: 0.55 }}>Interval: 1s</span>
+          </span>
         </label>
       </div>
       {error && <div style={{ color: '#f87171', fontSize: 13 }}>{error}</div>}
