@@ -7,7 +7,13 @@ import { ConfigPanel } from './components/ConfigPanel'
 import { SystemDashboard } from './components/SystemDashboard'
 import ProfitTracker from './components/ProfitTracker'
 
-const BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000' // vite dev proxy handles /api
+// Backend base resolution (same logic as api.ts)
+const BASE =
+  import.meta.env.VITE_API_BASE ||
+  import.meta.env.VITE_BACKEND_URL ||
+  (typeof location !== 'undefined' && location.hostname.endsWith('github.io')
+    ? 'https://poe-flip-backend.fly.dev'
+    : 'http://localhost:8000');
 
 // Helper function to calculate profit margins for linked pairs
 function calculateProfitMargins(pairs: PairSummary[]): PairSummary[] {
