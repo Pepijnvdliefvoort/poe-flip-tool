@@ -1,43 +1,50 @@
 import { useState } from 'react'
 
 interface LoginProps {
-  onLogin: (apiKey: string) => void
+  onLogin: (token: string) => void
 }
 
 export function Login({ onLogin }: LoginProps) {
-  const [apiKey, setApiKey] = useState('')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!apiKey.trim()) {
-      setError('Please enter an API key')
+    if (!username.trim() || !password.trim()) {
+      setError('Please enter username and password')
       return
     }
 
     setLoading(true)
     setError('')
 
-    // Test the API key by making a request
+    // Login and get session token
     try {
       const BASE = import.meta.env.VITE_BACKEND_URL || 
         (typeof location !== 'undefined' && location.hostname.endsWith('github.io')
           ? 'https://poe-flip-backend.fly.dev'
           : 'http://localhost:8000')
       
-      const response = await fetch(`${BASE}/api/config`, {
+      const response = await fetch(`${BASE}/api/auth/login`, {
+        method: 'POST',
         headers: {
-          'X-API-Key': apiKey.trim()
-        }
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          username: username.trim(),
+          password: password.trim()
+        })
       })
 
       if (response.ok) {
-        onLogin(apiKey.trim())
-      } else if (response.status === 403) {
-        setError('Invalid API key')
+        const data = await response.json()
+        onLogin(data.token)
+      } else if (response.status === 401) {
+        setError('Invalid username or password')
       } else {
-        setError('Failed to verify API key')
+        setError('Login failed. Please try again.')
       }
     } catch (err) {
       setError('Connection error. Please check if the backend is running.')
@@ -79,7 +86,7 @@ export function Login({ onLogin }: LoginProps) {
           marginBottom: '24px',
           textAlign: 'center'
         }}>
-          Enter your API key to continue
+          Sign in to continue
         </p>
 
         <form onSubmit={handleSubmit}>
@@ -91,14 +98,48 @@ export function Login({ onLogin }: LoginProps) {
               marginBottom: '6px',
               color: 'var(--text)'
             }}>
-              API Key
+              Username
+            </label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Enter your username"
+              disabled={loading}
+              autoComplete="username"
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                fontSize: '14px',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+                background: 'var(--bg-secondary)',
+                color: 'var(--text)',
+                outline: 'none',
+                transition: 'border-color 0.2s'
+              }}
+              onFocus={(e) => e.target.style.borderColor = 'var(--accent)'}
+              onBlur={(e) => e.target.style.borderColor = 'var(--border)'}
+            />
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '13px',
+              fontWeight: 500,
+              marginBottom: '6px',
+              color: 'var(--text)'
+            }}>
+              Password
             </label>
             <input
               type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="Enter your API key"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter your password"
               disabled={loading}
+              autoComplete="current-password"
               style={{
                 width: '100%',
                 padding: '10px 12px',

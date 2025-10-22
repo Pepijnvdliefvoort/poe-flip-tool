@@ -4,15 +4,17 @@ import time
 import logging
 import os
 from pathlib import Path
-from typing import List
+from typing import List, Dict
 import requests
 import secrets
+import hashlib
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Query, HTTPException, Request, Body, Security, Depends
 from fastapi.security import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from models import ConfigData, PairSummary, TradesResponse, TradesPatch
 from trade_logic import fetch_listings_with_cache, fetch_listings_force
@@ -37,15 +39,59 @@ logging.basicConfig(
 log = logging.getLogger("poe-backend")
 
 # ============================================================================
-# Security
+# Security & Authentication
 # ============================================================================
 
-API_KEY = os.getenv("API_KEY")
-if not API_KEY:
-    # Generate a random key if not set (for dev/testing)
-    API_KEY = secrets.token_urlsafe(32)
-    log.warning(f"No API_KEY set in environment. Using generated key for this session: {API_KEY}")
-    log.warning("Set API_KEY environment variable in production!")
+# Get username and password from environment
+AUTH_USERNAME = os.getenv("AUTH_USERNAME", "admin")
+AUTH_PASSWORD_HASH = os.getenv("AUTH_PASSWORD_HASH")
+
+# If no password hash is set, create one from plain password (for dev)
+if not AUTH_PASSWORD_HASH:
+    plain_password = os.getenv("AUTH_PASSWORD", "changeme")
+    AUTH_PASSWORD_HASH = hashlib.sha256(plain_password.encode()).hexdigest()
+    log.warning(f"No AUTH_PASSWORD_HASH set. Using password: {plain_password}")
+    log.warning("Set AUTH_PASSWORD_HASH in production! Generate with: echo -n 'yourpassword' | sha256sum")
+
+# Session storage (in-memory for simplicity)
+active_sessions: Dict[str, datetime] = {}
+SESSION_DURATION = 24 * 60 * 60  # 24 hours in seconds
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class LoginResponse(BaseModel):
+    token: str
+    expires_in: int
+
+def verify_password(username: str, password: str) -> bool:
+    """Verify username and password."""
+    if username != AUTH_USERNAME:
+        return False
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
+    return password_hash == AUTH_PASSWORD_HASH
+
+def create_session() -> str:
+    """Create a new session token."""
+    token = secrets.token_urlsafe(32)
+    active_sessions[token] = datetime.now(timezone.utc)
+    return token
+
+def verify_session(token: str) -> bool:
+    """Verify a session token is valid and not expired."""
+    if token not in active_sessions:
+        return False
+    
+    created_at = active_sessions[token]
+    age = (datetime.now(timezone.utc) - created_at).total_seconds()
+    
+    if age > SESSION_DURATION:
+        # Session expired, remove it
+        del active_sessions[token]
+        return False
+    
+    return True
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
@@ -54,17 +100,17 @@ async def verify_api_key(
     api_key_header: str = Security(api_key_header),
     api_key_query: str = Query(None, alias="api_key")
 ):
-    """Verify the API key from request headers or query parameters (for EventSource)."""
+    """Verify the session token from request headers or query parameters (for EventSource)."""
     # Check header first, then query parameter (for EventSource compatibility)
-    api_key = api_key_header or api_key_query
+    token = api_key_header or api_key_query
     
-    if api_key != API_KEY:
-        log.warning(f"Unauthorized access attempt with key: {api_key[:8] if api_key else 'None'}...")
+    if not token or not verify_session(token):
+        log.warning(f"Unauthorized access attempt with token: {token[:8] if token else 'None'}...")
         raise HTTPException(
             status_code=403,
-            detail="Invalid or missing API key"
+            detail="Invalid or missing session token"
         )
-    return api_key
+    return token
 
 # ============================================================================
 # Configuration
@@ -168,6 +214,29 @@ def _calculate_profit_margins(pairs: List[PairSummary]) -> None:
 def root():
     """Health check endpoint"""
     return {"status": "ok", "message": "PoE Trade Backend running"}
+
+
+@app.post("/api/auth/login", response_model=LoginResponse)
+def login(credentials: LoginRequest):
+    """Authenticate with username and password, returns session token"""
+    if not verify_password(credentials.username, credentials.password):
+        log.warning(f"Failed login attempt for user: {credentials.username}")
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid username or password"
+        )
+    
+    token = create_session()
+    log.info(f"Successful login for user: {credentials.username}")
+    return LoginResponse(token=token, expires_in=SESSION_DURATION)
+
+
+@app.post("/api/auth/logout")
+def logout(api_key: str = Depends(verify_api_key)):
+    """Logout and invalidate session token"""
+    if api_key in active_sessions:
+        del active_sessions[api_key]
+    return {"status": "ok", "message": "Logged out"}
 
 
 @app.get("/api/config", response_model=ConfigData)

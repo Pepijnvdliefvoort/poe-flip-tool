@@ -90,16 +90,22 @@ export default function App() {
 
   // Check if already authenticated on mount
   useEffect(() => {
-    const hasApiKey = !!getApiKey();
-    setIsAuthenticated(hasApiKey);
+    const hasToken = !!getApiKey();
+    setIsAuthenticated(hasToken);
   }, []);
 
-  const handleLogin = (apiKey: string) => {
-    sessionStorage.setItem('api_key', apiKey);
+  const handleLogin = (token: string) => {
+    sessionStorage.setItem('api_key', token);
     setIsAuthenticated(true);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Call logout endpoint to invalidate session
+    try {
+      await Api.logout();
+    } catch (err) {
+      console.error('Logout failed:', err);
+    }
     sessionStorage.removeItem('api_key');
     setIsAuthenticated(false);
   };

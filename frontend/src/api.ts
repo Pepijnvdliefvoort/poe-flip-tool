@@ -12,18 +12,18 @@ const BASE =
         ? 'https://poe-flip-backend.fly.dev'
         : 'http://localhost:8000'); // vite dev proxy handles /api
 
-// API Key from environment variable or sessionStorage (set after login)
-const getApiKey = () => import.meta.env.VITE_API_KEY || sessionStorage.getItem('api_key') || '';
+// Session token from sessionStorage (set after login)
+const getApiKey = () => sessionStorage.getItem('api_key') || '';
 
-// Helper to get headers with API key
+// Helper to get headers with session token
 function headers(extra?: Record<string, string>): Record<string, string> {
     const h: Record<string, string> = {
         'Content-Type': 'application/json',
         ...extra
     };
-    const apiKey = getApiKey();
-    if (apiKey) {
-        h['X-API-Key'] = apiKey;
+    const token = getApiKey();
+    if (token) {
+        h['X-API-Key'] = token;
     }
     return h;
 }
@@ -34,6 +34,12 @@ async function j<T>(res: Response): Promise<T> {
 }
 
 export const Api = {
+    async logout(): Promise<void> {
+        await fetch(`${BASE}/api/auth/logout`, {
+            method: 'POST',
+            headers: headers()
+        })
+    },
     async getConfig(): Promise<ConfigData> {
         return j(await fetch(`${BASE}/api/config`, { headers: headers() }))
     },
