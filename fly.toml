@@ -1,0 +1,49 @@
+# fly.toml generated for poe-flip-backend
+# Deploy with: fly launch --no-deploy (first time) then fly deploy
+# Docs: https://fly.io/docs/
+
+app = "poe-flip-backend"
+primary_region = "ams"
+
+[build]
+  image = "ghcr.io/pepijnvdliefvoort/poe-flip-backend:latest"
+
+[build.args]
+  DOCKER_BUILDKIT = "1"
+
+[[build.image_registry]]
+  registry = "ghcr.io"
+  username = "pepijnvdliefvoort"
+  password_secret = "REGISTRY_TOKEN"
+
+[env]
+  LOG_LEVEL = "INFO"
+  CACHE_TTL_SECONDS = "900"
+  HISTORY_RETENTION_HOURS = "168"
+  HISTORY_MAX_POINTS = "100"
+  SPARKLINE_POINTS = "30"
+  # SQLite path (mounted volume). persistence.py reads DB_PATH
+  DB_PATH = "/data/poe_cache.db"
+
+[[mounts]]
+  source = "db_data"
+  destination = "/data"
+
+[[services]]
+  internal_port = 8000
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [[services.http_checks]]
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "20s"
+    method = "GET"
+    path = "/"

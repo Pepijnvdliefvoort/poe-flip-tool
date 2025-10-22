@@ -500,6 +500,31 @@ Set `VITE_API_BASE` to your deployed backend URL. If omitted, the frontend may d
 
 Add more jobs (lint, security scan, mypy) as the project grows.
 
+### 🚀 Fly.io Quick Deploy
+
+Included files: `fly.toml`, `deploy-fly.yml` workflow.
+
+Initial setup (one time):
+```bash
+fly auth signup   # or: fly auth login
+fly volumes create db_data --region ams --size 3
+fly secrets set POESESSID=your_sess CF_CLEARANCE=your_clearance
+```
+
+Deploy manually (local):
+```bash
+fly deploy
+```
+
+Or trigger GitHub Action (ensure `FLY_API_TOKEN` secret configured):
+```bash
+fly tokens create deploy   # copy value -> GitHub repo settings -> Secrets -> Actions -> FLY_API_TOKEN
+```
+
+Environment variable `DB_PATH` points SQLite to the mounted volume at `/data/poe_cache.db`.
+
+After deploy, update frontend build env `VITE_API_BASE=https://poe-flip-backend.fly.dev` and redeploy Pages.
+
 ---
 
 ## 🔐 Updating Secrets

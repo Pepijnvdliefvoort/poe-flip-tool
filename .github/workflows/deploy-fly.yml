@@ -1,0 +1,41 @@
+name: Deploy to Fly.io
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/**'
+      - 'fly.toml'
+      - '.github/workflows/deploy-fly.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@v1
+
+      - name: Deploy
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          # Ensure latest backend image already pushed by backend-ci.yml
+          flyctl deploy --remote-only --build-image ghcr.io/pepijnvdliefvoort/poe-flip-backend:latest || flyctl deploy --remote-only
+
+      - name: Post-Deploy Health Check
+        run: |
+          echo "Waiting for health..."
+          sleep 10
+          curl -f https://poe-flip-backend.fly.dev/ || (echo 'Health check failed' && exit 1)
+
+# Setup Instructions:
+# 1. fly volumes create db_data --size 3 --region ams
+# 2. fly secrets set POESESSID=xxx CF_CLEARANCE=yyy
+# 3. Add FLY_API_TOKEN secret (fly tokens create deploy)
