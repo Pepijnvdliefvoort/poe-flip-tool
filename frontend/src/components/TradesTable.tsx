@@ -547,11 +547,11 @@ export function TradesTable({ data, loading, onReload, onRefresh, accountName }:
     // Find the index currently loading (first with empty listings)
     const loadingIndex = loading ? sortedData.findIndex(p => p.listings.length === 0) : -1
 
-    // Cache validity polling every 2s when enabled
+    // Cache validity polling every 5s when enabled (replaces legacy auto-refresh logic)
     useEffect(() => {
         if (!cacheWatch) return
         let cancelled = false
-        const intervalMs = 2000
+        const intervalMs = 5000
         const tick = async () => {
             if (cancelled) return
             if (pollingRef.current) {
@@ -657,7 +657,7 @@ export function TradesTable({ data, loading, onReload, onRefresh, accountName }:
                         </div>
                         <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.05 }}>
                             <span style={{ fontWeight: 600, letterSpacing: '.5px' }}>Cache Watch</span>
-                            <span style={{ fontSize: 10, opacity: 0.55 }}>2s check</span>
+                                <span style={{ fontSize: 10, opacity: 0.55 }}>5s check</span>
                         </span>
                     </label>
                 </div>

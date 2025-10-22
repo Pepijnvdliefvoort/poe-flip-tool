@@ -241,21 +241,7 @@ export function ConfigPanel({
                 </div>
             </div>
 
-            {/* Auto-refresh controls */}
-            <div style={{ marginBottom: 16, padding: '12px', background: 'rgba(59, 130, 246, 0.05)', borderRadius: '8px', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                    <input
-                        type="checkbox"
-                        checked={autoRefresh}
-                        onChange={(e) => onAutoRefreshChanged(e.target.checked)}
-                        style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                    />
-                    <span style={{ fontSize: '13px', fontWeight: 500 }}>Auto-refresh expired trades</span>
-                </label>
-                <div className="muted" style={{ fontSize: '11px', marginTop: '6px', marginLeft: '24px' }}>
-                    Checks every 60s to refresh trades (respects rate limits)
-                </div>
-            </div>
+            {/* Auto-refresh controls removed: functionality superseded by Trades page 'Cache Watch' toggle */}
 
             {/* Trade pairs list - compact */}
             <div style={{ marginBottom: 16 }}>

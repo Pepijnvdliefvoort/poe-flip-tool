@@ -77,7 +77,7 @@ export default function App() {
   const [data, setData] = useState<TradesResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [topN, setTopN] = useState(5)
-  const [autoRefresh, setAutoRefresh] = useState(true) // Auto-refresh enabled by default
+  // Removed legacy autoRefresh (replaced by per-page Cache Watch toggle in TradesTable)
   const [rateLimit, setRateLimit] = useState<{ blocked: boolean; block_remaining: number; rules: Record<string, { current: number; limit: number; reset_s: number }[]> } | null>(null)
   const [nearLimit, setNearLimit] = useState(false)
   const [rateLimitDisplay, setRateLimitDisplay] = useState<{ blocked: boolean; block_remaining: number; rules: Record<string, { current: number; limit: number; reset_s: number }[]> } | null>(null)
@@ -207,97 +207,6 @@ export default function App() {
     return () => { eventSourceRef.current?.close() } 
   }, [load, isAuthenticated])
 
-  // Auto-refresh functionality - poll cache status and refresh expired pairs
-  useEffect(() => {
-    if (!autoRefresh || !isAuthenticated) return;
-
-    const checkInterval = 60000; // Check every 60 seconds (very conservative)
-    
-    const checkCacheStatus = async () => {
-      try {
-        // First check rate limit status
-        const rateLimitCheck = await Api.rateLimitStatus();
-        
-        // Don't auto-refresh if we're blocked or near the limit
-        if (rateLimitCheck.blocked) {
-          console.log('[Auto-refresh] ⛔ Skipping - currently rate limited');
-          return;
-        }
-        
-        // Check if we're near any limit (>10% utilization - very conservative)
-        const isNearLimit = (r: { current: number; limit: number; reset_s: number }) => {
-          if (r.reset_s <= 0 || r.limit <= 0) return false;
-          if (r.limit <= 10) {
-            return r.current >= (r.limit - 1) && r.current < r.limit;
-          }
-          return r.current >= 3 && (r.current / r.limit) >= 0.7 && r.current < r.limit;
-        };
-        const nearAnyLimit = Object.values(rateLimitCheck.rules).some(ruleArr => 
-          ruleArr.some(isNearLimit)
-        );
-        
-        if (nearAnyLimit) {
-          console.log('[Auto-refresh] 🐌 Skipping - near rate limit (>10% utilization)');
-          return;
-        }
-        
-        const status = await Api.cacheStatus();
-        const expiredPairs = status.pairs.filter((p: any) => p.expired);
-        
-        if (expiredPairs.length > 0 && data) {
-          console.log(`[Auto-refresh] 🔄 Found ${expiredPairs.length} expired cache entries, refreshing...`);
-          
-          // Limit to refreshing max 2 pairs per check to avoid rate limits (very conservative)
-          const pairsToRefresh = expiredPairs.slice(0, 2);
-          
-          for (const pair of pairsToRefresh) {
-            // Update UI to show loading
-            setData(prev => {
-              if (!prev) return prev;
-              const results = [...prev.results];
-              const p = results[pair.index];
-              if (p) {
-                results[pair.index] = { ...p, status: 'loading', listings: [], best_rate: null, count_returned: 0 };
-              }
-              return { ...prev, results };
-            });
-            
-            try {
-              const refreshed = await Api.refreshOne(pair.index, topN);
-              setData(prev => {
-                if (!prev) return prev;
-                const results = [...prev.results];
-                results[pair.index] = refreshed;
-                // Recalculate profit margins after updating this pair
-                const updatedResults = calculateProfitMargins(results);
-                return { ...prev, results: updatedResults };
-              });
-            } catch (e) {
-              setData(prev => {
-                if (!prev) return prev;
-                const results = [...prev.results];
-                const p = results[pair.index];
-                if (p) {
-                  results[pair.index] = { ...p, status: 'error' };
-                }
-                return { ...prev, results };
-              });
-            }
-            
-            // Even longer delay between refreshes (3 seconds)
-            await new Promise(resolve => setTimeout(resolve, 3000));
-          }
-          
-          updateRateLimit();
-        }
-      } catch (e) {
-        console.error('[Auto-refresh] Failed to check cache status:', e);
-      }
-    };
-
-    const timer = setInterval(checkCacheStatus, checkInterval);
-    return () => clearInterval(timer);
-  }, [autoRefresh, data, topN, isAuthenticated])
 
   const reloadPair = async (index: number) => {
     if (!data) return;
@@ -491,8 +400,8 @@ export default function App() {
               onPairRemoved={removePair} 
               topN={topN} 
               onTopNChanged={setTopN}
-              autoRefresh={autoRefresh}
-              onAutoRefreshChanged={setAutoRefresh}
+              autoRefresh={false}
+              onAutoRefreshChanged={() => { /* deprecated – handled by TradesTable Cache Watch */ }}
               onAccountNameChanged={setAccountName}
             />
           </aside>
