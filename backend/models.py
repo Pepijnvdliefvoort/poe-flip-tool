@@ -1,0 +1,62 @@
+from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, Field
+
+
+class TradePair(BaseModel):
+    get: str
+    pay: str
+    hot: bool = Field(default=False)
+
+
+class ConfigData(BaseModel):
+    league: str = Field(default="Standard")
+    trades: List[TradePair] = Field(default_factory=list)
+    account_name: Optional[str] = Field(default=None, description="PoE account name used for highlighting own listings")
+
+
+class ListingSummary(BaseModel):
+    rate: float
+    have_currency: str
+    have_amount: float
+    want_currency: str
+    want_amount: float
+    stock: Optional[int] = None
+    account_name: Optional[str] = None
+    whisper: Optional[str] = None
+    indexed: Optional[str] = None
+
+
+class PriceTrend(BaseModel):
+    """Trend information for sparkline visualization"""
+    direction: str  # "up" | "down" | "neutral"
+    change_percent: float
+    data_points: int
+    oldest: Optional[str] = None
+    newest: Optional[str] = None
+    sparkline: Optional[List[float]] = None  # Down-sampled best_rate history for inline chart
+
+
+class PairSummary(BaseModel):
+    index: int
+    get: str
+    pay: str
+    hot: bool = Field(default=False)
+    status: str  # "ok" | "error" | "invalid" | "rate_limited"
+    listings: List[ListingSummary] = Field(default_factory=list)
+    best_rate: Optional[float] = None
+    count_returned: int = 0
+    trend: Optional[PriceTrend] = None  # Price trend for sparkline
+    fetched_at: Optional[str] = None  # ISO timestamp of when data was fetched
+    linked_pair_index: Optional[int] = None  # Index of reverse trade pair
+    profit_margin_pct: Optional[float] = None  # Profit margin in percentage
+    profit_margin_raw: Optional[float] = None  # Raw profit margin in "get" currency
+
+
+class TradesResponse(BaseModel):
+    league: str
+    pairs: int
+    results: List[PairSummary]
+
+class TradesPatch(BaseModel):
+    add: List[TradePair] = Field(default_factory=list)
+    remove_indices: List[int] = Field(default_factory=list)
