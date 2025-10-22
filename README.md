@@ -369,3 +369,170 @@ If you encounter any issues or have questions:
 ---
 
 **Happy flipping!** 💰⚡
+
+---
+
+## 🌐 Deployment & CI/CD
+
+This repo now includes containerization & GitHub Actions workflows so you can host without running locally every time.
+
+### Frontend Hosting (GitHub Pages)
+The workflow `.github/workflows/frontend-pages.yml` builds the React app with Vite and deploys the static bundle to GitHub Pages on pushes to `main` or `develop` (adjust branches as needed). Enable Pages in your repository settings ("Deploy from GitHub Actions").
+
+If your backend is hosted somewhere else, set `VITE_API_BASE` at build time (either via a secret or by hardcoding in `frontend/.env`). Currently the workflow builds with defaults; you can modify the build step:
+
+```yaml
+			- name: Build frontend
+				working-directory: frontend
+				env:
+					VITE_API_BASE: https://your-backend.example.com
+				run: npm run build
+```
+
+### Backend Hosting (Container Image)
+The workflow `.github/workflows/backend-ci.yml` runs tests and then builds a Docker image and pushes it to GitHub Container Registry (GHCR) as:
+
+```
+ghcr.io/<OWNER>/poe-flip-backend:latest
+```
+
+You can deploy this image on any container host (Render, Fly.io, Railway, Azure Container Apps, AWS ECS, etc.). Provide required environment variables there—DO NOT bake your PoE session cookies into the image.
+
+### Required Backend Environment Variables
+
+| Variable | Purpose | Sensitive |
+|----------|---------|-----------|
+| `POESESSID` | PoE auth cookie for trade API requests | Yes |
+| `CF_CLEARANCE` | Cloudflare clearance cookie | Yes |
+| `CACHE_TTL_SECONDS` | Cache entry TTL (seconds) | No |
+| `HISTORY_RETENTION_HOURS` | Snapshot retention | No |
+| `HISTORY_MAX_POINTS` | Max snapshots kept per pair | No |
+| `SPARKLINE_POINTS` | Down-sample points for trend sparkline | No |
+| `LOG_LEVEL` | Logging verbosity | No |
+
+Set the sensitive ones (`POESESSID`, `CF_CLEARANCE`) as platform secrets or GitHub Actions secrets. Example (Render/Fly): add them in the dashboard UI. For GitHub Actions self-deploy, add secrets in repo settings, then reference in a deploy job.
+
+### Local Docker Run
+
+```bash
+# Build images
+docker build -f backend/Dockerfile -t poe-flip-backend:latest .
+docker build -f frontend/Dockerfile -t poe-flip-frontend:latest .
+
+# Run backend with env file
+docker run --env-file backend/.env -p 8000:8000 poe-flip-backend:latest
+
+# Run frontend (served via nginx container)
+docker run -p 5173:80 poe-flip-frontend:latest
+```
+
+Or create a `docker-compose.yml` (optional) to run both containers together and set `VITE_API_BASE` to the backend service name.
+
+### Example docker-compose.yml (Optional)
+
+```yaml
+services:
+	backend:
+		build:
+			context: .
+			dockerfile: backend/Dockerfile
+		env_file: backend/.env
+		ports:
+			- "8000:8000"
+	frontend:
+		build:
+			context: .
+			dockerfile: frontend/Dockerfile
+		environment:
+			VITE_API_BASE: http://backend:8000
+		ports:
+			- "5173:80"
+```
+
+### Adding a Backend Deploy Step
+
+Extend `backend-ci.yml` with a deploy job after the image push. Example (Render deploy using Render API token):
+
+```yaml
+	deploy:
+		runs-on: ubuntu-latest
+		needs: build-image
+		steps:
+			- name: Trigger Render Deploy
+				run: |
+					curl -X POST \ 
+						-H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \ 
+						-H "Content-Type: application/json" \ 
+						-d '{"serviceId":"<your-service-id>"}' \ 
+						https://api.render.com/v1/services/<your-service-id>/deploys
+```
+
+### Secret Management Tips
+- Never commit `.env` files.
+- Use placeholder `.env.example` to document required keys.
+- Rotate `POESESSID` if you change passwords/log out; builds using old values will fail authentication silently.
+- Limit log level in production to avoid leaking header data: set `LOG_LEVEL=INFO`.
+
+### Production Hardening Ideas
+- Add a simple API key layer (e.g., header check middleware) if exposing publicly.
+- Enable CORS only for your frontend origin.
+- Add request tracing & structured logging (JSON) if scaling.
+- Consider rate limiting at reverse proxy (nginx or Fly proxy) to further protect PoE API usage.
+
+### Frontend Base URL Configuration
+Set `VITE_API_BASE` to your deployed backend URL. If omitted, the frontend may default to localhost, which won’t work for remote hosting.
+
+### Verification Checklist Before First Deploy
+1. Secrets added to hosting platform (POESESSID, CF_CLEARANCE).
+2. Backend reachable at `/` returning status ok.
+3. Frontend built with correct `VITE_API_BASE`.
+4. SSE endpoint `/api/trades/stream` reachable from the hosted frontend (watch network console for CORS issues).
+5. Cache & history endpoints return JSON (spot-check /api/cache/summary).
+
+---
+
+## 🤖 CI/CD Summary
+
+| Workflow | Purpose | Trigger |
+|----------|---------|---------|
+| `backend-ci.yml` | Test + build + push backend container image | Push/PR to backend paths |
+| `frontend-pages.yml` | Build & deploy static frontend to Pages | Push to main/develop |
+
+Add more jobs (lint, security scan, mypy) as the project grows.
+
+### 🚀 Fly.io Quick Deploy
+
+Included files: `fly.toml`, `deploy-fly.yml` workflow.
+
+Initial setup (one time):
+```bash
+fly auth signup   # or: fly auth login
+fly volumes create db_data --region ams --size 3
+fly secrets set POESESSID=your_sess CF_CLEARANCE=your_clearance
+```
+
+Deploy manually (local):
+```bash
+fly deploy
+```
+
+Or trigger GitHub Action (ensure `FLY_API_TOKEN` secret configured):
+```bash
+fly tokens create deploy   # copy value -> GitHub repo settings -> Secrets -> Actions -> FLY_API_TOKEN
+```
+
+Environment variable `DB_PATH` points SQLite to the mounted volume at `/data/poe_cache.db`.
+
+After deploy, update frontend build env `VITE_API_BASE=https://poe-flip-backend.fly.dev` and redeploy Pages.
+
+---
+
+## 🔐 Updating Secrets
+When your PoE cookies expire: update repository or platform secrets. No image rebuild needed if host passes them at runtime. If using Render/Fly env vars, just edit in dashboard and restart.
+
+---
+
+## ❓ Need Help Deploying?
+Open an issue describing your target platform, and we can add a tailored deploy workflow.
+
+---

@@ -5,6 +5,7 @@ Ensures data survives application restarts.
 import sqlite3
 import json
 import logging
+import os
 from datetime import datetime, timedelta
 from typing import List, Dict, Tuple, Optional, Any
 from pathlib import Path
@@ -441,4 +442,9 @@ class DatabasePersistence:
 
 
 # Global persistence instance
-db = DatabasePersistence()
+def _resolve_db_path() -> str:
+    # Allow overriding database location via environment variable (e.g. for container volume mounts)
+    return os.getenv("DB_PATH", "poe_cache.db")
+
+
+db = DatabasePersistence(_resolve_db_path())

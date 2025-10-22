@@ -1,6 +1,16 @@
 import type { TradesResponse, ConfigData, TradePair, PairSummary, CacheSummary, CacheStatus, HistoryResponse, DatabaseStats, LatestValuesResponse, StashTabResponse, PortfolioSnapshot, PortfolioHistoryResponse } from './types'
 
-const BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000' // vite dev proxy handles /api
+// Backend base resolution priority:
+// 1. VITE_API_BASE (legacy env var)
+// 2. VITE_BACKEND_URL (new explicit backend URL for Pages/Fly)
+// 3. If running on GitHub Pages (hostname includes 'github.io'), use Fly backend
+// 4. Fallback to localhost for dev
+const BASE =
+    import.meta.env.VITE_API_BASE ||
+    import.meta.env.VITE_BACKEND_URL ||
+    (typeof location !== 'undefined' && location.hostname.endsWith('github.io')
+        ? 'https://poe-flip-backend.fly.dev'
+        : 'http://localhost:8000'); // vite dev proxy handles /api
 
 async function j<T>(res: Response): Promise<T> {
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
