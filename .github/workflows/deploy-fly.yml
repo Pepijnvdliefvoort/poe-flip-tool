@@ -3,7 +3,7 @@ name: Deploy to Fly.io
 on:
   workflow_dispatch:
   push:
-    branches: [ main, develop, feature/ci-cd ]
+    branches: [ main, develop ]
     paths:
       - 'backend/**'
       - 'fly.toml'

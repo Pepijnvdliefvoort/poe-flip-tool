@@ -2,7 +2,7 @@ name: Frontend Deploy (GitHub Pages)
 
 on:
   push:
-    branches: [ develop, main, feature/ci-cd ]
+    branches: [ develop, main ]
     paths:
       - 'frontend/**'
       - '.github/workflows/frontend-pages.yml'
