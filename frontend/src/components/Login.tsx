@@ -71,6 +71,17 @@ export function Login({ onLogin }: LoginProps) {
         width: '100%',
         boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)'
       }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          marginBottom: '16px'
+        }}>
+          <img 
+            src={`${import.meta.env.BASE_URL}favicon.ico`} 
+            alt="PoE Logo" 
+            style={{ width: '48px', height: '48px' }}
+          />
+        </div>
         <h1 style={{
           fontSize: '24px',
           fontWeight: 700,
@@ -104,7 +115,7 @@ export function Login({ onLogin }: LoginProps) {
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter your username"
+              placeholder="Username"
               disabled={loading}
               autoComplete="username"
               style={{
@@ -137,7 +148,7 @@ export function Login({ onLogin }: LoginProps) {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter your password"
+              placeholder="Password"
               disabled={loading}
               autoComplete="current-password"
               style={{
@@ -202,7 +213,7 @@ export function Login({ onLogin }: LoginProps) {
           color: 'var(--muted)',
           textAlign: 'center'
         }}>
-          Don't have an API key? Contact your administrator.
+          Need access? Contact your administrator.
         </p>
       </div>
     </div>

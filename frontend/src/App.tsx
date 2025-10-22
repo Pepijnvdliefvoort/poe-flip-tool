@@ -198,12 +198,14 @@ export default function App() {
 
   // Initial load uses cache, subsequent manual refreshes force fresh data
   useEffect(() => { 
+    if (!isAuthenticated) return; // Don't load if not authenticated
+    
     if (initialLoadRef.current) {
       load(false); // Initial load from cache
       initialLoadRef.current = false;
     }
     return () => { eventSourceRef.current?.close() } 
-  }, [load])
+  }, [load, isAuthenticated])
 
   // Auto-refresh functionality - poll cache status and refresh expired pairs
   useEffect(() => {
