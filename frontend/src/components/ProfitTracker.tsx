@@ -166,43 +166,14 @@ const ProfitTracker: React.FC = () => {
     }
   }
 
-  // Periodically refresh age + countdown display, and check for new snapshots
+  // Periodically refresh age + countdown display
   useEffect(() => {
-    const id = setInterval(async () => {
+    const id = setInterval(() => {
       if (snapshot?.timestamp) updateSnapshotAge(snapshot.timestamp);
       updateCountdown();
-      
-      // Check for new snapshots every 5s (polls history endpoint)
-      if (isAuthenticated) {
-        try {
-          const h = await Api.portfolioHistory(1); // Get just the latest snapshot
-          if (h.snapshots.length > 0) {
-            const latestFromServer = h.snapshots[h.snapshots.length - 1];
-            // If we have a newer snapshot than what we're currently displaying, update
-            if (!lastSnapshotRef.current || latestFromServer.timestamp !== lastSnapshotRef.current) {
-              console.log('[ProfitTracker] New snapshot detected, updating display');
-              lastSnapshotRef.current = latestFromServer.timestamp;
-              setSnapshot({
-                saved: true,
-                timestamp: latestFromServer.timestamp,
-                total_divines: latestFromServer.total_divines,
-                league: 'Unknown', // Not returned by history endpoint
-                breakdown: latestFromServer.breakdown.map(b => ({
-                  ...b,
-                  source_pair: b.source_pair ?? null
-                }))
-              });
-              // Also reload full history to update the chart
-              loadHistory();
-            }
-          }
-        } catch (error) {
-          console.error('[ProfitTracker] Failed to check for new snapshots:', error);
-        }
-      }
     }, 5000); // update every 5s
     return () => clearInterval(id);
-  }, [snapshot, isAuthenticated]);
+  }, [snapshot]);
 
   const grandTotal = snapshot?.total_divines ?? null;
 
