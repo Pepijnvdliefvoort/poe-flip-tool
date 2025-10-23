@@ -9,6 +9,13 @@ export function Login({ onLogin }: LoginProps) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  const handleDiscordCopy = () => {
+    navigator.clipboard.writeText('pepijn.')
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -207,14 +214,55 @@ export function Login({ onLogin }: LoginProps) {
           </button>
         </form>
 
-        <p style={{
-          marginTop: '20px',
-          fontSize: '12px',
-          color: 'var(--muted)',
+        <div style={{
+          marginTop: '24px',
+          padding: '16px',
+          background: 'var(--bg-secondary)',
+          border: '1px solid var(--border)',
+          borderRadius: '6px',
           textAlign: 'center'
         }}>
-          Need access? Contact your administrator.
-        </p>
+          <p style={{
+            fontSize: '13px',
+            color: 'var(--text)',
+            marginBottom: '8px'
+          }}>
+            Want to use this tool?
+          </p>
+          <p style={{
+            fontSize: '12px',
+            color: 'var(--muted)',
+            marginBottom: '10px'
+          }}>
+            Contact me on Discord:
+          </p>
+          <button
+            onClick={handleDiscordCopy}
+            style={{
+              padding: '8px 16px',
+              fontSize: '14px',
+              fontWeight: 600,
+              fontFamily: 'monospace',
+              color: 'var(--text-bright)',
+              background: 'var(--bg)',
+              border: '1px solid var(--border)',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              position: 'relative'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = 'var(--accent)'
+              e.currentTarget.style.background = 'var(--card)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = 'var(--border)'
+              e.currentTarget.style.background = 'var(--bg)'
+            }}
+          >
+            {copied ? '✓ Copied!' : 'pepijn.'}
+          </button>
+        </div>
       </div>
     </div>
   )

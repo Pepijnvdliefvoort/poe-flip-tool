@@ -1,26 +1,20 @@
 import { useEffect, useRef } from 'react'
 import { Api } from '../api'
 
-// Portfolio snapshot interval from environment (in milliseconds)
-const PORTFOLIO_SNAPSHOT_INTERVAL = parseInt(import.meta.env.VITE_PORTFOLIO_SNAPSHOT_INTERVAL || '900000') // 15 minutes
-
 /**
  * Global polling service that runs independent of page navigation.
  * 
- * Cache Refresh Strategy:
- * - Polls backend at configured interval (CACHE_CHECK_INTERVAL_SECONDS from backend .env)
+ * Unified Polling Strategy:
+ * - Polls backend at configured interval (CACHE_CHECK_INTERVAL_SECONDS from backend .env, default 30s)
  * - Backend returns only EXPIRED cache entries
  * - Refreshes up to 2 expired pairs per check to avoid rate limiting
  * - Pairs refresh independently based on their individual expiry times
- * 
- * Portfolio Snapshots:
- * - Takes snapshots at configured interval (VITE_PORTFOLIO_SNAPSHOT_INTERVAL)
+ * - Portfolio snapshots taken at the same interval (backend handles 15-minute snapshots automatically)
  */
 export function useGlobalPolling(isAuthenticated: boolean) {
   const cacheCheckTimerRef = useRef<number | null>(null)
-  const portfolioTimerRef = useRef<number | null>(null)
   const isMountedRef = useRef(false)
-  const checkIntervalRef = useRef<number>(120000) // Default 2 minutes, will be updated from backend
+  const checkIntervalRef = useRef<number>(30000) // Default 30s, will be updated from backend
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -28,10 +22,6 @@ export function useGlobalPolling(isAuthenticated: boolean) {
       if (cacheCheckTimerRef.current !== null) {
         clearInterval(cacheCheckTimerRef.current)
         cacheCheckTimerRef.current = null
-      }
-      if (portfolioTimerRef.current !== null) {
-        clearInterval(portfolioTimerRef.current)
-        portfolioTimerRef.current = null
       }
       isMountedRef.current = false
       return
@@ -90,35 +80,17 @@ export function useGlobalPolling(isAuthenticated: boolean) {
       }
     }
 
-    // Portfolio snapshot timer - every configured interval
-    const takePortfolioSnapshot = async () => {
-      try {
-        console.log('[GlobalPolling] Taking portfolio snapshot...')
-        const snapshot = await Api.portfolioSnapshot()
-        console.log(
-          `[GlobalPolling] Portfolio snapshot taken: ${snapshot.total_divines.toFixed(3)} Divine Orbs @ ${new Date(snapshot.timestamp).toLocaleTimeString()}`
-        )
-      } catch (error) {
-        console.error('[GlobalPolling] Failed to take portfolio snapshot:', error)
-      }
-    }
-
-    // Start timers - use backend's check interval for cache checks
+    // Start cache check timer - backend handles portfolio snapshots automatically
     cacheCheckTimerRef.current = window.setInterval(checkExpiredCache, checkIntervalRef.current)
-    portfolioTimerRef.current = window.setInterval(takePortfolioSnapshot, PORTFOLIO_SNAPSHOT_INTERVAL)
 
-    console.log('[GlobalPolling] Timers initialized')
+    console.log('[GlobalPolling] Cache check timer initialized')
 
     // Cleanup on unmount or auth change
     return () => {
-      console.log('[GlobalPolling] Cleaning up global polling timers')
+      console.log('[GlobalPolling] Cleaning up global polling timer')
       if (cacheCheckTimerRef.current !== null) {
         clearInterval(cacheCheckTimerRef.current)
         cacheCheckTimerRef.current = null
-      }
-      if (portfolioTimerRef.current !== null) {
-        clearInterval(portfolioTimerRef.current)
-        portfolioTimerRef.current = null
       }
       isMountedRef.current = false
     }
