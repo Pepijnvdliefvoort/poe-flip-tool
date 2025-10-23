@@ -493,7 +493,7 @@ const ProfitTracker: React.FC = () => {
                     // Find mirror in breakdown using the short key 'mirror'
                     const mirrorEntry = snapshot.breakdown.find(b => b.currency === 'mirror');
                     const divPerMirror = mirrorEntry?.divine_per_unit || 80;
-                    return formatNumber((grandTotal ?? 0) / divPerMirror, 3);
+                    return formatNumber((grandTotal ?? 0) / divPerMirror, 2);
                   })()}
                 </text>
               </g>
@@ -521,8 +521,8 @@ const ProfitTracker: React.FC = () => {
                   {b.currency}
                 </td>
                 <td style={{ padding: 6, textAlign: 'right' }}>{b.quantity}</td>
-                <td style={{ padding: 6, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{formatNumber(b.divine_per_unit, 4)}</td>
-                <td style={{ padding: 6, textAlign: 'right', fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: '#38bdf8' }}>{formatNumber(b.total_divine, 3)}</td>
+                <td style={{ padding: 6, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{formatNumber(b.divine_per_unit, 2)}</td>
+                <td style={{ padding: 6, textAlign: 'right', fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: '#38bdf8' }}>{formatNumber(b.total_divine, 2)}</td>
                 <td style={{ padding: 6, fontSize: 12, opacity: 0.65 }}>{b.source_pair || '—'}</td>
               </tr>
             ))}
@@ -530,7 +530,7 @@ const ProfitTracker: React.FC = () => {
           <tfoot>
             <tr>
               <td colSpan={3} style={{ textAlign: 'right', padding: 6, fontWeight: 600 }}>Grand Total</td>
-              <td style={{ textAlign: 'right', padding: 6, fontWeight: 700, color: '#38bdf8', fontVariantNumeric: 'tabular-nums' }}>{formatNumber(grandTotal, 3)}</td>
+              <td style={{ textAlign: 'right', padding: 6, fontWeight: 700, color: '#38bdf8', fontVariantNumeric: 'tabular-nums' }}>{formatNumber(grandTotal, 2)}</td>
               <td />
             </tr>
           </tfoot>
