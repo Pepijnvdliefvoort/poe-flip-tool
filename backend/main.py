@@ -1030,18 +1030,29 @@ _NAME_TO_KEY = {
 }
 
 def _compute_portfolio_breakdown(account: str, league: str):
-    """Fetch stash 'currency' tab and produce quantity map + valuations."""
-    # Reuse stash logic
-    tab_resp = get_stash_tab('currency')  # will raise if missing
-    items = tab_resp.get('items', [])
+
+    """Fetch stash 'currency' and 'trades' tabs and produce quantity map + valuations."""
+    # Reuse stash logic for both tabs
     quantities = {}
-    for it in items:
-        key_candidate = (it.get('typeLine') or it.get('name') or '').lower()
-        cur_key = _NAME_TO_KEY.get(key_candidate)
-        if not cur_key:
-            continue
-        qty = it.get('stackSize') or 1
-        quantities[cur_key] = (quantities.get(cur_key, 0) + qty)
+    for tab in ['currency', 'trades']:
+        try:
+            tab_resp = get_stash_tab(tab)
+            items = tab_resp.get('items', [])
+            for it in items:
+                key_candidate = (it.get('typeLine') or it.get('name') or '').lower()
+                cur_key = _NAME_TO_KEY.get(key_candidate)
+                if not cur_key:
+                    continue
+                qty = it.get('stackSize') or 1
+                quantities[cur_key] = (quantities.get(cur_key, 0) + qty)
+        except HTTPException as e:
+            # If the tab is missing, skip it (but raise if both are missing)
+            if tab == 'currency' and e.status_code == 404:
+                continue
+            elif tab == 'trades' and e.status_code == 404:
+                continue
+            else:
+                raise
 
     # Get valuations
     vals = latest_currency_values()

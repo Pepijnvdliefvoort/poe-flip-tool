@@ -321,12 +321,39 @@ const ProfitTracker: React.FC = () => {
 
   function iconFor(currency: string) { return `${import.meta.env.BASE_URL}currency/${currency}.webp`; }
 
+  function pluralize(currency: string, quantity: number): string {
+    if (quantity === 1) {
+      // Singular forms
+      const singularMap: Record<string, string> = {
+        'divine': 'divine',
+        'mirror': 'mirror',
+        'hinekoras-lock': 'lock',
+        'exalted': 'exalt',
+        'chaos': 'chaos',
+        'mirror-shard': 'mirror shard',
+      };
+      return singularMap[currency] || currency;
+    } else {
+      // Plural forms
+      const pluralMap: Record<string, string> = {
+        'divine': 'divines',
+        'mirror': 'mirrors',
+        'hinekoras-lock': 'locks',
+        'exalted': 'exalts',
+        'chaos': 'chaos',
+        'mirror-shard': 'mirror shards',
+      };
+      return pluralMap[currency] || currency + 's';
+    }
+  }
+
   const donut = useMemo(() => {
     if (!snapshot) return [];
     const entries = snapshot.breakdown.filter(b => b.total_divine != null && b.total_divine! > 0);
     const total = entries.reduce((a, b) => a + (b.total_divine || 0), 0) || 1;
     return entries.map(e => ({
       currency: e.currency,
+      quantity: e.quantity,
       value: e.total_divine!,
       pct: (e.total_divine! / total),
     })).sort((a, b) => b.value - a.value);
@@ -722,7 +749,7 @@ const ProfitTracker: React.FC = () => {
                     <img src={iconFor(d.currency)} alt={d.currency} style={{ width:20, height:20, flexShrink:0 }} />
                     <div style={{ flex:1, overflow:'hidden' }}>
                       <div style={{ fontSize:12, fontWeight:600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{d.currency}</div>
-                      <div style={{ fontSize:11, opacity:0.7, fontVariantNumeric:'tabular-nums' }}>{formatNumber(d.pct*100, 1)}% • {formatNumber(d.value, 2)} Div</div>
+                      <div style={{ fontSize:11, opacity:0.7, fontVariantNumeric:'tabular-nums' }}>{formatNumber(d.pct*100, 1)}% • {formatNumber(d.quantity, 0)} {pluralize(d.currency, d.quantity)}</div>
                     </div>
                   </div>
                 ))}
@@ -743,7 +770,7 @@ const ProfitTracker: React.FC = () => {
                   {donutHoverIdx===i && (
                     <g>
                       <text x={seg.labelPos.x} y={seg.labelPos.y} textAnchor="middle" fontSize={13} fill="#fff" fontWeight={600}>{seg.data.currency}</text>
-                      <text x={seg.labelPos.x} y={seg.labelPos.y+16} textAnchor="middle" fontSize={12} fill="#e2e8f0">{formatNumber(seg.data.pct*100, 1)}%</text>
+                      <text x={seg.labelPos.x} y={seg.labelPos.y+16} textAnchor="middle" fontSize={12} fill="#e2e8f0">{formatNumber(seg.data.quantity, 0)} {pluralize(seg.data.currency, seg.data.quantity)} ({formatNumber(seg.data.pct*100, 1)}%)</text>
                     </g>
                   )}
                 </g>
