@@ -451,17 +451,25 @@ export function TradesTable({ data, loading, onReload, onRefresh, accountName }:
     // Always display all metrics
     const selectedMetrics = ['spread', 'median', 'profit'] as const
     
-    // Sort state
+    // Sort state - three states: descending, ascending, neutral (none)
     type SortKey = 'none' | 'change' | 'spread' | 'median' | 'profit'
+    type SortDirection = 'desc' | 'asc' | 'none'
     const [sortBy, setSortBy] = useState<SortKey>('none')
-    const [sortAsc, setSortAsc] = useState(false)
+    const [sortDirection, setSortDirection] = useState<SortDirection>('none')
     
     const handleSort = (key: SortKey) => {
         if (sortBy === key) {
-            setSortAsc(!sortAsc)
+            // Cycle through: desc -> asc -> none
+            if (sortDirection === 'desc') {
+                setSortDirection('asc')
+            } else if (sortDirection === 'asc') {
+                setSortDirection('none')
+                setSortBy('none')
+            }
         } else {
+            // Start with descending on first click
             setSortBy(key)
-            setSortAsc(false)
+            setSortDirection('desc')
         }
     }
 
@@ -485,7 +493,7 @@ export function TradesTable({ data, loading, onReload, onRefresh, accountName }:
 
     // Sort data based on selected sort key
     const sortedData = (() => {
-        if (sortBy === 'none') return data
+        if (sortBy === 'none' || sortDirection === 'none') return data
         
         const sorted = [...data].sort((a, b) => {
             let aVal: number | null = null
@@ -535,7 +543,7 @@ export function TradesTable({ data, loading, onReload, onRefresh, accountName }:
             if (aVal === null) return 1
             if (bVal === null) return -1
             
-            return sortAsc ? aVal - bVal : bVal - aVal
+            return sortDirection === 'asc' ? aVal - bVal : bVal - aVal
         })
         
         return sorted
@@ -605,9 +613,9 @@ export function TradesTable({ data, loading, onReload, onRefresh, accountName }:
                         title="Sort by price change percentage"
                     >
                         <span style={{ textTransform: 'capitalize' }}>change</span>
-                        {sortBy === 'change' && (
+                        {sortBy === 'change' && sortDirection !== 'none' && (
                             <span style={{ fontSize: '10px' }}>
-                                {sortAsc ? '▲' : '▼'}
+                                {sortDirection === 'asc' ? '▲' : '▼'}
                             </span>
                         )}
                     </div>
@@ -631,9 +639,9 @@ export function TradesTable({ data, loading, onReload, onRefresh, accountName }:
                             title="Sort by spread"
                         >
                             <span style={{ textTransform: 'capitalize' }}>spread</span>
-                            {sortBy === 'spread' && (
+                            {sortBy === 'spread' && sortDirection !== 'none' && (
                                 <span style={{ fontSize: '10px' }}>
-                                    {sortAsc ? '▲' : '▼'}
+                                    {sortDirection === 'asc' ? '▲' : '▼'}
                                 </span>
                             )}
                         </div>
@@ -654,9 +662,9 @@ export function TradesTable({ data, loading, onReload, onRefresh, accountName }:
                             title="Sort by median rate"
                         >
                             <span style={{ textTransform: 'capitalize' }}>median</span>
-                            {sortBy === 'median' && (
+                            {sortBy === 'median' && sortDirection !== 'none' && (
                                 <span style={{ fontSize: '10px' }}>
-                                    {sortAsc ? '▲' : '▼'}
+                                    {sortDirection === 'asc' ? '▲' : '▼'}
                                 </span>
                             )}
                         </div>
@@ -677,9 +685,9 @@ export function TradesTable({ data, loading, onReload, onRefresh, accountName }:
                             title="Sort by profit margin"
                         >
                             <span style={{ textTransform: 'capitalize' }}>profit</span>
-                            {sortBy === 'profit' && (
+                            {sortBy === 'profit' && sortDirection !== 'none' && (
                                 <span style={{ fontSize: '10px' }}>
-                                    {sortAsc ? '▲' : '▼'}
+                                    {sortDirection === 'asc' ? '▲' : '▼'}
                                 </span>
                             )}
                         </div>
