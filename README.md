@@ -1,6 +1,6 @@
 # ⚡ PoE Flip Tool
 
-A modern, real-time market analysis tool for **Path of Exile** currency trading. Track profitable flip opportunities with live market data, beautiful UI, and intelligent caching.
+A modern, real-time market analysis tool for **Path of Exile** currency trading. Track profitable flip opportunities with live market data, beautiful UI, and intelligent caching. Includes automated portfolio tracking to monitor your wealth over time.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
@@ -12,11 +12,30 @@ A modern, real-time market analysis tool for **Path of Exile** currency trading.
 
 ---
 
+## 📸 Screenshots
+
+### Market Trading View
+![Trade Overview](image-0.png)
+_Live market data with profit calculations, trend indicators, and click-to-copy whisper messages_
+
+### Profit Tracker
+![Profit Tracker](image-1.png)_Automated portfolio snapshots tracking your wealth over time with detailed currency breakdown_
+
+### System Dashboard
+![System Analytics](image-2.png)_Monitor cache status, database statistics, and historical data retention_
+
+### Login Page
+![Login Page](image-3.png)
+_Login Page to prevent unauthorized use of Backend API_
+
+---
+
 ## 🚀 Features
 
 - **Real-time Market Data**: Stream trade data asynchronously with Server-Sent Events (SSE)
+- **Automated Portfolio Tracking**: Take snapshots of your stash every 15 minutes to track wealth over time
 - **Smart Caching**: Intelligent TTL-based caching to avoid rate limits and reduce API load
-- **SQLite Persistence**: Cache and price history survive application restarts with automatic database management
+- **SQLite Persistence**: Cache, price history, and portfolio snapshots survive application restarts
 - **Price Trend Indicators**: Inline micro sparkline + % change (direction colored) showing recent momentum
 - **Historical Price Tracking**: 7-day (configurable) price history with automatic snapshot recording
 - **Hot/Cold Trade Marking**: Mark specific trade pairs as "hot" for closer monitoring with visual indicators
@@ -29,24 +48,33 @@ A modern, real-time market analysis tool for **Path of Exile** currency trading.
 - **Professional Design**: Dark theme, smooth transitions, custom scrollbars with SVG styling
 - **Rate Limit Protection**: Soft throttling and hard blocking to prevent API lockouts
 - **System Dashboard**: In-app view to inspect cache entries, expirations, historical snapshot counts, and database stats
+- **Fly.io Ready**: One-command deployment to Fly.io with persistent volume storage for your database
 
 ---
 
 ## 📦 Tech Stack
 
 ### Backend
-- **FastAPI**: High-performance async Python web framework
-- **Uvicorn**: ASGI server for FastAPI
-- **Pydantic**: Data validation and settings management
-- **Requests**: HTTP library for PoE Trade API calls
-- **Python-dotenv**: Environment variable management
-- **SQLite3**: Built-in Python database for persistent storage (cache and price history)
+- **FastAPI** (>=0.110.0): High-performance async Python web framework
+- **Uvicorn** (>=0.29.0): ASGI server for FastAPI with standard extensions
+- **Pydantic** (>=1.10.0, <2.0): Data validation and settings management
+- **Requests** (>=2.31.0): HTTP library for PoE Trade API calls
+- **Python-dotenv** (>=1.0.0): Environment variable management
+- **SQLite3**: Built-in Python database for persistent storage (cache, price history, and portfolio snapshots)
 
 ### Frontend
-- **React 18**: Modern UI library with hooks
-- **TypeScript**: Type-safe JavaScript
-- **Vite**: Lightning-fast build tool and dev server
+- **React** (^18.3.1): Modern UI library with hooks
+- **React-DOM** (^18.3.1): React rendering for web
+- **TypeScript** (^5.6.3): Type-safe JavaScript
+- **Vite** (^5.4.8): Lightning-fast build tool and dev server
+- **@vitejs/plugin-react** (^4.3.1): Official React plugin for Vite
 - **CSS3**: Custom styling with modern animations
+
+### Deployment
+- **Fly.io**: Container hosting with persistent volumes
+- **GitHub Actions**: Automated CI/CD pipelines
+- **GitHub Pages**: Static frontend hosting
+- **Docker**: Containerization for backend and frontend
 
 ---
 
@@ -63,12 +91,19 @@ git clone https://github.com/Pepijnvdliefvoort/poe-flip-tool.git
 cd poe-flip-tool
 ```
 
-### 2. Backend Setup
+### Backend Setup
 ```bash
 cd backend
 
 # Install dependencies
-py -m pip install -r requirements.txt
+pip install -r requirements.txt
+
+# Required packages:
+# - fastapi>=0.110.0
+# - uvicorn[standard]>=0.29.0
+# - pydantic>=1.10.0,<2.0
+# - requests>=2.31.0
+# - python-dotenv>=1.0.0
 
 # Create .env file with your PoE credentials
 # Copy the example file and edit it
@@ -92,12 +127,22 @@ See `.env.example` for detailed descriptions of all options.
 
 The backend API will be available at `http://localhost:8000`
 
-### 3. Frontend Setup
+### Frontend Setup
 ```bash
 cd frontend
 
 # Install dependencies
 npm install
+
+# Required packages (automatically installed):
+# - react ^18.3.1
+# - react-dom ^18.3.1
+# - typescript ^5.6.3
+# - vite ^5.4.8
+# - @vitejs/plugin-react ^4.3.1
+# - @types/react ^18.3.5
+# - @types/react-dom ^18.3.0
+# - @types/node ^24.8.1
 
 # Create .env file (optional - for highlighting your own trades)
 # Copy the example file and edit it
@@ -115,6 +160,70 @@ npm run dev
 See `frontend/.env.example` for the template.
 
 The frontend will be available at `http://localhost:5173`
+
+---
+
+## ☁️ Quick Deploy to Fly.io
+
+Deploy the backend to Fly.io with persistent database storage:
+
+### Prerequisites
+- Install [Fly CLI](https://fly.io/docs/hands-on/install-flyctl/)
+- Sign up for Fly.io: `fly auth signup` (or login: `fly auth login`)
+
+### One-Time Setup
+```bash
+# Navigate to project root
+cd poe-flip-tool
+
+# Create a persistent volume for the SQLite database (3GB in Amsterdam region)
+fly volumes create db_data --region ams --size 3
+
+# Set your PoE credentials as secrets
+fly secrets set POESESSID="your_session_id_here"
+fly secrets set CF_CLEARANCE="your_clearance_token_here"
+
+# Optional: Set authentication credentials
+fly secrets set AUTH_USERNAME="your_username"
+fly secrets set AUTH_PASSWORD_HASH="your_sha256_hash"
+```
+
+### Deploy
+```bash
+# Manual deployment
+fly deploy
+
+# Your backend will be available at: https://your-app-name.fly.dev
+```
+
+### Update Frontend
+After deploying the backend, update your frontend to use the Fly.io backend URL:
+
+```bash
+# In frontend/.env or during build
+VITE_API_BASE=https://your-app-name.fly.dev
+```
+
+### Automated Deployment
+The repository includes a GitHub Action (`.github/workflows/deploy-fly.yml`) that automatically deploys to Fly.io when you push to main/develop:
+
+1. Create a Fly.io deploy token: `fly tokens create deploy`
+2. Add it to GitHub repository secrets as `FLY_API_TOKEN`
+3. Push to trigger automatic deployment
+
+### Monitoring
+```bash
+# View logs
+fly logs
+
+# Check status
+fly status
+
+# SSH into the container
+fly ssh console
+```
+
+The database persists across deployments in the mounted volume at `/data/poe_cache.db`.
 
 ---
 
@@ -156,7 +265,19 @@ The frontend will be available at `http://localhost:5173`
 - `GET /api/value/latest` - Latest divine-equivalent value for each unique configured currency (uses historical snapshots; returns null values if no data). Used by Profit Tracker.
 
 ### Profit Tracker
-The Profit Tracker tab ("Profit" in the header) lets you take manual portfolio snapshots of your `currency` stash tab, persist them, and view a historical chart of total Divine value over time.
+The Profit Tracker tab ("Profit" in the header) lets you monitor your portfolio value over time with automatic snapshots of your `currency` stash tab.
+
+**How It Works:**
+- **Automatic Snapshots**: The backend takes a snapshot every 15 minutes (configurable via `PORTFOLIO_SNAPSHOT_INTERVAL_SECONDS`)
+- **Page Updates**: The display updates every 5 seconds to show snapshot age and countdown
+- **Manual Snapshots**: Click "Snapshot Now" to take an immediate snapshot
+- **Persistent History**: All snapshots are stored in the database and survive restarts
+- **Value Tracking**: Shows total Divine Orb value and per-currency breakdown
+
+**Configuration:**
+- Set your `account_name` in the Config Panel for the tracker to fetch your stash
+- Ensure you have a stash tab named "currency" (case-insensitive)
+- The backend must be running for automatic snapshots (works even when the page is closed)
 
 New Portfolio Endpoints:
 - `POST /api/portfolio/snapshot` – Computes current stash quantities + valuations and stores a snapshot row (returns the snapshot payload).
@@ -528,30 +649,25 @@ Set `VITE_API_BASE` to your deployed backend URL. If omitted, the frontend may d
 
 Add more jobs (lint, security scan, mypy) as the project grows.
 
-### 🚀 Fly.io Quick Deploy
+### 🚀 Fly.io Deployment
 
-Included files: `fly.toml`, `deploy-fly.yml` workflow.
+See the [☁️ Quick Deploy to Fly.io](#️-quick-deploy-to-flyio) section above for detailed deployment instructions.
 
-Initial setup (one time):
+**Quick Reference:**
+
+Initial setup:
 ```bash
-fly auth signup   # or: fly auth login
+fly auth login
 fly volumes create db_data --region ams --size 3
 fly secrets set POESESSID=your_sess CF_CLEARANCE=your_clearance
 ```
 
-Deploy manually (local):
+Deploy:
 ```bash
 fly deploy
 ```
 
-Or trigger GitHub Action (ensure `FLY_API_TOKEN` secret configured):
-```bash
-fly tokens create deploy   # copy value -> GitHub repo settings -> Secrets -> Actions -> FLY_API_TOKEN
-```
-
-Environment variable `DB_PATH` points SQLite to the mounted volume at `/data/poe_cache.db`.
-
-After deploy, update frontend build env `VITE_API_BASE=https://poe-flip-backend.fly.dev` and redeploy Pages.
+The `fly.toml` configuration file and `deploy-fly.yml` GitHub Action workflow are included in the repository for automated deployments.
 
 ---
 
