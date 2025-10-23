@@ -10,10 +10,6 @@ primary_region = "ams"
 
 [env]
   LOG_LEVEL = "INFO"
-  CACHE_TTL_SECONDS = "900"
-  HISTORY_RETENTION_HOURS = "168"
-  HISTORY_MAX_POINTS = "100"
-  SPARKLINE_POINTS = "30"
   # SQLite path (mounted volume). persistence.py reads DB_PATH
   DB_PATH = "/data/poe_cache.db"
 

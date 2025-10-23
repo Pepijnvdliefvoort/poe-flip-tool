@@ -38,7 +38,7 @@ jobs:
       - name: Build frontend
         working-directory: frontend
         env:
-          VITE_BACKEND_URL: https://poe-flip-backend.fly.dev
+          VITE_API_BASE: ${{ secrets.VITE_API_BASE }}
         run: npm run build
 
       - name: Upload artifact
