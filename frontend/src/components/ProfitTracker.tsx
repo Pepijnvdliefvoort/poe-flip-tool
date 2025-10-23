@@ -490,7 +490,8 @@ const ProfitTracker: React.FC = () => {
                   style={{letterSpacing:0.5}}
                 >
                   {(() => {
-                    const mirrorEntry = snapshot.breakdown.find(b => b.currency === 'Mirror of Kalandra');
+                    // Find mirror in breakdown using the short key 'mirror'
+                    const mirrorEntry = snapshot.breakdown.find(b => b.currency === 'mirror');
                     const divPerMirror = mirrorEntry?.divine_per_unit || 80;
                     return formatNumber((grandTotal ?? 0) / divPerMirror, 3);
                   })()}
