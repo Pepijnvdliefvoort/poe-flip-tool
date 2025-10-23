@@ -171,7 +171,7 @@ const ProfitTracker: React.FC = () => {
     const id = setInterval(() => {
       if (snapshot?.timestamp) updateSnapshotAge(snapshot.timestamp);
       updateCountdown();
-    }, 5000); // update every 5s
+    }, 1000); // update every 1s
     return () => clearInterval(id);
   }, [snapshot]);
 
