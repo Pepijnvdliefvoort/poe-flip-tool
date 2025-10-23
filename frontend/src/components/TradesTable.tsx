@@ -495,8 +495,8 @@ export function TradesTable({
             }, 30000) // 30s
         }
         
-        // Start the timer immediately
-        schedule()
+        // Fetch immediately on mount, then start the timer
+        fetchLatestCached().then(schedule)
         
         return () => {
             console.log('[TradesTable] Stopping 30s refresh timer')

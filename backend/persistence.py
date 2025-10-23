@@ -410,14 +410,26 @@ class DatabasePersistence:
             log.error(f"Failed to save portfolio snapshot: {e}")
             return False
 
-    def load_portfolio_history(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
-        """Return chronological portfolio snapshots (oldest -> newest)."""
+    def load_portfolio_history(self, limit: Optional[int] = None, hours: Optional[float] = None) -> List[Dict[str, Any]]:
+        """Return chronological portfolio snapshots (oldest -> newest).
+        
+        Args:
+            limit: Maximum number of snapshots to return (most recent N)
+            hours: Only return snapshots from the last N hours
+        """
         try:
+            # Build query with optional time filter
+            where_clause = ""
+            if hours is not None:
+                # Calculate cutoff timestamp
+                cutoff = datetime.utcnow() - timedelta(hours=hours)
+                where_clause = f"WHERE timestamp >= '{cutoff.isoformat()}'"
+            
             # When limit is specified, get the most recent N snapshots (DESC), then reverse for chronological order
             if limit:
-                query = f'SELECT timestamp, total_divines, breakdown_json FROM portfolio_snapshots ORDER BY timestamp DESC LIMIT {int(limit)}'
+                query = f'SELECT timestamp, total_divines, breakdown_json FROM portfolio_snapshots {where_clause} ORDER BY timestamp DESC LIMIT {int(limit)}'
             else:
-                query = 'SELECT timestamp, total_divines, breakdown_json FROM portfolio_snapshots ORDER BY timestamp ASC'
+                query = f'SELECT timestamp, total_divines, breakdown_json FROM portfolio_snapshots {where_clause} ORDER BY timestamp ASC'
             
             cursor = self.conn.cursor()
             cursor.execute(query)

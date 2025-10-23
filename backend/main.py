@@ -1081,9 +1081,19 @@ def create_portfolio_snapshot(api_key: str = Depends(verify_api_key)):
     }
 
 @app.get("/api/portfolio/history")
-def portfolio_history(limit: int = Query(None, ge=1, le=1000), api_key: str = Depends(verify_api_key)):
+def portfolio_history(
+    limit: int = Query(None, ge=1, le=1000),
+    hours: float = Query(None, ge=0),
+    api_key: str = Depends(verify_api_key)
+):
+    """Get portfolio snapshot history.
+    
+    Args:
+        limit: Maximum number of snapshots to return
+        hours: Only return snapshots from the last N hours (e.g., 1, 6, 24, 168 for 1 week)
+    """
     from persistence import db
-    rows = db.load_portfolio_history(limit)
+    rows = db.load_portfolio_history(limit, hours)
     return {
         'count': len(rows),
         'snapshots': rows,

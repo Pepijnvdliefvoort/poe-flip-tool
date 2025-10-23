@@ -110,8 +110,11 @@ export const Api = {
     async portfolioSnapshot(): Promise<PortfolioSnapshot> {
         return j(await fetch(`${BASE}/api/portfolio/snapshot`, { method: 'POST', headers: headers() }))
     },
-    async portfolioHistory(limit?: number): Promise<PortfolioHistoryResponse> {
-        const qp = limit ? `?limit=${limit}` : ''
+    async portfolioHistory(limit?: number, hours?: number): Promise<PortfolioHistoryResponse> {
+        const params = new URLSearchParams();
+        if (limit) params.append('limit', String(limit));
+        if (hours !== undefined) params.append('hours', String(hours));
+        const qp = params.toString() ? `?${params.toString()}` : '';
         return j(await fetch(`${BASE}/api/portfolio/history${qp}`, { headers: headers() }))
     }
 }
