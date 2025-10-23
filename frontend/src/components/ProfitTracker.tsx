@@ -450,11 +450,52 @@ const ProfitTracker: React.FC = () => {
                   )}
                 </g>
               ))}
-              <text x={donutSvg.cx} y={donutSvg.cy - 14} textAnchor="middle" fontSize={22} fill="#e2e8f0" fontWeight={700} style={{letterSpacing:1,dominantBaseline:'middle'}}>
-                {formatNumber(grandTotal, 2)}
-              </text>
-              <image href={`${import.meta.env.BASE_URL}currency/divine.webp`} x={donutSvg.cx - 16} y={donutSvg.cy + 4} width="32" height="32" />
-              <text x={donutSvg.cx} y={donutSvg.cy + 54} textAnchor="middle" fontSize={14} fill="#94a3b8">Total</text>
+              {/* Divine Orbs total with icon */}
+              <g transform={`translate(${donutSvg.cx}, ${donutSvg.cy - 18})`}>
+                <image 
+                  href={`${import.meta.env.BASE_URL}currency/divine.webp`} 
+                  x={-50} 
+                  y={-12} 
+                  width="24" 
+                  height="24" 
+                />
+                <text 
+                  x={-20} 
+                  y={4} 
+                  textAnchor="start" 
+                  fontSize={18} 
+                  fill="#e2e8f0" 
+                  fontWeight={700}
+                  style={{letterSpacing:0.5}}
+                >
+                  {formatNumber(grandTotal, 2)}
+                </text>
+              </g>
+              {/* Mirror equivalent with icon */}
+              <g transform={`translate(${donutSvg.cx}, ${donutSvg.cy + 12})`}>
+                <image 
+                  href={`${import.meta.env.BASE_URL}currency/mirror.webp`} 
+                  x={-50} 
+                  y={-12} 
+                  width="24" 
+                  height="24" 
+                />
+                <text 
+                  x={-20} 
+                  y={4} 
+                  textAnchor="start" 
+                  fontSize={16} 
+                  fill="#94a3b8" 
+                  fontWeight={600}
+                  style={{letterSpacing:0.5}}
+                >
+                  {(() => {
+                    const mirrorEntry = snapshot.breakdown.find(b => b.currency === 'Mirror of Kalandra');
+                    const divPerMirror = mirrorEntry?.divine_per_unit || 80;
+                    return formatNumber((grandTotal ?? 0) / divPerMirror, 3);
+                  })()}
+                </text>
+              </g>
             </svg>
           </div>
         </div>
