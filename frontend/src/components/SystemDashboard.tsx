@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Api } from '../api'
 import type { CacheSummary, CacheStatus, HistoryResponse, ConfigData, DatabaseStats } from '../types'
+import { useAuth } from '../hooks/useAuth'
 
 export function SystemDashboard() {
+  const { isAuthenticated } = useAuth()
   const [cacheSummary, setCacheSummary] = useState<CacheSummary | null>(null)
   const [cacheStatus, setCacheStatus] = useState<CacheStatus | null>(null)
   const [dbStats, setDbStats] = useState<DatabaseStats | null>(null)
@@ -18,6 +20,8 @@ export function SystemDashboard() {
 
   // Fetch base data
   useEffect(() => {
+    if (!isAuthenticated) return
+    
     const load = async () => {
       try {
         const [cfg, summary, status, db] = await Promise.all([
@@ -38,11 +42,11 @@ export function SystemDashboard() {
       }
     }
     load()
-  }, [])
+  }, [isAuthenticated])
 
   // Auto refresh summary/status (now every second, skipping if previous still in-flight)
   useEffect(() => {
-    if (!autoRefresh) return
+    if (!autoRefresh || !isAuthenticated) return
     let cancelled = false
     const tick = async () => {
       if (cancelled) return
@@ -72,10 +76,12 @@ export function SystemDashboard() {
     }
     tick()
     return () => { cancelled = true }
-  }, [autoRefresh])
+  }, [autoRefresh, isAuthenticated])
 
   // Fetch history when selection changes
   useEffect(() => {
+    if (!isAuthenticated) return
+    
     const run = async () => {
       if (!selectedPair) return
       setLoadingHistory(true)
@@ -90,7 +96,7 @@ export function SystemDashboard() {
       }
     }
     run()
-  }, [selectedPair])
+  }, [selectedPair, isAuthenticated])
 
   const pairs = config?.trades || []
 

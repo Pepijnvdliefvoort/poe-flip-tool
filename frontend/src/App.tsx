@@ -7,6 +7,7 @@ import { ConfigPanel } from './components/ConfigPanel'
 import { SystemDashboard } from './components/SystemDashboard'
 import ProfitTracker from './components/ProfitTracker'
 import { Login } from './components/Login'
+import { useAuth } from './hooks/useAuth'
 
 // Backend base resolution (same logic as api.ts)
 const BASE =
@@ -73,7 +74,7 @@ function calculateProfitMargins(pairs: PairSummary[]): PairSummary[] {
 }
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const { isAuthenticated, setIsAuthenticated } = useAuth()
   const [data, setData] = useState<TradesResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [topN, setTopN] = useState(5)
@@ -89,14 +90,9 @@ export default function App() {
   const eventSourceRef = useRef<EventSource | null>(null)
   const initialLoadRef = useRef(true) // Track if this is the initial load
 
-  // Check if already authenticated on mount
-  useEffect(() => {
-    const hasToken = !!getApiKey();
-    setIsAuthenticated(hasToken);
-  }, []);
-
   const handleLogin = (token: string) => {
     sessionStorage.setItem('api_key', token);
+    setIsAuthenticated(true);
     // Reload the page to initialize the authenticated state
     window.location.reload();
   };

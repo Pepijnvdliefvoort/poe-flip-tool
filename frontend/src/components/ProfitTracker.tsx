@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Api } from '../api';
 import type { PortfolioSnapshot, PortfolioHistoryResponse } from '../types';
+import { useAuth } from '../hooks/useAuth';
 
 // Format numbers with thousand/million separators and fixed decimals
 // Uses European format: dots for thousands, commas for decimals (e.g., 12.330,91)
@@ -19,6 +20,7 @@ function parseUtcTimestamp(ts: string): number {
 }
 
 const ProfitTracker: React.FC = () => {
+  const { isAuthenticated } = useAuth()
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +49,8 @@ const ProfitTracker: React.FC = () => {
   const lastSnapshotRef = useRef<string | null>(null);
 
   async function takeSnapshot(source: 'initial' | 'interval' | 'visibility') {
+    if (!isAuthenticated) return
+    
     console.log(`[ProfitTracker] (${source}) snapshot request starting @ ${new Date().toISOString()}`);
     setLoading(true); setError(null);
     try {
@@ -71,6 +75,8 @@ const ProfitTracker: React.FC = () => {
   }
 
   async function loadHistory(limit = 120) {
+    if (!isAuthenticated) return
+    
     setHistoryLoading(true); setError(null);
     try {
       const h = await Api.portfolioHistory(limit);
@@ -82,9 +88,14 @@ const ProfitTracker: React.FC = () => {
     }
   }
 
-  useEffect(() => { loadHistory(); }, []);
+  useEffect(() => { 
+    if (!isAuthenticated) return
+    loadHistory(); 
+  }, [isAuthenticated]);
 
   useEffect(() => {
+    if (!isAuthenticated) return
+    
     // Initial snapshot
     takeSnapshot('initial');
     // Use self-rescheduling timer to reduce drift
@@ -119,7 +130,7 @@ const ProfitTracker: React.FC = () => {
     };
     document.addEventListener('visibilitychange', onVis);
     return () => { cancelled = true; document.removeEventListener('visibilitychange', onVis); };
-  }, []);
+  }, [isAuthenticated]);
 
   function updateSnapshotAge(ts: string) {
     const then = parseUtcTimestamp(ts);

@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { Api } from '../api'
 import type { ConfigData } from '../types'
 import { CurrencyIcon } from './CurrencyIcon'
+import { useAuth } from '../hooks/useAuth'
 
 export function ConfigPanel({ 
     onChanged, 
@@ -24,6 +25,7 @@ export function ConfigPanel({
     onAutoRefreshChanged: (value: boolean) => void;
     onAccountNameChanged?: (name: string | null) => void;
 }) {
+    const { isAuthenticated } = useAuth()
     const [cfg, setCfg] = useState<ConfigData | null>(null)
     const [get, setGet] = useState('')
     const [pay, setPay] = useState('')
@@ -33,11 +35,13 @@ export function ConfigPanel({
     const accountNameDebounceRef = useRef<number | null>(null)
 
     useEffect(() => { 
+        if (!isAuthenticated) return
+        
         Api.getConfig().then(c => { 
             setCfg(c)
             setAccountNameDraft(c.account_name || '')
         }) 
-    }, [])
+    }, [isAuthenticated])
 
     async function changeLeague(newLeague: string) {
         const next = await Api.patchLeague(newLeague)
