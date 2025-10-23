@@ -413,9 +413,12 @@ class DatabasePersistence:
     def load_portfolio_history(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """Return chronological portfolio snapshots (oldest -> newest)."""
         try:
-            query = 'SELECT timestamp, total_divines, breakdown_json FROM portfolio_snapshots ORDER BY timestamp ASC'
+            # When limit is specified, get the most recent N snapshots (DESC), then reverse for chronological order
             if limit:
-                query += f' LIMIT {int(limit)}'
+                query = f'SELECT timestamp, total_divines, breakdown_json FROM portfolio_snapshots ORDER BY timestamp DESC LIMIT {int(limit)}'
+            else:
+                query = 'SELECT timestamp, total_divines, breakdown_json FROM portfolio_snapshots ORDER BY timestamp ASC'
+            
             cursor = self.conn.cursor()
             cursor.execute(query)
             rows = []
@@ -435,6 +438,11 @@ class DatabasePersistence:
                 except Exception as e:
                     log.warning(f"Skipping invalid portfolio snapshot row: {e}")
                     continue
+            
+            # If we used DESC order (limit case), reverse to get chronological order
+            if limit:
+                rows.reverse()
+            
             return rows
         except Exception as e:
             log.error(f"Failed to load portfolio history: {e}")
