@@ -234,7 +234,7 @@ export function Login({ onLogin }: LoginProps) {
             color: 'var(--muted)',
             marginBottom: '10px'
           }}>
-            Contact me on Discord:
+            Contact me on Discord
           </p>
           <button
             onClick={handleDiscordCopy}
