@@ -117,4 +117,8 @@ export const Api = {
         const qp = params.toString() ? `?${params.toString()}` : '';
         return j(await fetch(`${BASE}/api/portfolio/history${qp}`, { headers: headers() }))
     }
+    ,
+    async portfolioSchedulerStatus(): Promise<{ enabled: boolean; interval_seconds: number; last_success: string | null; last_error: string | null; last_total_divines: number | null; runs: number }> {
+        return j(await fetch(`${BASE}/api/portfolio/scheduler_status`, { headers: headers() }))
+    }
 }

@@ -33,6 +33,8 @@ const ProfitTracker: React.FC = () => {
   const [snapshotAge, setSnapshotAge] = useState<string>('');
   const [nextCountdown, setNextCountdown] = useState<string>('');
   const nextSnapshotAtRef = useRef<number | null>(null);
+  const schedulerIntervalRef = useRef<number | null>(null);
+  const schedulerLastSuccessRef = useRef<number | null>(null);
   const [timeRange, setTimeRange] = useState<number | null>(null); // hours, null = all
   const [showCustomRange, setShowCustomRange] = useState(false);
   const [customStartDate, setCustomStartDate] = useState('');
@@ -100,6 +102,7 @@ const ProfitTracker: React.FC = () => {
     // Load history and latest snapshot on mount
     loadHistory();
     loadLatestSnapshot();
+    loadSchedulerStatus();
   }, [isAuthenticated, timeRange]); // Re-load when time range changes
 
   async function loadLatestSnapshot() {
@@ -124,41 +127,83 @@ const ProfitTracker: React.FC = () => {
         });
         lastSnapshotRef.current = latest.timestamp;
         updateSnapshotAge(latest.timestamp);
+        // If we know scheduler interval, derive next snapshot time from latest
+        if (schedulerIntervalRef.current) {
+          const lastTs = parseUtcTimestamp(latest.timestamp);
+          nextSnapshotAtRef.current = lastTs + schedulerIntervalRef.current * 1000;
+        }
       }
     } catch (e: any) {
       console.error('[ProfitTracker] Failed to load latest snapshot:', e);
     }
   }
 
+  async function loadSchedulerStatus() {
+    if (!isAuthenticated) return;
+    try {
+      const s = await Api.portfolioSchedulerStatus();
+      if (s.enabled) {
+        schedulerIntervalRef.current = s.interval_seconds;
+        if (s.last_success) {
+          const lastSuccess = parseUtcTimestamp(s.last_success);
+          schedulerLastSuccessRef.current = lastSuccess;
+          // Establish next snapshot time
+          nextSnapshotAtRef.current = lastSuccess + s.interval_seconds * 1000;
+          // If we have a newer locally loaded snapshot, override
+          if (lastSnapshotRef.current) {
+            const localLast = parseUtcTimestamp(lastSnapshotRef.current);
+            if (localLast > lastSuccess) {
+              nextSnapshotAtRef.current = localLast + s.interval_seconds * 1000;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[ProfitTracker] Failed to fetch scheduler status, using local timing fallback');
+    }
+  }
+
   useEffect(() => {
     if (!isAuthenticated) return
     
-    // Don't take initial snapshot - only on interval or manual trigger
-    // Use self-rescheduling timer to reduce drift
+    // Use backend scheduler interval if available; fallback to 15m
+    const intervalMs = (schedulerIntervalRef.current || (15 * 60)) * 1000;
     let cancelled = false;
     const scheduleNext = () => {
       if (cancelled) return;
       const now = Date.now();
-      // ensure nextSnapshotAtRef is set; initialize to 15 minutes from now if not set
       if (!nextSnapshotAtRef.current) {
-        nextSnapshotAtRef.current = now + 15 * 60 * 1000;
+        if (lastSnapshotRef.current) {
+          nextSnapshotAtRef.current = parseUtcTimestamp(lastSnapshotRef.current) + intervalMs;
+        } else if (schedulerLastSuccessRef.current) {
+          nextSnapshotAtRef.current = schedulerLastSuccessRef.current + intervalMs;
+        } else {
+          nextSnapshotAtRef.current = now + intervalMs;
+        }
       }
       const delay = Math.max(1000, nextSnapshotAtRef.current - now);
       setTimeout(async () => {
         if (cancelled) return;
-        await takeSnapshot('interval');
+        // Refresh latest snapshot & history (backend scheduler created new snapshot)
+        await loadLatestSnapshot();
+        await loadHistory();
+        if (lastSnapshotRef.current) {
+          nextSnapshotAtRef.current = parseUtcTimestamp(lastSnapshotRef.current) + intervalMs;
+        } else {
+          nextSnapshotAtRef.current = Date.now() + intervalMs;
+        }
         scheduleNext();
       }, delay);
     };
     scheduleNext();
-    // Visibility re-check (if user was away longer than interval, take immediate one)
-    const intervalMs = 15 * 60 * 1000;
+    // Visibility re-check: if away longer than interval, refresh immediately
     const onVis = () => {
       if (document.visibilityState === 'visible') {
         if (!lastSnapshotRef.current) return; // Don't auto-snapshot if never taken before
         const last = parseUtcTimestamp(lastSnapshotRef.current);
         if (Date.now() - last > intervalMs - 5000) {
-          takeSnapshot('visibility');
+          loadLatestSnapshot();
+          loadHistory();
         }
       }
     };
