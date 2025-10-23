@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, memo } from 'react'
 import '../spinner.css'
 import { PairSummary } from '../types'
+import { Api } from '../api'
 // (Reverted) Removed cache watch specific imports/logic
 
 // Tiny sparkline component using SVG with optional baseline alignment
@@ -446,8 +447,63 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
     )
 }
 
-export function TradesTable({ data, loading, onReload, onRefresh, accountName }: { data: PairSummary[]; loading: boolean; onReload: (index: number) => void; onRefresh?: () => void; accountName?: string | null }) {
+export function TradesTable({ 
+    data, 
+    loading, 
+    onReload, 
+    onRefresh, 
+    accountName,
+    onDataUpdate 
+}: { 
+    data: PairSummary[]; 
+    loading: boolean; 
+    onReload: (index: number) => void; 
+    onRefresh?: () => void; 
+    accountName?: string | null;
+    onDataUpdate?: (newData: PairSummary[]) => void;
+}) {
     const [allExpanded, setAllExpanded] = useState(false)
+
+    // Page-specific 30s refresh timer - updates to latest cached data
+    useEffect(() => {
+        if (!onDataUpdate) return
+        
+        console.log('[TradesTable] Starting 30s refresh timer')
+        
+        let cancelled = false
+        let timer: number | null = null
+        
+        const fetchLatestCached = async () => {
+            if (cancelled) return
+            try {
+                console.log('[TradesTable] Fetching latest cached data (30s timer)...')
+                const response = await Api.latestCached(5)
+                if (!cancelled && response.results) {
+                    console.log('[TradesTable] Received cached data with timestamps:', 
+                        response.results.map(r => `${r.get}/${r.pay}: ${r.fetched_at}`))
+                    onDataUpdate(response.results)
+                }
+            } catch (error) {
+                console.error('[TradesTable] Failed to fetch latest cached data:', error)
+            }
+        }
+        
+        const schedule = () => {
+            if (cancelled) return
+            timer = window.setTimeout(() => {
+                fetchLatestCached().then(schedule)
+            }, 30000) // 30s
+        }
+        
+        // Start the timer immediately
+        schedule()
+        
+        return () => {
+            console.log('[TradesTable] Stopping 30s refresh timer')
+            cancelled = true
+            if (timer !== null) clearTimeout(timer)
+        }
+    }, [onDataUpdate])
 
     // Always display all metrics
     const selectedMetrics = ['spread', 'median', 'profit'] as const

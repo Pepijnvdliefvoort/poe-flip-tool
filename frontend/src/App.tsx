@@ -8,6 +8,7 @@ import { SystemDashboard } from './components/SystemDashboard'
 import ProfitTracker from './components/ProfitTracker'
 import { Login } from './components/Login'
 import { useAuth } from './hooks/useAuth'
+import { useGlobalPolling } from './hooks/useGlobalPolling'
 
 // Backend base resolution (same logic as api.ts)
 const BASE =
@@ -75,11 +76,14 @@ function calculateProfitMargins(pairs: PairSummary[]): PairSummary[] {
 
 export default function App() {
   const { isAuthenticated, setIsAuthenticated } = useAuth()
+  
+  // Initialize global polling timers (15-minute intervals for cache refresh and portfolio snapshots)
+  useGlobalPolling(isAuthenticated)
+  
   const [data, setData] = useState<TradesResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [topN, setTopN] = useState(5)
-  // Restored legacy autoRefresh (60s interval) after reverting Cache Watch toggle
-  const [autoRefresh, setAutoRefresh] = useState(true)
+  // Removed autoRefresh state - no longer needed with global polling
   const [rateLimit, setRateLimit] = useState<{ blocked: boolean; block_remaining: number; rules: Record<string, { current: number; limit: number; reset_s: number }[]> } | null>(null)
   const [nearLimit, setNearLimit] = useState(false)
   const [rateLimitDisplay, setRateLimitDisplay] = useState<{ blocked: boolean; block_remaining: number; rules: Record<string, { current: number; limit: number; reset_s: number }[]> } | null>(null)
@@ -204,33 +208,6 @@ export default function App() {
     return () => { eventSourceRef.current?.close() } 
   }, [load, isAuthenticated])
 
-  // Legacy 60s auto-refresh loop (lightweight: forces new SSE cycle)
-  useEffect(() => {
-    if (!isAuthenticated || !autoRefresh || view !== 'trades') return;
-    let cancelled = false;
-    let timer: number | null = null;
-    const tick = () => {
-      if (cancelled) return;
-      // Skip if currently rate limited hard
-      if (rateLimit && rateLimit.blocked) {
-        schedule();
-        return;
-      }
-      // Trigger a forced refresh of all pairs
-      load(true);
-      schedule();
-    };
-    const schedule = () => {
-      if (cancelled) return;
-      timer = window.setTimeout(tick, 60000); // 60s
-    };
-    schedule();
-    return () => {
-      cancelled = true;
-      if (timer !== null) clearTimeout(timer);
-    };
-  }, [autoRefresh, load, isAuthenticated, view, rateLimit]);
-
 
   const reloadPair = async (index: number) => {
     if (!data) return;
@@ -266,6 +243,25 @@ export default function App() {
     }
     updateRateLimit();
   }
+
+  // Stable callback for TradesTable data updates
+  const handleTradeDataUpdate = useCallback((newResults: PairSummary[]) => {
+    console.log('[App] Trade page data update callback called with timestamps:', 
+      newResults.map(r => `${r.get}/${r.pay}: ${r.fetched_at}`))
+    // Force new object reference to ensure React re-renders with updated timestamps
+    const updatedResults = calculateProfitMargins(newResults.map(r => ({ ...r })))
+    console.log('[App] Setting updated data with timestamps:', 
+      updatedResults.map(r => `${r.get}/${r.pay}: ${r.fetched_at}`))
+    setData(prev => {
+      const newData = prev ? { 
+        league: prev.league,
+        pairs: prev.pairs,
+        results: updatedResults 
+      } : null
+      console.log('[App] Data state updated')
+      return newData
+    })
+  }, []) // Empty deps - this function doesn't depend on any props/state
 
   const updateHotStatus = (index: number, hot: boolean) => {
     setData(prev => {
@@ -414,7 +410,14 @@ export default function App() {
       {view === 'trades' ? (
         <div className="main-layout">
           <div className="trades-section">
-            <TradesTable data={data?.results || []} loading={loading} onReload={reloadPair} onRefresh={() => load(true)} accountName={accountName} />
+            <TradesTable 
+              data={data?.results || []} 
+              loading={loading} 
+              onReload={reloadPair} 
+              onRefresh={() => load(true)} 
+              accountName={accountName} 
+              onDataUpdate={handleTradeDataUpdate}
+            />
           </div>
           <aside className="config-sidebar">
             <ConfigPanel 
@@ -424,8 +427,6 @@ export default function App() {
               onPairRemoved={removePair} 
               topN={topN} 
               onTopNChanged={setTopN}
-                autoRefresh={autoRefresh}
-                onAutoRefreshChanged={setAutoRefresh}
               onAccountNameChanged={setAccountName}
             />
           </aside>

@@ -76,8 +76,18 @@ export const Api = {
     async refreshOne(index: number, top_n = 5): Promise<PairSummary> {
         return j(await fetch(`${BASE}/api/trades/refresh_one?index=${index}&top_n=${top_n}`, { method: 'POST', headers: headers() }))
     },
+    async refreshCacheAll(top_n = 5): Promise<TradesResponse> {
+        return j(await fetch(`${BASE}/api/trades/refresh_cache?top_n=${top_n}`, { method: 'POST', headers: headers() }))
+    },
+    async latestCached(top_n = 5): Promise<TradesResponse> {
+        return j(await fetch(`${BASE}/api/trades/latest_cached?top_n=${top_n}`, { headers: headers() }))
+    },
     async cacheStatus(): Promise<CacheStatus> {
         return j(await fetch(`${BASE}/api/cache/status`, { headers: headers() }))
+    },
+    async cacheExpiring(threshold?: number): Promise<{ check_interval_seconds: number; count: number; pairs: { index: number; have: string; want: string; seconds_remaining: number; expired: boolean }[] }> {
+        const qp = threshold !== undefined ? `?threshold=${threshold}` : ''
+        return j(await fetch(`${BASE}/api/cache/expiring${qp}`, { headers: headers() }))
     },
     async cacheSummary(): Promise<CacheSummary> {
         return j(await fetch(`${BASE}/api/cache/summary`, { headers: headers() }))

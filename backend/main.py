@@ -119,6 +119,9 @@ async def verify_api_key(
 
 CONFIG_PATH = Path(__file__).parent / "config.json"
 
+# Cache check interval (used by frontend to know how often to poll)
+CACHE_CHECK_INTERVAL_SECONDS = int(os.getenv("CACHE_CHECK_INTERVAL_SECONDS", "30"))  # default 30s
+
 # ============================================================================
 # Background Portfolio Snapshot Scheduler
 # ============================================================================
@@ -523,6 +526,152 @@ async def stream_trades(
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
+@app.post("/api/trades/refresh_cache")
+async def refresh_cache_all(
+    top_n: int = Query(5, ge=1, le=20),
+    api_key: str = Depends(verify_api_key)
+):
+    """
+    Refresh cache for all configured trade pairs (non-forced, uses cache TTL).
+    Returns the current cached state after refresh attempts.
+    Used by global 15-minute polling timer.
+    """
+    cfg = _load_config()
+    results = []
+    
+    for idx, t in enumerate(cfg.trades):
+        if rate_limiter.blocked:
+            summary = PairSummary(
+                index=idx,
+                get=t.get,
+                pay=t.pay,
+                hot=t.hot,
+                status="rate_limited",
+                listings=[],
+                best_rate=None,
+                count_returned=0,
+                fetched_at=datetime.utcnow().isoformat() + 'Z',
+            )
+        else:
+            # Use cache-aware fetch (will only hit API if cache expired)
+            listings, was_cached, fetched_at = fetch_listings_with_cache(
+                league=cfg.league,
+                have=t.pay,
+                want=t.get,
+                top_n=top_n,
+            )
+            if listings is None:
+                summary = PairSummary(
+                    index=idx,
+                    get=t.get,
+                    pay=t.pay,
+                    hot=t.hot,
+                    status="error",
+                    listings=[],
+                    best_rate=None,
+                    count_returned=0,
+                    fetched_at=(fetched_at.isoformat() + 'Z') if fetched_at else datetime.utcnow().isoformat() + 'Z',
+                )
+            else:
+                from trade_logic import historical_cache
+                if not was_cached and listings:
+                    historical_cache.add_snapshot(cfg.league, t.pay, t.get, listings)
+                trend_data = historical_cache.get_trend(cfg.league, t.pay, t.get)
+                summary = PairSummary(
+                    index=idx,
+                    get=t.get,
+                    pay=t.pay,
+                    hot=t.hot,
+                    status="ok",
+                    listings=listings,
+                    best_rate=(listings[0].rate if listings else None),
+                    count_returned=len(listings),
+                    trend=trend_data,
+                    fetched_at=(fetched_at.isoformat() + 'Z') if fetched_at else datetime.utcnow().isoformat() + 'Z',
+                )
+        results.append(summary)
+    
+    # Calculate profit margins
+    _calculate_profit_margins(results)
+    
+    return TradesResponse(
+        league=cfg.league,
+        pairs=len(results),
+        results=results
+    )
+
+
+@app.get("/api/trades/latest_cached")
+def get_latest_cached(
+    top_n: int = Query(5, ge=1, le=20),
+    api_key: str = Depends(verify_api_key)
+):
+    """
+    Retrieve latest cached data for all configured pairs without triggering any API calls.
+    Returns cached data even if expired. Used by 60s trade page refresh timer.
+    """
+    from trade_logic import cache, historical_cache
+    from datetime import datetime
+    
+    cfg = _load_config()
+    results = []
+    now = datetime.utcnow()
+    
+    for idx, t in enumerate(cfg.trades):
+        key = (cfg.league, t.pay, t.get)
+        entry = cache._store.get(key)
+        
+        if entry and entry.data:
+            trend_data = historical_cache.get_trend(cfg.league, t.pay, t.get)
+            listings = entry.data[:top_n]
+            
+            # Calculate cache age for logging
+            seconds_remaining = (entry.expires_at - now).total_seconds()
+            cache_age_seconds = (now - entry.fetched_at).total_seconds() if entry.fetched_at else 0
+            
+            log.debug(
+                f"[latest_cached] {t.pay}->{t.get}: "
+                f"fetched={entry.fetched_at.isoformat() if entry.fetched_at else 'unknown'} "
+                f"age={cache_age_seconds:.1f}s remaining={seconds_remaining:.1f}s"
+            )
+            
+            summary = PairSummary(
+                index=idx,
+                get=t.get,
+                pay=t.pay,
+                hot=t.hot,
+                status="ok",
+                listings=listings,
+                best_rate=(listings[0].rate if listings else None),
+                count_returned=len(listings),
+                trend=trend_data,
+                fetched_at=(entry.fetched_at.isoformat() + 'Z') if entry.fetched_at else None,
+            )
+        else:
+            # No cache entry - return empty result
+            summary = PairSummary(
+                index=idx,
+                get=t.get,
+                pay=t.pay,
+                hot=t.hot,
+                status="error",
+                listings=[],
+                best_rate=None,
+                count_returned=0,
+                fetched_at=None,
+            )
+        results.append(summary)
+    
+    # Calculate profit margins
+    _calculate_profit_margins(results)
+    
+    return TradesResponse(
+        league=cfg.league,
+        pairs=len(results),
+        results=results
+    )
+
+
 @app.get("/api/history/{have}/{want}")
 def get_price_history(
     have: str,
@@ -583,6 +732,54 @@ def get_cache_status(api_key: str = Depends(verify_api_key)):
             })
     
     return {"pairs": result}
+
+
+@app.get("/api/cache/expiring")
+def get_expiring_pairs(
+    api_key: str = Depends(verify_api_key)
+):
+    """
+    Get list of pair indices that are expired (seconds_remaining <= 0).
+    Used by the check interval timer to determine which pairs need refreshing.
+    """
+    from trade_logic import cache
+    from datetime import datetime
+    
+    cfg = _load_config()
+    expired = []
+    
+    now = datetime.utcnow()
+    
+    for idx, trade in enumerate(cfg.trades):
+        key = (cfg.league, trade.pay, trade.get)
+        entry = cache._store.get(key)
+        
+        if entry:
+            seconds_remaining = (entry.expires_at - now).total_seconds()
+            # Only include if expired
+            if seconds_remaining <= 0:
+                expired.append({
+                    "index": idx,
+                    "have": trade.pay,
+                    "want": trade.get,
+                    "seconds_remaining": 0,
+                    "expired": True
+                })
+        else:
+            # No cache entry means it needs refreshing
+            expired.append({
+                "index": idx,
+                "have": trade.pay,
+                "want": trade.get,
+                "seconds_remaining": 0,
+                "expired": True
+            })
+    
+    return {
+        "check_interval_seconds": CACHE_CHECK_INTERVAL_SECONDS,
+        "count": len(expired),
+        "pairs": expired
+    }
 
 
 @app.get("/api/rate_limit")
