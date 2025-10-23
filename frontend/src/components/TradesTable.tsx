@@ -157,16 +157,16 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
     useEffect(() => {
         setIsExpanded(defaultExpanded)
     }, [defaultExpanded])
-    
+
     const copyWhisper = (whisper: string, index: number) => {
         // Clear any existing timeout
         if (timeoutRef.current !== null) {
             clearTimeout(timeoutRef.current)
         }
-        
+
         navigator.clipboard.writeText(whisper)
         setCopiedIndex(index)
-        
+
         // Set new timeout
         timeoutRef.current = window.setTimeout(() => {
             setCopiedIndex(null)
@@ -187,9 +187,9 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
     const rates = pair.listings.map(l => l.rate)
     const medianRate = (() => {
         if (!rates.length) return null
-        const sorted = [...rates].sort((a,b)=>a-b)
-        const mid = Math.floor(sorted.length/2)
-        return sorted.length % 2 ? sorted[mid] : (sorted[mid-1]+sorted[mid])/2
+        const sorted = [...rates].sort((a, b) => a - b)
+        const mid = Math.floor(sorted.length / 2)
+        return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
     })()
     const spreadPct = (() => {
         if (rates.length < 2) return null
@@ -213,9 +213,9 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
         profit: {
             label: 'Profit',
             value: pair.profit_margin_pct !== null && pair.profit_margin_pct !== undefined ? (
-                <span className="summary-value" style={{ 
+                <span className="summary-value" style={{
                     color: pair.profit_margin_pct > 0 ? '#10b981' : pair.profit_margin_pct < 0 ? '#ef4444' : undefined,
-                    fontWeight: pair.profit_margin_pct !== 0 ? 600 : undefined 
+                    fontWeight: pair.profit_margin_pct !== 0 ? 600 : undefined
                 }}>
                     {pair.profit_margin_pct > 0 ? '+' : ''}{formatNumberEU(pair.profit_margin_pct, 1, 1)}%
                 </span>
@@ -230,8 +230,8 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
 
     return (
         <div style={{ position: 'relative', maxWidth: '100%', overflow: 'hidden' }}>
-            <div 
-                className="pair-card" 
+            <div
+                className="pair-card"
                 style={{
                     border: pair.hot ? '2px solid var(--warning)' : '1px solid var(--border)',
                     background: pair.hot ? 'rgba(245, 158, 11, 0.05)' : undefined,
@@ -251,212 +251,213 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
                             <CurrencyIcon currency={pair.get} size={20} />
                         </span>
 
-                    {/* Summary - always shown in header row */}
-                    <div className="collapsed-summary" style={{ display: 'grid', gridAutoFlow: 'column', alignItems: 'center', gap: 4 }}>
-                        {loading && pair.listings.length === 0 ? (
+                        {/* Summary - always shown in header row */}
+                        <div className="collapsed-summary" style={{ display: 'grid', gridAutoFlow: 'column', alignItems: 'center', gap: 4 }}>
+                            {loading && pair.listings.length === 0 ? (
+                                <>
+                                    <span className="row-spinner"><span className="spinner small"></span></span>
+                                    <span className="blurred-line" style={{ width: 40 }}></span>
+                                    <span className="blurred-line" style={{ width: 30 }}></span>
+                                    <span className="blurred-line" style={{ width: 24 }}></span>
+                                </>
+                            ) : <>
+                                {/* Fixed-width columns to align sparkline start across rows */}
+                                <span className="summary-item" style={{ width: 120, display: 'inline-flex', gap: 4, alignItems: 'center', whiteSpace: 'nowrap', paddingRight: 8 }}>
+                                    {pair.best_rate ? (
+                                        <>
+                                            <span className="summary-label" style={{ fontWeight: 600 }}>Best:</span>
+                                            <span className="summary-value" style={{ color: 'var(--accent)', fontWeight: 700, fontSize: '14px', display: 'inline-block', paddingRight: 4 }}>{formatRate(pair.best_rate, pair.pay, pair.get)}</span>
+                                        </>
+                                    ) : null}
+                                </span>
+                                <span className="summary-item" style={{ width: 130, display: 'inline-flex', gap: 6, alignItems: 'center', justifyContent: 'flex-start' }}>
+                                    {pair.trend && pair.trend.sparkline && pair.trend.sparkline.length >= 2 ? (
+                                        <>
+                                            <Sparkline values={pair.trend.sparkline} width={70} relativeFirst={true} globalMaxAbsDelta={globalMaxAbsDelta} adaptive={true} visualCapPct={40} />
+                                            <span style={{ fontSize: '11px', minWidth: 10, textAlign: 'right', color: pair.trend.direction === 'up' ? '#ef4444' : pair.trend.direction === 'down' ? '#10b981' : '#6b7280', whiteSpace: 'nowrap' }}>
+                                                {pair.trend.change_percent > 0 ? '+' : ''}{formatNumberEU(pair.trend.change_percent, 1, 1)}%
+                                            </span>
+                                        </>
+                                    ) : null}
+                                </span>
+                                {/* Selected metrics (max 3) - always 3 equal columns */}
+                                <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 390, border: 'none', height: 20 }}>
+                                    <tbody>
+                                        <tr>
+                                            {Array.from({ length: 3 }).map((_, idx) => {
+                                                const key = selectedMetrics[idx]
+                                                if (!key) return <td key={idx} style={{ width: 130, border: 'none', height: 20, padding: 0 }}></td>
+                                                const def = metricRenderers[key]
+                                                if (!def || !def.value) return <td key={idx} style={{ width: 130, border: 'none', height: 20, padding: 0 }}></td>
+                                                return (
+                                                    <td key={idx} style={{ width: 130, border: 'none', height: 20, padding: 0 }} title={def.tooltip}>
+                                                        <span className="summary-item" style={{ display: 'inline-flex', gap: 4, alignItems: 'center', whiteSpace: 'nowrap', fontSize: '12px' }}>
+                                                            <span className="summary-label">{def.label}:</span>
+                                                            {def.value}
+                                                        </span>
+                                                    </td>
+                                                )
+                                            })}
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </>}
+                        </div>
+                    </div>
+
+                    <div className="pair-controls">
+                        <div className="pair-status">
+                            {pair.status === 'ok' && <span className="status-badge ok">✓ Online</span>}
+                            {pair.status === 'loading' && <span className="status-badge loading">Loading...</span>}
+                            {pair.status === 'error' && <span className="status-badge error">Error</span>}
+                            {pair.status === 'invalid' && <span className="status-badge error">Invalid</span>}
+                            {pair.status === 'rate_limited' && <span className="status-badge blocked">Rate Limited</span>}
+                            {pair.fetched_at && (
+                                <span style={{ fontSize: '11px', opacity: 0.5, marginLeft: 8 }}>
+                                    {new Date(pair.fetched_at).toLocaleTimeString()}
+                                </span>
+                            )}
+                        </div>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                            <button className="collapse-btn" onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded) }}>
+                                {isExpanded ? '▼' : '▶'}
+                            </button>
+                            <button
+                                className="collapse-btn"
+                                disabled={pair.status === 'loading'}
+                                onClick={(e) => { e.stopPropagation(); onReload(pair.index) }}
+                                style={{ fontSize: '14px' }}
+                                title="Refresh this trade"
+                            >⟳</button>
+                        </div>
+                    </div>
+                </div>
+
+                {isExpanded && (
+                    <>
+                        {pair.status === 'rate_limited' ? (
+                            <div className="listings-section">
+                                <div className="listings-header">Temporarily rate limited – listings unavailable.</div>
+                            </div>
+                        ) : loading && pair.listings.length === 0 ? (
+                            <div className="listings-section">
+                                <div className="listings-header">Loading…</div>
+                                <div className="listings-list">
+                                    <div className="listing-card compact">
+                                        <span className="row-spinner"><span className="spinner small"></span></span>
+                                        <span className="blurred-line" style={{ width: 50 }}></span>
+                                        <span className="blurred-line" style={{ width: 40 }}></span>
+                                        <span className="blurred-line" style={{ width: 60 }}></span>
+                                        <span className="blurred-line" style={{ width: 80 }}></span>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
                             <>
-                                <span className="row-spinner"><span className="spinner small"></span></span>
-                                <span className="blurred-line" style={{ width: 40 }}></span>
-                                <span className="blurred-line" style={{ width: 30 }}></span>
-                                <span className="blurred-line" style={{ width: 24 }}></span>
-                            </>
-                        ) : <>
-                            {/* Fixed-width columns to align sparkline start across rows */}
-                            <span className="summary-item" style={{ width: 120, display: 'inline-flex', gap: 4, alignItems: 'center', whiteSpace: 'nowrap', paddingRight: 8 }}>
-                                {pair.best_rate ? (
-                                    <>
-                                        <span className="summary-label" style={{ fontWeight: 600 }}>Best:</span>
-                                        <span className="summary-value" style={{ color: 'var(--accent)', fontWeight: 700, fontSize: '14px', display: 'inline-block', paddingRight: 4 }}>{formatRate(pair.best_rate, pair.pay, pair.get)}</span>
-                                    </>
-                                ) : null}
-                            </span>
-                            <span className="summary-item" style={{ width: 130, display: 'inline-flex', gap: 6, alignItems: 'center', justifyContent: 'flex-start' }}>
-                                {pair.trend && pair.trend.sparkline && pair.trend.sparkline.length >= 2 ? (
-                                    <>
-                                        <Sparkline values={pair.trend.sparkline} width={70} relativeFirst={true} globalMaxAbsDelta={globalMaxAbsDelta} adaptive={true} visualCapPct={40} />
-                                        <span style={{ fontSize: '11px', minWidth: 10, textAlign: 'right', color: pair.trend.direction === 'up' ? '#ef4444' : pair.trend.direction === 'down' ? '#10b981' : '#6b7280', whiteSpace: 'nowrap' }}>
-                                            {pair.trend.change_percent > 0 ? '+' : ''}{formatNumberEU(pair.trend.change_percent, 1, 1)}%
-                                        </span>
-                                    </>
-                                ) : null}
-                            </span>
-                            {/* Selected metrics (max 3) - always 3 equal columns */}
-                            <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 390, border: 'none', height: 20 }}>
-                                <tbody>
-                                    <tr>
-                                        {Array.from({ length: 3 }).map((_, idx) => {
-                                            const key = selectedMetrics[idx]
-                                            if (!key) return <td key={idx} style={{ width: 130, border: 'none', height: 20, padding: 0 }}></td>
-                                            const def = metricRenderers[key]
-                                            if (!def || !def.value) return <td key={idx} style={{ width: 130, border: 'none', height: 20, padding: 0 }}></td>
+                                <div className="listings-section">
+                                    <div className="listings-header">
+                                        {pair.listings.length} Listing{pair.listings.length !== 1 ? 's' : ''}
+                                    </div>
+                                    <div className="listings-list">
+                                        {pair.listings.map((l, i) => {
+                                            // Support multiple names from runtime config (comma-separated). Fallback to env only if prop not provided.
+                                            const sourceNames = accountName && accountName.length > 0 ? accountName : (import.meta.env.VITE_ACCOUNT_NAME || '')
+                                            const rawNames: string[] = sourceNames
+                                                .split(',')
+                                                .map((s: string) => s.trim())
+                                                .filter((val: string) => !!val)
+                                            // Normalize: remove optional #discriminator suffix (e.g., Name#1234) for comparison
+                                            const normalize = (name?: string | null) => (name || '').replace(/#\d{3,5}$/, '').toLowerCase()
+                                            const normalizedListing = normalize(l.account_name)
+                                            const isMyTrade = rawNames.some((envName: string) => {
+                                                const nEnv: string = normalize(envName)
+                                                return nEnv && nEnv === normalizedListing
+                                            })
                                             return (
-                                                <td key={idx} style={{ width: 130, border: 'none', height: 20, padding: 0 }} title={def.tooltip}>
-                                                    <span className="summary-item" style={{ display: 'inline-flex', gap: 4, alignItems: 'center', whiteSpace: 'nowrap', fontSize: '12px' }}>
-                                                        <span className="summary-label">{def.label}:</span>
-                                                        {def.value}
+                                                <div
+                                                    key={i}
+                                                    className="listing-card compact"
+                                                    style={{
+                                                        background: isMyTrade ? 'rgba(59, 130, 246, 0.12)' : undefined,
+                                                        border: isMyTrade ? '1px solid rgba(59, 130, 246, 0.35)' : undefined,
+                                                        boxShadow: isMyTrade ? '0 0 8px rgba(59, 130, 246, 0.2)' : undefined
+                                                    }}
+                                                >
+                                                    <span className="listing-rank" style={{ width: '40px', flexShrink: 0 }}>#{i + 1}</span>
+                                                    <span className="rate-value" style={{ color: 'var(--accent)', fontWeight: 500, width: '60px', flexShrink: 0 }}>{formatRate(l.rate, l.have_currency, l.want_currency)}</span>
+                                                    <span className="rate-currencies" style={{ width: '50px', flexShrink: 0 }}>
+                                                        <CurrencyIcon currency={l.have_currency} size={14} />
+                                                        <span>/</span>
+                                                        <CurrencyIcon currency={l.want_currency} size={14} />
                                                     </span>
-                                                </td>
+                                                    <span className="listing-info" style={{ width: '80px', flexShrink: 0 }}>
+                                                        <span className="meta-label">Stock:</span>
+                                                        <span className="meta-value">{l.stock ?? '∞'}</span>
+                                                    </span>
+                                                    <span className="listing-info" style={{ width: '180px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                        <span className="meta-label">Account:</span>
+                                                        <span className="meta-value" style={{ fontWeight: isMyTrade ? 600 : undefined }}>{l.account_name || 'Unknown'}</span>
+                                                    </span>
+                                                    {l.whisper && (
+                                                        <span
+                                                            className="whisper-message"
+                                                            onClick={() => copyWhisper(l.whisper!, i)}
+                                                            style={{
+                                                                flex: '1 1 auto',
+                                                                minWidth: 0,
+                                                                padding: '4px 8px',
+                                                                fontSize: '11px',
+                                                                background: copiedIndex === i ? 'rgba(16, 185, 129, 0.3)' : 'rgba(100, 100, 100, 0.1)',
+                                                                color: copiedIndex === i ? 'rgba(255, 255, 255, 0.5)' : 'rgba(156, 163, 175, 0.7)',
+                                                                border: '1px solid',
+                                                                borderColor: copiedIndex === i ? 'rgba(16, 185, 129, 0.9)' : 'rgba(156, 163, 175, 0.3)',
+                                                                borderRadius: '4px',
+                                                                cursor: 'pointer',
+                                                                fontFamily: 'monospace',
+                                                                transition: 'all 0.3s ease-in-out',
+                                                                userSelect: 'none',
+                                                                overflow: 'hidden',
+                                                                textOverflow: 'ellipsis',
+                                                                whiteSpace: 'nowrap',
+                                                                alignSelf: 'center',
+                                                                textAlign: 'center'
+                                                            }}
+                                                            title={copiedIndex === i ? 'Copied!' : `Click to copy: ${l.whisper}`}
+                                                        >
+                                                            {copiedIndex === i ? '✓ Copied!' : l.whisper}
+                                                        </span>
+                                                    )}
+                                                    {l.indexed && (
+                                                        <span className="listing-time">
+                                                            {new Date(l.indexed).toLocaleString()}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             )
                                         })}
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </>}
-                    </div>
-                </div>
-
-                <div className="pair-controls">
-                    <div className="pair-status">
-                        {pair.status === 'ok' && <span className="status-badge ok">✓ Online</span>}
-                        {pair.status === 'loading' && <span className="status-badge loading">Loading...</span>}
-                        {pair.status === 'error' && <span className="status-badge error">Error</span>}
-                        {pair.status === 'invalid' && <span className="status-badge error">Invalid</span>}
-                        {pair.status === 'rate_limited' && <span className="status-badge blocked">Rate Limited</span>}
-                        {pair.fetched_at && (
-                            <span style={{ fontSize: '11px', opacity: 0.5, marginLeft: 8 }}>
-                                {new Date(pair.fetched_at).toLocaleTimeString()}
-                            </span>
+                                    </div>
+                                </div>
+                            </>
                         )}
-                    </div>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                        <button className="collapse-btn" onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded) }}>
-                            {isExpanded ? '▼' : '▶'}
-                        </button>
-                        <button
-                            className="collapse-btn"
-                            disabled={pair.status === 'loading'}
-                            onClick={(e) => { e.stopPropagation(); onReload(pair.index) }}
-                            style={{ fontSize: '14px' }}
-                            title="Refresh this trade"
-                        >⟳</button>
-                    </div>
-                </div>
+                    </>
+                )}
             </div>
-
-            {isExpanded && (
-                <>
-                    {pair.status === 'rate_limited' ? (
-                        <div className="listings-section">
-                            <div className="listings-header">Temporarily rate limited – listings unavailable.</div>
-                        </div>
-                    ) : loading && pair.listings.length === 0 ? (
-                        <div className="listings-section">
-                            <div className="listings-header">Loading…</div>
-                            <div className="listings-list">
-                                <div className="listing-card compact">
-                                    <span className="row-spinner"><span className="spinner small"></span></span>
-                                    <span className="blurred-line" style={{ width: 50 }}></span>
-                                    <span className="blurred-line" style={{ width: 40 }}></span>
-                                    <span className="blurred-line" style={{ width: 60 }}></span>
-                                    <span className="blurred-line" style={{ width: 80 }}></span>
-                                </div>
-                            </div>
-                        </div>
-                    ) : (
-                        <>
-                            <div className="listings-section">
-                                <div className="listings-header">
-                                    {pair.listings.length} Listing{pair.listings.length !== 1 ? 's' : ''}
-                                </div>
-                                <div className="listings-list">
-                                    {pair.listings.map((l, i) => {
-                                        // Support multiple names from runtime config (comma-separated). Fallback to env only if prop not provided.
-                                        const sourceNames = accountName && accountName.length > 0 ? accountName : (import.meta.env.VITE_ACCOUNT_NAME || '')
-                                        const rawNames: string[] = sourceNames
-                                            .split(',')
-                                            .map((s: string) => s.trim())
-                                            .filter((val: string) => !!val)
-                                        // Normalize: remove optional #discriminator suffix (e.g., Name#1234) for comparison
-                                        const normalize = (name?: string | null) => (name || '').replace(/#\d{3,5}$/,'').toLowerCase()
-                                        const normalizedListing = normalize(l.account_name)
-                                        const isMyTrade = rawNames.some((envName: string) => {
-                                            const nEnv: string = normalize(envName)
-                                            return nEnv && nEnv === normalizedListing
-                                        })
-                                        return (
-                                        <div 
-                                            key={i} 
-                                            className="listing-card compact"
-                                            style={{
-                                                background: isMyTrade ? 'rgba(59, 130, 246, 0.12)' : undefined,
-                                                border: isMyTrade ? '1px solid rgba(59, 130, 246, 0.35)' : undefined,
-                                                boxShadow: isMyTrade ? '0 0 8px rgba(59, 130, 246, 0.2)' : undefined
-                                            }}
-                                        >
-                                            <span className="listing-rank" style={{ width: '40px', flexShrink: 0 }}>#{i + 1}</span>
-                                            <span className="rate-value" style={{ color: 'var(--accent)', fontWeight: 500, width: '60px', flexShrink: 0 }}>{formatRate(l.rate, l.have_currency, l.want_currency)}</span>
-                                            <span className="rate-currencies" style={{ width: '50px', flexShrink: 0 }}>
-                                                <CurrencyIcon currency={l.have_currency} size={14} />
-                                                <span>/</span>
-                                                <CurrencyIcon currency={l.want_currency} size={14} />
-                                            </span>
-                                            <span className="listing-info" style={{ width: '80px', flexShrink: 0 }}>
-                                                <span className="meta-label">Stock:</span>
-                                                <span className="meta-value">{l.stock ?? '∞'}</span>
-                                            </span>
-                                            <span className="listing-info" style={{ width: '180px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                <span className="meta-label">Account:</span>
-                                                <span className="meta-value" style={{ fontWeight: isMyTrade ? 600 : undefined }}>{l.account_name || 'Unknown'}</span>
-                                            </span>
-                                            {l.whisper && (
-                                                <span
-                                                    className="whisper-message"
-                                                    onClick={() => copyWhisper(l.whisper!, i)}
-                                                    style={{
-                                                        flex: '1 1 auto',
-                                                        minWidth: 0,
-                                                        padding: '4px 8px',
-                                                        fontSize: '11px',
-                                                        background: copiedIndex === i ? 'rgba(16, 185, 129, 0.3)' : 'rgba(100, 100, 100, 0.1)',
-                                                        color: copiedIndex === i ? 'rgba(255, 255, 255, 0.5)' : 'rgba(156, 163, 175, 0.7)',
-                                                        border: '1px solid',
-                                                        borderColor: copiedIndex === i ? 'rgba(16, 185, 129, 0.9)' : 'rgba(156, 163, 175, 0.3)',
-                                                        borderRadius: '4px',
-                                                        cursor: 'pointer',
-                                                        fontFamily: 'monospace',
-                                                        transition: 'all 0.3s ease-in-out',
-                                                        userSelect: 'none',
-                                                        overflow: 'hidden',
-                                                        textOverflow: 'ellipsis',
-                                                        whiteSpace: 'nowrap',
-                                                        alignSelf: 'center',
-                                                        textAlign: 'center'
-                                                    }}
-                                                    title={copiedIndex === i ? 'Copied!' : `Click to copy: ${l.whisper}`}
-                                                >
-                                                    {copiedIndex === i ? '✓ Copied!' : l.whisper}
-                                                </span>
-                                            )}
-                                            {l.indexed && (
-                                                <span className="listing-time">
-                                                    {new Date(l.indexed).toLocaleString()}
-                                                </span>
-                                            )}
-                                        </div>
-                                    )})}
-                                </div>
-                            </div>
-                        </>
-                    )}
-                </>
-            )}
-        </div>
         </div>
     )
 }
 
 export function TradesTable({ data, loading, onReload, onRefresh, accountName }: { data: PairSummary[]; loading: boolean; onReload: (index: number) => void; onRefresh?: () => void; accountName?: string | null }) {
     const [allExpanded, setAllExpanded] = useState(false)
-    
+
     // Always display all metrics
     const selectedMetrics = ['spread', 'median', 'profit'] as const
-    
+
     // Sort state - three states: descending, ascending, neutral (none)
     type SortKey = 'none' | 'change' | 'spread' | 'median' | 'profit'
     type SortDirection = 'desc' | 'asc' | 'none'
     const [sortBy, setSortBy] = useState<SortKey>('none')
     const [sortDirection, setSortDirection] = useState<SortDirection>('none')
-    
+
     const handleSort = (key: SortKey) => {
         if (sortBy === key) {
             // Cycle through: desc -> asc -> none
@@ -494,11 +495,11 @@ export function TradesTable({ data, loading, onReload, onRefresh, accountName }:
     // Sort data based on selected sort key
     const sortedData = (() => {
         if (sortBy === 'none' || sortDirection === 'none') return data
-        
+
         const sorted = [...data].sort((a, b) => {
             let aVal: number | null = null
             let bVal: number | null = null
-            
+
             switch (sortBy) {
                 case 'change':
                     aVal = a.trend?.change_percent ?? null
@@ -537,15 +538,15 @@ export function TradesTable({ data, loading, onReload, onRefresh, accountName }:
                     bVal = b.profit_margin_pct ?? null
                     break
             }
-            
+
             // Handle null values (push to end)
             if (aVal === null && bVal === null) return 0
             if (aVal === null) return 1
             if (bVal === null) return -1
-            
+
             return sortDirection === 'asc' ? aVal - bVal : bVal - aVal
         })
-        
+
         return sorted
     })()
 
@@ -579,12 +580,12 @@ export function TradesTable({ data, loading, onReload, onRefresh, accountName }:
                         )}
                     </div>
                 </div>
-                
+
                 {/* Column Headers - matches data row structure exactly */}
-                <div style={{ 
-                    display: 'grid', 
-                    gridAutoFlow: 'column', 
-                    alignItems: 'center', 
+                <div style={{
+                    display: 'grid',
+                    gridAutoFlow: 'column',
+                    alignItems: 'center',
                     gap: 4,
                     padding: '8px 24px 8px 0px',
                     background: 'var(--bg-secondary)',
@@ -594,13 +595,13 @@ export function TradesTable({ data, loading, onReload, onRefresh, accountName }:
                 }}>
                     {/* Spacer for Best column */}
                     <div style={{ width: '170px' }}></div>
-                    
+
                     {/* Change column header */}
-                    <div 
-                        style={{ 
+                    <div
+                        style={{
                             width: '0px',
-                            display: 'flex', 
-                            alignItems: 'center', 
+                            display: 'flex',
+                            alignItems: 'center',
                             gap: 4,
                             cursor: 'pointer',
                             userSelect: 'none',
@@ -619,14 +620,14 @@ export function TradesTable({ data, loading, onReload, onRefresh, accountName }:
                             </span>
                         )}
                     </div>
-                    
+
                     {/* Metrics table headers */}
                     <div style={{ width: '540px', display: 'flex', gap: 0 }}>
-                        <div 
-                            style={{ 
+                        <div
+                            style={{
                                 width: '130px',
-                                display: 'flex', 
-                                alignItems: 'center', 
+                                display: 'flex',
+                                alignItems: 'center',
                                 gap: 4,
                                 cursor: 'pointer',
                                 userSelect: 'none',
@@ -645,11 +646,11 @@ export function TradesTable({ data, loading, onReload, onRefresh, accountName }:
                                 </span>
                             )}
                         </div>
-                        <div 
-                            style={{ 
+                        <div
+                            style={{
                                 width: '130px',
-                                display: 'flex', 
-                                alignItems: 'center', 
+                                display: 'flex',
+                                alignItems: 'center',
                                 gap: 4,
                                 cursor: 'pointer',
                                 userSelect: 'none',
@@ -668,11 +669,11 @@ export function TradesTable({ data, loading, onReload, onRefresh, accountName }:
                                 </span>
                             )}
                         </div>
-                        <div 
-                            style={{ 
+                        <div
+                            style={{
                                 width: '310px',
-                                display: 'flex', 
-                                alignItems: 'center', 
+                                display: 'flex',
+                                alignItems: 'center',
                                 gap: 4,
                                 cursor: 'pointer',
                                 userSelect: 'none',

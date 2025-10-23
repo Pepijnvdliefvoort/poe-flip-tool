@@ -51,14 +51,16 @@ const ProfitTracker: React.FC = () => {
   async function takeSnapshot(source: 'initial' | 'interval' | 'visibility') {
     if (!isAuthenticated) return
     
-    console.log(`[ProfitTracker] (${source}) snapshot request starting @ ${new Date().toISOString()}`);
     setLoading(true); setError(null);
     try {
       const snap = await Api.portfolioSnapshot();
   lastSnapshotRef.current = snap.timestamp;
   // schedule next snapshot 15 minutes from NOW (not from saved timestamp to avoid drift)
   nextSnapshotAtRef.current = Date.now() + 15 * 60 * 1000;
-      console.log(`[ProfitTracker] (${source}) snapshot saved total=${snap.total_divines.toFixed(3)} timestamp=${snap.timestamp}`);
+      // Log only for scheduled 15-minute intervals
+      if (source === 'interval') {
+        console.log(`[ProfitTracker] Snapshot taken: ${snap.total_divines.toFixed(3)} Divine Orbs @ ${new Date(snap.timestamp).toLocaleTimeString()}`);
+      }
   setSnapshot(snap);
   updateSnapshotAge(snap.timestamp);
       setHistory(h => {
@@ -67,7 +69,7 @@ const ProfitTracker: React.FC = () => {
         return { ...h, snapshots: [...h.snapshots, { timestamp: snap.timestamp, total_divines: snap.total_divines, breakdown: snap.breakdown }] };
       });
     } catch (e: any) {
-      console.error(`[ProfitTracker] (${source}) snapshot error:`, e);
+      console.error(`[ProfitTracker] snapshot error:`, e);
       setError(e.message || 'Failed to create snapshot');
     } finally {
       setLoading(false);
@@ -110,7 +112,6 @@ const ProfitTracker: React.FC = () => {
       const delay = Math.max(1000, nextSnapshotAtRef.current - now);
       setTimeout(async () => {
         if (cancelled) return;
-        console.log('[ProfitTracker] interval tick');
         await takeSnapshot('interval');
         scheduleNext();
       }, delay);
@@ -123,7 +124,6 @@ const ProfitTracker: React.FC = () => {
         if (!lastSnapshotRef.current) { takeSnapshot('visibility'); return; }
         const last = parseUtcTimestamp(lastSnapshotRef.current);
         if (Date.now() - last > intervalMs - 5000) {
-          console.log('[ProfitTracker] visibility snapshot trigger');
           takeSnapshot('visibility');
         }
       }
