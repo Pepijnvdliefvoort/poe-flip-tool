@@ -7,7 +7,8 @@ Todo list, ideas:
 - [ ] Mobile responsiveness
 
 ### Backend
-- [ ] Create backend endpoints for editting the database
+- [x] Create backend endpoints for editting the database
+- Created [Update DB](update_db.md) file on how to update DB externally
 
 ### Trade page
 - [ ] Make the change indicate 7 days in the header & based on the median
