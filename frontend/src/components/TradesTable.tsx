@@ -275,9 +275,16 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
                                     {pair.trend && pair.trend.sparkline && pair.trend.sparkline.length >= 2 ? (
                                         <>
                                             <Sparkline values={pair.trend.sparkline} width={70} relativeFirst={true} globalMaxAbsDelta={globalMaxAbsDelta} adaptive={true} visualCapPct={40} />
-                                            <span style={{ fontSize: '11px', minWidth: 10, textAlign: 'right', color: pair.trend.direction === 'up' ? '#ef4444' : pair.trend.direction === 'down' ? '#10b981' : '#6b7280', whiteSpace: 'nowrap' }}>
+                                            <span style={{ fontSize: '11px', minWidth: 10, textAlign: 'right', color: pair.trend.direction === 'up' ? '#ef4444' : pair.trend.direction === 'down' ? '#10b981' : '#6b7280', whiteSpace: 'nowrap', marginLeft: 4 }}>
                                                 {pair.trend.change_percent > 0 ? '+' : ''}{formatNumberEU(pair.trend.change_percent, 1, 1)}%
                                             </span>
+                                            {typeof pair.trend.lowest_median === 'number' && typeof pair.trend.highest_median === 'number' ? (
+                                                <span style={{ fontSize: '10px', color: '#6b7280', marginLeft: 8 }}>
+                                                    <span style={{ color: '#10b981', fontWeight: 600 }}>Low:</span> {formatRate(pair.trend.lowest_median, pair.pay, pair.get)}
+                                                    {' '}
+                                                    <span style={{ color: '#ef4444', fontWeight: 600 }}>High:</span> {formatRate(pair.trend.highest_median, pair.pay, pair.get)}
+                                                </span>
+                                            ) : null}
                                         </>
                                     ) : null}
                                 </span>

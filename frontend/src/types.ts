@@ -19,6 +19,8 @@ export type PriceTrend = {
   oldest?: string | null
   newest?: string | null
   sparkline?: number[]
+  lowest_median?: number | null
+  highest_median?: number | null
 }
 
 export type PairSummary = {

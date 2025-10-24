@@ -249,39 +249,19 @@ class HistoricalCache:
         log.debug(f"Historical snapshot added: {have}->{want} best={best_rate:.2f} avg={avg_rate:.2f}")
     
     def _cleanup(self, key: Tuple[str, str, str]):
-        """Remove snapshots older than retention period and limit to max points"""
-        if key not in self._history:
-            return
-        
-        cutoff = datetime.utcnow() - timedelta(hours=self.retention_hours)
-        snapshots = self._history[key]
-        
-        # Remove old entries
-        snapshots = [s for s in snapshots if s.timestamp > cutoff]
-        
-        # Limit to max points (keep most recent)
-        if len(snapshots) > self.max_points:
-            snapshots = snapshots[-self.max_points:]
-        
-        self._history[key] = snapshots
+        """No-op: keep all snapshots forever. Only filter for API output."""
+        pass
     
     def get_history(self, league: str, have: str, want: str, max_points: Optional[int] = None) -> List[Dict[str, Any]]:
-        """Get price history for a pair, formatted for API response"""
+        """Get price history for a pair, formatted for API response (last 7 days only)"""
         key = (league, have, want)
-        snapshots = self._history.get(key, [])
-        
-        # Clean up before returning
-        if snapshots:
-            self._cleanup(key)
-            snapshots = self._history.get(key, [])
-        
-        # Limit points if requested
+        all_snapshots = self._history.get(key, [])
+        cutoff = datetime.utcnow() - timedelta(days=7)
+        snapshots = [s for s in all_snapshots if s.timestamp >= cutoff]
         if max_points and len(snapshots) > max_points:
-            # Sample evenly across the dataset
             step = len(snapshots) / max_points
             indices = [int(i * step) for i in range(max_points)]
             snapshots = [snapshots[i] for i in indices]
-        
         return [
             {
                 "timestamp": s.timestamp.isoformat(),
@@ -293,43 +273,43 @@ class HistoricalCache:
         ]
     
     def get_trend(self, league: str, have: str, want: str) -> Dict[str, Any]:
-        """Calculate trend statistics for a pair"""
+        """Calculate trend statistics for a pair (last 7 days, median-based)"""
         key = (league, have, want)
-        snapshots = self._history.get(key, [])
-        
+        all_snapshots = self._history.get(key, [])
+        cutoff = datetime.utcnow() - timedelta(days=7)
+        snapshots = [s for s in all_snapshots if s.timestamp >= cutoff]
         if len(snapshots) < 2:
             return {
                 "direction": "neutral",
                 "change_percent": 0.0,
                 "data_points": len(snapshots),
                 "sparkline": [s.best_rate for s in snapshots],
+                "lowest_median": None,
+                "highest_median": None,
             }
-        
-        # Compare recent average to older average
-        recent_count = max(1, len(snapshots) // 4)  # Last 25% of data
-        recent_avg = sum(s.best_rate for s in snapshots[-recent_count:]) / recent_count
-        older_avg = sum(s.best_rate for s in snapshots[:recent_count]) / recent_count
-        
-        change_percent = ((recent_avg - older_avg) / older_avg) * 100 if older_avg > 0 else 0.0
-        
-        if change_percent > 2:
-            direction = "up"
-        elif change_percent < -2:
-            direction = "down"
+        # Use median price at start and end of window
+        import statistics
+        start_prices = [s.best_rate for s in snapshots[:max(1, len(snapshots)//8)]]
+        end_prices = [s.best_rate for s in snapshots[-max(1, len(snapshots)//8):]]
+        start_median = statistics.median(start_prices)
+        end_median = statistics.median(end_prices)
+        # Prevent division by zero/extreme %
+        if start_median == 0:
+            change_percent = 0.0
         else:
-            direction = "neutral"
-        
-        # Build sparkline values of best_rate, down-sampled to SPARKLINE_POINTS
+            change_percent = ((end_median - start_median) / start_median) * 100
+        direction = "up" if change_percent > 2 else "down" if change_percent < -2 else "neutral"
+        # Sparkline
         series = [s.best_rate for s in snapshots]
         if len(series) > SPARKLINE_POINTS:
-            # Evenly sample across series
             step = len(series) / SPARKLINE_POINTS
             indices = [int(i * step) for i in range(SPARKLINE_POINTS)]
-            # Ensure last index included
             if indices[-1] != len(series) - 1:
                 indices[-1] = len(series) - 1
             series = [series[i] for i in indices]
-
+        # Lowest/highest median in window
+        lowest_median = min([statistics.median([s.best_rate for s in snapshots[i:i+max(1,len(snapshots)//8)]]) for i in range(0, len(snapshots), max(1,len(snapshots)//8))])
+        highest_median = max([statistics.median([s.best_rate for s in snapshots[i:i+max(1,len(snapshots)//8)]]) for i in range(0, len(snapshots), max(1,len(snapshots)//8))])
         return {
             "direction": direction,
             "change_percent": round(change_percent, 2),
@@ -337,6 +317,8 @@ class HistoricalCache:
             "oldest": snapshots[0].timestamp.isoformat(),
             "newest": snapshots[-1].timestamp.isoformat(),
             "sparkline": series,
+            "lowest_median": round(lowest_median, 6),
+            "highest_median": round(highest_median, 6),
         }
     
     def clear_all(self):
