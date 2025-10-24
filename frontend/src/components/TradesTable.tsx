@@ -306,7 +306,20 @@ function formatRate(num: number, have?: string, want?: string): string {
 function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAbsDelta, accountName, selectedMetrics }: { pair: PairSummary; defaultExpanded: boolean; loading: boolean; onReload: (index: number) => void; globalMaxAbsDelta: number; accountName?: string | null; selectedMetrics: readonly string[] }) {
     const [isExpanded, setIsExpanded] = useState(defaultExpanded)
     const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
+    const [copiedAccountIndex, setCopiedAccountIndex] = useState<number | null>(null);
     const timeoutRef = useRef<number | null>(null)
+    const accountTimeoutRef = useRef<number | null>(null);
+    const copyAccountName = (name: string, index: number) => {
+        if (accountTimeoutRef.current !== null) {
+            clearTimeout(accountTimeoutRef.current);
+        }
+        navigator.clipboard.writeText(name);
+        setCopiedAccountIndex(index);
+        accountTimeoutRef.current = window.setTimeout(() => {
+            setCopiedAccountIndex(null);
+            accountTimeoutRef.current = null;
+        }, 1250);
+    };
 
     useEffect(() => {
         setIsExpanded(defaultExpanded)
@@ -561,7 +574,36 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
                                                     </span>
                                                     <span className="listing-info" style={{ width: '180px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
                                                         <span className="meta-label">Account:</span>
-                                                        <span className="meta-value" style={{ fontWeight: isMyTrade ? 600 : undefined }}>{l.account_name || 'Unknown'}</span>
+                                                        <span
+                                                            className="meta-value"
+                                                            title={copiedAccountIndex === i ? 'Copied!' : (l.account_name || 'Unknown')}
+                                                            onClick={() => l.account_name && copyAccountName(l.account_name, i)}
+                                                            style={{
+                                                                fontWeight: isMyTrade ? 600 : undefined,
+                                                                width: '100px',
+                                                                minWidth: '120px',
+                                                                overflow: 'hidden',
+                                                                textOverflow: 'ellipsis',
+                                                                whiteSpace: 'nowrap',
+                                                                display: 'block',
+                                                                verticalAlign: 'bottom',
+                                                                border: '1px solid',
+                                                                borderColor: copiedAccountIndex === i ? 'rgba(16, 185, 129, 0.9)' : 'rgba(156, 163, 175, 0.3)',
+                                                                background: copiedAccountIndex === i ? 'rgba(16, 185, 129, 0.3)' : 'rgba(100, 100, 100, 0.1)',
+                                                                color: copiedAccountIndex === i ? 'rgba(255, 255, 255, 0.5)' : 'rgba(156, 163, 175, 0.7)',
+                                                                borderRadius: '4px',
+                                                                cursor: l.account_name ? 'pointer' : 'default',
+                                                                padding: '4px 6px',
+                                                                fontSize: '11px',
+                                                                fontFamily: 'monospace',
+                                                                opacity: 0.95,
+                                                                transition: 'all 0.3s ease-in-out',
+                                                                userSelect: 'none',
+                                                                textAlign: 'left',
+                                                            }}
+                                                        >
+                                                            {copiedAccountIndex === i ? '✓ Copied!' : (l.account_name || 'Unknown')}
+                                                        </span>
                                                     </span>
                                                     {l.whisper && (
                                                         <span
