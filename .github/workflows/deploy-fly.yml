@@ -1,13 +1,10 @@
 name: Deploy to Fly.io
 
 on:
-  workflow_dispatch:
-  push:
-    branches: [ main, develop ]
-    paths:
-      - 'backend/**'
-      - 'fly.toml'
-      - '.github/workflows/deploy-fly.yml'
+  workflow_run:
+    workflows: ["Backend CI"]
+    types:
+      - completed
 
 jobs:
   deploy:
