@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, memo } from 'react'
+import { createPortal } from 'react-dom'
 import '../spinner.css'
 import { PairSummary } from '../types'
 import { Api } from '../api'
@@ -15,15 +16,17 @@ interface SparklineProps {
     showMinMax?: boolean
     visualCapPct?: number // clamp global scaling to at most this percent for visibility (e.g. 50)
     adaptive?: boolean // if true, use per-series max instead of global for finer detail (still centered)
+    haveCurrency?: string
+    wantCurrency?: string
 }
-const Sparkline = memo(function Sparkline({ values, width = 70, height = 24, stroke = 'var(--accent)', relativeFirst = false, globalMaxAbsDelta, showMinMax = true, visualCapPct = 50, adaptive = true }: SparklineProps) {
+const Sparkline = memo(function Sparkline({ values, width = 70, height = 24, stroke = 'var(--accent)', relativeFirst = false, globalMaxAbsDelta, showMinMax = true, visualCapPct = 50, adaptive = true, haveCurrency, wantCurrency }: SparklineProps) {
     // If values is empty or contains only null/undefined, show a fallback dot (loading state)
     if (!values || values.length === 0 || values.every(v => v == null)) {
         const y = height / 2;
         return (
             <div style={{ position: 'relative', width, height }}>
                 <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: 'block', overflow: 'visible' }}>
-                    <circle cx={width/2} cy={y} r={6} fill="#64748b" stroke="#334155" strokeWidth={2} style={{ opacity: 0.5 }} />
+                    <circle cx={width / 2} cy={y} r={6} fill="#64748b" stroke="#334155" strokeWidth={2} style={{ opacity: 0.5 }} />
                 </svg>
             </div>
         );
@@ -45,7 +48,7 @@ const Sparkline = memo(function Sparkline({ values, width = 70, height = 24, str
                     onMouseLeave={() => setHover(false)}
                 >
                     <circle
-                        cx={width/2}
+                        cx={width / 2}
                         cy={y}
                         r={7}
                         fill="#38bdf8"
@@ -58,7 +61,7 @@ const Sparkline = memo(function Sparkline({ values, width = 70, height = 24, str
                     <div
                         style={{
                             position: 'absolute',
-                            left: width/2 - 40,
+                            left: width / 2 - 40,
                             top: y - 36,
                             background: '#1e293b',
                             color: '#e2e8f0',
@@ -136,11 +139,6 @@ const Sparkline = memo(function Sparkline({ values, width = 70, height = 24, str
             return height - ((v - min) / range) * height
         }
     }
-    const minIndex = values.indexOf(min)
-    const maxIndex = values.indexOf(max)
-    const lastIndex = values.length - 1
-
-    const tooltip = `Min: ${formatNumberEU(min, 4, 4)}\nMax: ${formatNumberEU(max, 4, 4)}\nMedian: ${formatNumberEU(median, 4, 4)}\nStart: ${formatNumberEU(base, 4, 4)}\nLast: ${formatNumberEU(last, 4, 4)}\nChange: ${changePct >= 0 ? '+' : ''}${formatNumberEU(changePct, 2, 2)}%`
 
     const [hoverIdx, setHoverIdx] = useState<number | null>(null);
     const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -156,15 +154,21 @@ const Sparkline = memo(function Sparkline({ values, width = 70, height = 24, str
         setHoverIdx(closest);
     };
     const handleMouseLeave = () => setHoverIdx(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [containerPos, setContainerPos] = useState<{left: number, top: number} | null>(null);
+    useEffect(() => {
+        if (hoverIdx !== null && containerRef.current) {
+            const rect = containerRef.current.getBoundingClientRect();
+            setContainerPos({ left: rect.left, top: rect.top });
+        }
+    }, [hoverIdx]);
     return (
-        <div style={{ position: 'relative', width, height }}>
+        <div ref={containerRef} style={{ position: 'relative', width, height }}>
             <svg
                 width={width}
                 height={height}
                 viewBox={`0 0 ${width} ${height}`}
-                style={{ display: 'block', overflow: 'visible', cursor: 'pointer' }}
-                onMouseMove={handleMouseMove}
-                onMouseLeave={handleMouseLeave}
+                style={{ display: 'block', overflow: 'visible' }}
             >
                 {relativeFirst && globalMaxAbsDelta && globalMaxAbsDelta > 0 && (
                     <line
@@ -184,37 +188,61 @@ const Sparkline = memo(function Sparkline({ values, width = 70, height = 24, str
                     strokeWidth={1.5}
                     strokeLinecap="round"
                 />
+                {/* Render lines between all points */}
+                {values.map((v, i) => {
+                    if (i === 0) return null;
+                    const x1 = (i - 1) * stepX;
+                    const y1 = computeY(values[i - 1]);
+                    const x2 = i * stepX;
+                    const y2 = computeY(v);
+                    return (
+                        <line
+                            key={`line-${i}`}
+                            x1={x1}
+                            y1={y1}
+                            x2={x2}
+                            y2={y2}
+                            stroke={stroke}
+                            strokeWidth={1.5}
+                        />
+                    );
+                })}
+                {/* Render only min, max, and latest as dots */}
                 {values.map((v, i) => {
                     const x = i * stepX;
                     const y = computeY(v);
-                    // Highlight min/max points
                     const isMin = i === values.indexOf(min);
                     const isMax = i === values.indexOf(max);
+                    const isLast = i === values.length - 1;
+                    const isHoverable = isMin || isMax || isLast;
+                    if (!isHoverable) return null;
                     const isHover = i === hoverIdx;
                     let fill = isHover ? '#fff' : isMin ? '#10b981' : isMax ? '#ef4444' : 'var(--accent)';
-                    let r = isHover ? 4 : isMin || isMax ? 3 : 2;
+                    let r = isHover ? 4 : 3;
                     let stroke = isHover ? 'var(--accent)' : isMin ? '#10b981' : isMax ? '#ef4444' : '#111827';
                     let strokeWidth = isHover ? 2 : 1;
                     return (
                         <circle
-                            key={i}
+                            key={`dot-${i}`}
                             cx={x}
                             cy={y}
                             r={r}
                             fill={fill}
                             stroke={stroke}
                             strokeWidth={strokeWidth}
-                            style={{ transition: 'r 0.15s, fill 0.15s, stroke 0.15s' }}
+                            style={{ transition: 'r 0.15s, fill 0.15s, stroke 0.15s', cursor: 'pointer' }}
+                            onMouseEnter={() => setHoverIdx(i)}
+                            onMouseLeave={() => setHoverIdx(null)}
                         />
                     );
                 })}
             </svg>
-            {hoverIdx !== null && (
+            {hoverIdx !== null && containerPos && createPortal(
                 <div
                     style={{
-                        position: 'absolute',
-                        left: hoverIdx * stepX - 40,
-                        top: computeY(values[hoverIdx]) - 36,
+                        position: 'fixed',
+                        left: containerPos.left + hoverIdx * stepX - 40,
+                        top: containerPos.top + computeY(values[hoverIdx]) - 36,
                         background: '#1e293b',
                         color: '#e2e8f0',
                         border: '1px solid #334155',
@@ -223,14 +251,15 @@ const Sparkline = memo(function Sparkline({ values, width = 70, height = 24, str
                         fontSize: 13,
                         fontWeight: 600,
                         pointerEvents: 'none',
-                        zIndex: 10,
+                        zIndex: 9999,
                         minWidth: 80,
                         textAlign: 'center',
                         boxShadow: '0 2px 8px rgba(0,0,0,0.18)'
                     }}
                 >
-                    Median: {formatNumberEU(values[hoverIdx], 4, 4)}
-                </div>
+                    {formatRate(values[hoverIdx], haveCurrency, wantCurrency)}
+                </div>,
+                document.body
             )}
         </div>
     );
@@ -256,8 +285,10 @@ function formatRate(num: number, have?: string, want?: string): string {
         const rounded = Math.round(denom)
         // If denom is very close to an integer, prefer the clean integer
         if (Math.abs(denom - rounded) < 0.0005) {
-            return `1/${formatNumberEU(rounded)}`
+            var test = `1/${formatNumberEU(rounded)}`
+            return test
         }
+        
         // Choose decimals based on magnitude for readability
         let decimals: number
         if (denom < 10) decimals = 2
@@ -400,7 +431,7 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
                                 <span className="summary-item" style={{ width: 130, display: 'inline-flex', gap: 6, alignItems: 'center', justifyContent: 'flex-start' }}>
                                     {pair.trend && pair.trend.sparkline && pair.trend.sparkline.length >= 2 ? (
                                         <>
-                                            <Sparkline values={pair.trend.sparkline} width={70} relativeFirst={true} globalMaxAbsDelta={globalMaxAbsDelta} adaptive={true} visualCapPct={40} />
+                                            <Sparkline values={pair.trend.sparkline} width={70} relativeFirst={true} globalMaxAbsDelta={globalMaxAbsDelta} adaptive={true} visualCapPct={40} haveCurrency={pair.pay} wantCurrency={pair.get} />
                                             <span style={{ fontSize: '11px', minWidth: 10, textAlign: 'right', color: pair.trend.direction === 'up' ? '#ef4444' : pair.trend.direction === 'down' ? '#10b981' : '#6b7280', whiteSpace: 'nowrap', marginLeft: 4 }}>
                                                 {pair.trend.change_percent > 0 ? '+' : ''}{formatNumberEU(pair.trend.change_percent, 1, 1)}%
                                             </span>
@@ -580,18 +611,18 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
     )
 }
 
-export function TradesTable({ 
-    data, 
-    loading, 
-    onReload, 
-    onRefresh, 
+export function TradesTable({
+    data,
+    loading,
+    onReload,
+    onRefresh,
     accountName,
-    onDataUpdate 
-}: { 
-    data: PairSummary[]; 
-    loading: boolean; 
-    onReload: (index: number) => void; 
-    onRefresh?: () => void; 
+    onDataUpdate
+}: {
+    data: PairSummary[];
+    loading: boolean;
+    onReload: (index: number) => void;
+    onRefresh?: () => void;
     accountName?: string | null;
     onDataUpdate?: (newData: PairSummary[]) => void;
 }) {
@@ -600,19 +631,19 @@ export function TradesTable({
     // Page-specific 30s refresh timer - updates to latest cached data
     useEffect(() => {
         if (!onDataUpdate) return
-        
+
         console.log('[TradesTable] Starting 30s refresh timer')
-        
+
         let cancelled = false
         let timer: number | null = null
-        
+
         const fetchLatestCached = async () => {
             if (cancelled) return
             try {
                 console.log('[TradesTable] Fetching latest cached data (30s timer)...')
                 const response = await Api.latestCached(5)
                 if (!cancelled && response.results) {
-                    console.log('[TradesTable] Received cached data with timestamps:', 
+                    console.log('[TradesTable] Received cached data with timestamps:',
                         response.results.map(r => `${r.get}/${r.pay}: ${r.fetched_at}`))
                     onDataUpdate(response.results)
                 }
@@ -620,17 +651,17 @@ export function TradesTable({
                 console.error('[TradesTable] Failed to fetch latest cached data:', error)
             }
         }
-        
+
         const schedule = () => {
             if (cancelled) return
             timer = window.setTimeout(() => {
                 fetchLatestCached().then(schedule)
             }, 30000) // 30s
         }
-        
+
         // Fetch immediately on mount, then start the timer
         fetchLatestCached().then(schedule)
-        
+
         return () => {
             console.log('[TradesTable] Stopping 30s refresh timer')
             cancelled = true
