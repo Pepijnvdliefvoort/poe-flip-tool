@@ -27,6 +27,15 @@ You can use any SQLite database editor of your choice. Here are a couple of popu
 - [DB Browser for SQLite](https://sqlitebrowser.org/)
 - [DBeaver](https://dbeaver.io/)
 
+## 4.5 Delete old .db file (safety overwrite)
+```pwsh
+fly ssh console --app poe-flip-backend # SSH into the app
+
+cd /data # Change directory to the /data folder
+
+rm poe_cache.db
+```
+
 ## 5. Upload the Edited Database
 ```pwsh
 fly ssh sftp --app poe-flip-backend put "C:\Users\PepijnvandeLiefvoort\poe_cache.db" /data/poe_cache.db
