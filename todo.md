@@ -7,3 +7,4 @@ Todo list, ideas:
 - [ ] Add hover effects for more details on the change graph
 - [ ] Account name can exceed width overlapping the whisper message
 - [ ] Slider to buy more than a single item for a trade
+- [ ] Mobile responsiveness
