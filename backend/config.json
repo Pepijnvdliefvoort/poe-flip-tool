@@ -19,12 +19,12 @@
     {
       "get": "divine",
       "pay": "mirror",
-      "hot": false
+      "hot": true
     },
     {
       "get": "divine",
       "pay": "hinekoras-lock",
-      "hot": false
+      "hot": true
     },
     {
       "get": "hinekoras-lock",

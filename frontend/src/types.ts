@@ -31,6 +31,7 @@ export type PairSummary = {
   status: 'ok' | 'error' | 'invalid' | 'loading' | 'rate_limited'
   listings: ListingSummary[]
   best_rate?: number | null
+  median_rate?: number | null
   count_returned: number
   trend?: PriceTrend | null
   fetched_at?: string | null
