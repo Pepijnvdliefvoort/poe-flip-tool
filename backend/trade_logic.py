@@ -137,7 +137,7 @@ def summarize_exchange_json(data: Dict[str, Any], top_n: int = 5) -> List[Listin
             whisper = None
 
         out.append(ListingSummary(
-            rate=round(rate, 6),
+            rate=round(rate, 10),
             have_currency=str(ex.get("currency")),
             have_amount=float(have_amt),
             want_currency=str(it.get("currency")),
