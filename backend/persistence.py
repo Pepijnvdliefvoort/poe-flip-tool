@@ -62,6 +62,7 @@ class DatabasePersistence:
                     timestamp TEXT NOT NULL,
                     best_rate REAL NOT NULL,
                     avg_rate REAL NOT NULL,
+                    median_rate REAL NOT NULL,
                     listing_count INTEGER NOT NULL
                 );
                 
@@ -154,19 +155,20 @@ class DatabasePersistence:
             now = datetime.utcnow()
             cursor = self.conn.cursor()
             cursor.execute('''
-                SELECT league, have, want, listings_json, expires_at
+                SELECT league, have, want, listings_json, expires_at, created_at
                 FROM cache_entries
                 WHERE expires_at > ?
                 ORDER BY expires_at ASC
             ''', (now.isoformat(),))
-            
+
             entries = {}
             for row in cursor.fetchall():
                 key = (row['league'], row['have'], row['want'])
                 listings = json.loads(row['listings_json'])
                 expires_at = datetime.fromisoformat(row['expires_at'])
-                entries[key] = (listings, expires_at)
-            
+                fetched_at = datetime.fromisoformat(row['created_at']) if 'created_at' in row.keys() else expires_at
+                entries[key] = (listings, expires_at, fetched_at)
+
             log.info(f"Loaded {len(entries)} cache entries from database")
             return entries
         except Exception as e:
@@ -203,21 +205,39 @@ class DatabasePersistence:
         timestamp: datetime,
         best_rate: float,
         avg_rate: float,
+        median_rate: float,
         listing_count: int
     ) -> bool:
-        """Save a price snapshot to the database."""
+        """Save a price snapshot to the database, avoiding duplicates."""
         try:
+            # Check for duplicate: same median_rate within 1 minute
+            cursor = self.conn.cursor()
+            cursor.execute('''
+                SELECT timestamp, median_rate FROM price_snapshots
+                WHERE league = ? AND have = ? AND want = ?
+                ORDER BY timestamp DESC LIMIT 1
+            ''', (league, have, want))
+            row = cursor.fetchone()
+            if row:
+                last_ts = datetime.fromisoformat(row['timestamp'])
+                last_median = row['median_rate']
+                time_diff = abs((timestamp - last_ts).total_seconds())
+                median_diff = abs(last_median - median_rate)
+                if time_diff < 60 and median_diff < 1e-6:
+                    log.debug(f"Skipped DB duplicate snapshot for {have}->{want}: median unchanged ({median_rate:.6f})")
+                    cursor.close()
+                    return False
+            cursor.close()
             with self._transaction() as cursor:
                 cursor.execute('''
                     INSERT INTO price_snapshots 
-                    (league, have, want, timestamp, best_rate, avg_rate, listing_count)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (league, have, want, timestamp, best_rate, avg_rate, median_rate, listing_count)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     league, have, want,
                     timestamp.isoformat(),
-                    best_rate, avg_rate, listing_count
+                    best_rate, avg_rate, median_rate, listing_count
                 ))
-            
             log.debug(f"Saved snapshot: {have}->{want} @ {timestamp.isoformat()}")
             return True
         except Exception as e:
@@ -235,7 +255,7 @@ class DatabasePersistence:
         """Load price snapshots for a specific pair."""
         try:
             query = '''
-                SELECT timestamp, best_rate, avg_rate, listing_count
+                SELECT timestamp, best_rate, avg_rate, median_rate, listing_count
                 FROM price_snapshots
                 WHERE league = ? AND have = ? AND want = ?
             '''
@@ -259,6 +279,7 @@ class DatabasePersistence:
                     'timestamp': datetime.fromisoformat(row['timestamp']),
                     'best_rate': row['best_rate'],
                     'avg_rate': row['avg_rate'],
+                    'median_rate': row['median_rate'],
                     'listing_count': row['listing_count']
                 })
             
@@ -274,7 +295,7 @@ class DatabasePersistence:
             cutoff = datetime.utcnow() - timedelta(hours=retention_hours)
             cursor = self.conn.cursor()
             cursor.execute('''
-                SELECT league, have, want, timestamp, best_rate, avg_rate, listing_count
+                SELECT league, have, want, timestamp, best_rate, avg_rate, median_rate, listing_count
                 FROM price_snapshots
                 WHERE timestamp > ?
                 ORDER BY league, have, want, timestamp ASC
@@ -298,6 +319,7 @@ class DatabasePersistence:
                     'timestamp': ts,
                     'best_rate': row['best_rate'],
                     'avg_rate': row['avg_rate'],
+                    'median_rate': row['median_rate'],
                     'listing_count': row['listing_count']
                 })
             

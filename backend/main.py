@@ -31,7 +31,15 @@ load_dotenv()
 # Get log level from environment
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
+from fastapi.middleware.cors import CORSMiddleware
 app = FastAPI(title="PoE Trade Backend")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL, logging.INFO),
@@ -237,45 +245,31 @@ def _calculate_profit_margins(pairs: List[PairSummary]) -> None:
     """
     for i, pair_a in enumerate(pairs):
         # Skip if already calculated or no valid rate
-        if pair_a.linked_pair_index is not None or pair_a.best_rate is None:
+        if pair_a.linked_pair_index is not None or pair_a.median_rate is None:
             continue
-        
+
         # Find the reverse pair
         for j, pair_b in enumerate(pairs):
             if i == j:
                 continue
-            
+
             # Check if this is the reverse pair (get/pay swapped)
             if pair_a.get == pair_b.pay and pair_a.pay == pair_b.get:
-                if pair_b.best_rate is not None and pair_b.best_rate > 0:
+                if pair_b.median_rate is not None and pair_b.median_rate > 0:
                     # Link them together
                     pair_a.linked_pair_index = j
                     pair_b.linked_pair_index = i
-                    
-                    # Calculate profit margin
-                    # pair_a: pay X to get Y (rate = Y/X)
-                    # pair_b: pay Y to get X (rate = X/Y)
-                    # If we execute both: spend X to get Y, then spend Y to get X back
-                    # We should end up with more X than we started with
-                    
-                    # Amount of pair_a.get currency we receive per 1 pair_a.pay
-                    receive_per_cycle = pair_a.best_rate
-                    
-                    # Amount of pair_a.pay currency we need to get back 1 pair_a.pay
-                    # pair_b.best_rate is pair_a.pay per pair_a.get, so we need 1/pair_b.best_rate of pair_a.get
-                    spend_to_get_back = 1.0 / pair_b.best_rate if pair_b.best_rate > 0 else 0
-                    
-                    # Raw profit in pair_a.get currency per 1 pair_a.pay spent
+
+                    # Calculate profit margin using median_rate
+                    receive_per_cycle = pair_a.median_rate
+                    spend_to_get_back = 1.0 / pair_b.median_rate if pair_b.median_rate > 0 else 0
                     raw_profit = receive_per_cycle - spend_to_get_back
-                    
-                    # Percentage profit margin
                     profit_pct = (raw_profit / spend_to_get_back * 100) if spend_to_get_back > 0 else 0
-                    
+
                     pair_a.profit_margin_raw = round(raw_profit, 4)
                     pair_a.profit_margin_pct = round(profit_pct, 2)
                     pair_b.profit_margin_raw = round(raw_profit, 4)
                     pair_b.profit_margin_pct = round(profit_pct, 2)
-                
                 break
 
 # ============================================================================
@@ -416,8 +410,15 @@ def refresh_one_trade(
         )
     from trade_logic import historical_cache
     if listings:
-        historical_cache.add_snapshot(cfg.league, t.pay, t.get, listings)
+        # Only use top_n listings for snapshot
+        historical_cache.add_snapshot(cfg.league, t.pay, t.get, listings[:top_n])
     trend_data = historical_cache.get_trend(cfg.league, t.pay, t.get)
+    median_rate = None
+    if listings:
+        rates = [l.rate for l in listings]
+        if rates:
+            import statistics
+            median_rate = statistics.median(rates)
     return PairSummary(
         index=index,
         get=t.get,
@@ -426,6 +427,7 @@ def refresh_one_trade(
         status="ok",
         listings=listings,
         best_rate=(listings[0].rate if listings else None),
+        median_rate=median_rate,
         count_returned=len(listings),
         trend=trend_data,
         fetched_at=(fetched_at.isoformat() + 'Z') if fetched_at else datetime.utcnow().isoformat() + 'Z',
@@ -498,6 +500,12 @@ async def stream_trades(
                     if not was_cached and listings:
                         historical_cache.add_snapshot(cfg.league, t.pay, t.get, listings)
                     trend_data = historical_cache.get_trend(cfg.league, t.pay, t.get)
+                    median_rate = None
+                    if listings:
+                        rates = [l.rate for l in listings]
+                        if rates:
+                            import statistics
+                            median_rate = statistics.median(rates)
                     summary = PairSummary(
                         index=idx,
                         get=t.get,
@@ -506,6 +514,7 @@ async def stream_trades(
                         status="ok",
                         listings=listings,
                         best_rate=(listings[0].rate if listings else None),
+                        median_rate=median_rate,
                         count_returned=len(listings),
                         trend=trend_data,
                         fetched_at=(fetched_at.isoformat() + 'Z') if fetched_at else datetime.utcnow().isoformat() + 'Z',
@@ -575,8 +584,15 @@ async def refresh_cache_all(
             else:
                 from trade_logic import historical_cache
                 if not was_cached and listings:
-                    historical_cache.add_snapshot(cfg.league, t.pay, t.get, listings)
+                    # Only use top_n listings for snapshot
+                    historical_cache.add_snapshot(cfg.league, t.pay, t.get, listings[:top_n])
                 trend_data = historical_cache.get_trend(cfg.league, t.pay, t.get)
+                median_rate = None
+                if listings:
+                    rates = [l.rate for l in listings]
+                    if rates:
+                        import statistics
+                        median_rate = statistics.median(rates)
                 summary = PairSummary(
                     index=idx,
                     get=t.get,
@@ -585,6 +601,7 @@ async def refresh_cache_all(
                     status="ok",
                     listings=listings,
                     best_rate=(listings[0].rate if listings else None),
+                    median_rate=median_rate,
                     count_returned=len(listings),
                     trend=trend_data,
                     fetched_at=(fetched_at.isoformat() + 'Z') if fetched_at else datetime.utcnow().isoformat() + 'Z',
@@ -635,6 +652,12 @@ def get_latest_cached(
                 f"age={cache_age_seconds:.1f}s remaining={seconds_remaining:.1f}s"
             )
             
+            median_rate = None
+            if listings:
+                rates = [l.rate for l in listings]
+                if rates:
+                    import statistics
+                    median_rate = statistics.median(rates)
             summary = PairSummary(
                 index=idx,
                 get=t.get,
@@ -643,6 +666,7 @@ def get_latest_cached(
                 status="ok",
                 listings=listings,
                 best_rate=(listings[0].rate if listings else None),
+                median_rate=median_rate,
                 count_returned=len(listings),
                 trend=trend_data,
                 fetched_at=(entry.fetched_at.isoformat() + 'Z') if entry.fetched_at else None,

@@ -19,7 +19,7 @@
     {
       "get": "divine",
       "pay": "mirror",
-      "hot": true
+      "hot": false
     },
     {
       "get": "divine",

@@ -268,13 +268,17 @@ export function SystemDashboard() {
             <div style={{ fontSize: 12, marginBottom: 6, opacity: 0.8 }}>
               {history.history.length} points | Change: {history.trend.change_percent > 0 ? '+' : ''}{history.trend.change_percent.toFixed(2)}% ({history.trend.direction})
             </div>
-            <HistoryMiniChart data={history.history} />
+            <HistoryMiniChart data={history.history.map(h => ({
+              timestamp: h.timestamp,
+              median_rate: h.median_rate,
+              avg_rate: h.avg_rate
+            }))} />
             <div style={{ maxHeight: 220, overflow: 'auto', marginTop: 10 }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                 <thead>
                   <tr>
                     <th style={{ textAlign: 'left', padding: '4px 6px', borderBottom: '1px solid var(--border)' }}>Time</th>
-                    <th style={{ textAlign: 'right', padding: '4px 6px', borderBottom: '1px solid var(--border)' }}>Best</th>
+                    <th style={{ textAlign: 'right', padding: '4px 6px', borderBottom: '1px solid var(--border)' }}>Median</th>
                     <th style={{ textAlign: 'right', padding: '4px 6px', borderBottom: '1px solid var(--border)' }}>Avg</th>
                     <th style={{ textAlign: 'right', padding: '4px 6px', borderBottom: '1px solid var(--border)' }}>Listings</th>
                   </tr>
@@ -283,7 +287,7 @@ export function SystemDashboard() {
                   {history.history.slice().reverse().map((h, i) => (
                     <tr key={i}>
                       <td style={{ padding: '4px 6px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>{new Date(h.timestamp).toLocaleTimeString()}</td>
-                      <td style={{ padding: '4px 6px', textAlign: 'right', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>{h.best_rate.toFixed(4)}</td>
+                      <td style={{ padding: '4px 6px', textAlign: 'right', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>{h.median_rate.toFixed(4)}</td>
                       <td style={{ padding: '4px 6px', textAlign: 'right', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>{h.avg_rate.toFixed(4)}</td>
                       <td style={{ padding: '4px 6px', textAlign: 'right', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>{h.listing_count}</td>
                     </tr>
@@ -315,16 +319,16 @@ function formatBytes(bytes: number): string {
   return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
 }
 
-function HistoryMiniChart({ data }: { data: { timestamp: string; best_rate: number; avg_rate: number }[] }) {
+function HistoryMiniChart({ data }: { data: { timestamp: string; median_rate: number; avg_rate: number }[] }) {
   if (data.length < 2) return null
   const width = 320
   const height = 80
-  const bestSeries = data.map(d => d.best_rate)
-  const min = Math.min(...bestSeries)
-  const max = Math.max(...bestSeries)
+  const medianSeries = data.map(d => d.median_rate)
+  const min = Math.min(...medianSeries)
+  const max = Math.max(...medianSeries)
   const range = max - min || 1
   const stepX = width / (data.length - 1)
-  const d = bestSeries.map((v, i) => {
+  const d = medianSeries.map((v, i) => {
     const x = i * stepX
     const y = height - ((v - min) / range) * height
     return `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`

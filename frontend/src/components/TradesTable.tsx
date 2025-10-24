@@ -17,14 +17,79 @@ interface SparklineProps {
     adaptive?: boolean // if true, use per-series max instead of global for finer detail (still centered)
 }
 const Sparkline = memo(function Sparkline({ values, width = 70, height = 24, stroke = 'var(--accent)', relativeFirst = false, globalMaxAbsDelta, showMinMax = true, visualCapPct = 50, adaptive = true }: SparklineProps) {
-    if (!values || values.length < 2) return null
+    // If values is empty or contains only null/undefined, show a fallback dot (loading state)
+    if (!values || values.length === 0 || values.every(v => v == null)) {
+        const y = height / 2;
+        return (
+            <div style={{ position: 'relative', width, height }}>
+                <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: 'block', overflow: 'visible' }}>
+                    <circle cx={width/2} cy={y} r={6} fill="#64748b" stroke="#334155" strokeWidth={2} style={{ opacity: 0.5 }} />
+                </svg>
+            </div>
+        );
+    }
 
-    // Stats
+    // Special case: single value, render a visually distinct dot with tooltip
+    if (values.length === 1) {
+        const v = values[0];
+        const y = height / 2;
+        const [hover, setHover] = useState(false);
+        return (
+            <div style={{ position: 'relative', width, height }}>
+                <svg
+                    width={width}
+                    height={height}
+                    viewBox={`0 0 ${width} ${height}`}
+                    style={{ display: 'block', overflow: 'visible', cursor: 'pointer' }}
+                    onMouseEnter={() => setHover(true)}
+                    onMouseLeave={() => setHover(false)}
+                >
+                    <circle
+                        cx={width/2}
+                        cy={y}
+                        r={7}
+                        fill="#38bdf8"
+                        stroke="#0ea5e9"
+                        strokeWidth={2}
+                        style={{ filter: 'drop-shadow(0 1px 4px #0ea5e980)' }}
+                    />
+                </svg>
+                {hover && (
+                    <div
+                        style={{
+                            position: 'absolute',
+                            left: width/2 - 40,
+                            top: y - 36,
+                            background: '#1e293b',
+                            color: '#e2e8f0',
+                            border: '1px solid #334155',
+                            borderRadius: 8,
+                            padding: '6px 12px',
+                            fontSize: 13,
+                            fontWeight: 600,
+                            pointerEvents: 'none',
+                            zIndex: 10,
+                            minWidth: 80,
+                            textAlign: 'center',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.18)'
+                        }}
+                    >
+                        Value: {formatNumberEU(v, 4, 4)}
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    // Use values prop directly, which should be median_rate array
     const min = Math.min(...values)
     const max = Math.max(...values)
     const last = values[values.length - 1]
     const base = values[0]
     const changePct = base !== 0 ? ((last - base) / base) * 100 : 0
+    const sorted = [...values].sort((a, b) => a - b)
+    const mid = Math.floor(sorted.length / 2)
+    const median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
 
     const stepX = width / (values.length - 1)
 
@@ -75,14 +140,32 @@ const Sparkline = memo(function Sparkline({ values, width = 70, height = 24, str
     const maxIndex = values.indexOf(max)
     const lastIndex = values.length - 1
 
-    const tooltip = `Min: ${formatNumberEU(min, 4, 4)}\nMax: ${formatNumberEU(max, 4, 4)}\nStart: ${formatNumberEU(base, 4, 4)}\nLast: ${formatNumberEU(last, 4, 4)}\nChange: ${changePct >= 0 ? '+' : ''}${formatNumberEU(changePct, 2, 2)}%`
+    const tooltip = `Min: ${formatNumberEU(min, 4, 4)}\nMax: ${formatNumberEU(max, 4, 4)}\nMedian: ${formatNumberEU(median, 4, 4)}\nStart: ${formatNumberEU(base, 4, 4)}\nLast: ${formatNumberEU(last, 4, 4)}\nChange: ${changePct >= 0 ? '+' : ''}${formatNumberEU(changePct, 2, 2)}%`
 
+    const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+    const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        let closest = 0;
+        let dist = Infinity;
+        values.forEach((_, i) => {
+            const x = i * stepX;
+            const d = Math.abs(x - mx);
+            if (d < dist) { dist = d; closest = i; }
+        });
+        setHoverIdx(closest);
+    };
+    const handleMouseLeave = () => setHoverIdx(null);
     return (
-        <div
-            style={{ position: 'relative', width, height }}
-            title={tooltip}
-        >
-            <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: 'block', overflow: 'visible' }}>
+        <div style={{ position: 'relative', width, height }}>
+            <svg
+                width={width}
+                height={height}
+                viewBox={`0 0 ${width} ${height}`}
+                style={{ display: 'block', overflow: 'visible', cursor: 'pointer' }}
+                onMouseMove={handleMouseMove}
+                onMouseLeave={handleMouseLeave}
+            >
                 {relativeFirst && globalMaxAbsDelta && globalMaxAbsDelta > 0 && (
                     <line
                         x1={0}
@@ -101,17 +184,56 @@ const Sparkline = memo(function Sparkline({ values, width = 70, height = 24, str
                     strokeWidth={1.5}
                     strokeLinecap="round"
                 />
-                {showMinMax && (
-                    <>
-                        <circle cx={minIndex * stepX} cy={computeY(min)} r={1.8} fill="#10b981" />
-                        <circle cx={maxIndex * stepX} cy={computeY(max)} r={1.8} fill="#ef4444" />
-                    </>
-                )}
-                {/* Last point highlight */}
-                <circle cx={lastIndex * stepX} cy={computeY(last)} r={2} fill="var(--accent)" stroke="#111827" strokeWidth={1} />
+                {values.map((v, i) => {
+                    const x = i * stepX;
+                    const y = computeY(v);
+                    // Highlight min/max points
+                    const isMin = i === values.indexOf(min);
+                    const isMax = i === values.indexOf(max);
+                    const isHover = i === hoverIdx;
+                    let fill = isHover ? '#fff' : isMin ? '#10b981' : isMax ? '#ef4444' : 'var(--accent)';
+                    let r = isHover ? 4 : isMin || isMax ? 3 : 2;
+                    let stroke = isHover ? 'var(--accent)' : isMin ? '#10b981' : isMax ? '#ef4444' : '#111827';
+                    let strokeWidth = isHover ? 2 : 1;
+                    return (
+                        <circle
+                            key={i}
+                            cx={x}
+                            cy={y}
+                            r={r}
+                            fill={fill}
+                            stroke={stroke}
+                            strokeWidth={strokeWidth}
+                            style={{ transition: 'r 0.15s, fill 0.15s, stroke 0.15s' }}
+                        />
+                    );
+                })}
             </svg>
+            {hoverIdx !== null && (
+                <div
+                    style={{
+                        position: 'absolute',
+                        left: hoverIdx * stepX - 40,
+                        top: computeY(values[hoverIdx]) - 36,
+                        background: '#1e293b',
+                        color: '#e2e8f0',
+                        border: '1px solid #334155',
+                        borderRadius: 6,
+                        padding: '6px 12px',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        pointerEvents: 'none',
+                        zIndex: 10,
+                        minWidth: 80,
+                        textAlign: 'center',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.18)'
+                    }}
+                >
+                    Median: {formatNumberEU(values[hoverIdx], 4, 4)}
+                </div>
+            )}
         </div>
-    )
+    );
 })
 import { CurrencyIcon } from './CurrencyIcon'
 
@@ -199,6 +321,10 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
         return min !== 0 ? ((max - min) / min) * 100 : null
     })()
 
+    // Profit metric: use backend-provided profit_margin_pct and profit_margin_raw (median-based)
+    const profitMarginRaw = pair.profit_margin_raw ?? null;
+    const profitMarginPct = pair.profit_margin_pct ?? null;
+
     // Metric render map (only relevant metrics for stable/permanent leagues)
     const metricRenderers: Record<string, { label: string; value: JSX.Element | null; tooltip: string }> = {
         spread: {
@@ -213,15 +339,15 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
         },
         profit: {
             label: 'Profit',
-            value: pair.profit_margin_pct !== null && pair.profit_margin_pct !== undefined ? (
+            value: profitMarginPct !== null && profitMarginPct !== undefined ? (
                 <span className="summary-value" style={{
-                    color: pair.profit_margin_pct > 0 ? '#10b981' : pair.profit_margin_pct < 0 ? '#ef4444' : undefined,
-                    fontWeight: pair.profit_margin_pct !== 0 ? 600 : undefined
+                    color: profitMarginPct > 0 ? '#10b981' : profitMarginPct < 0 ? '#ef4444' : undefined,
+                    fontWeight: profitMarginPct !== 0 ? 600 : undefined
                 }}>
-                    {pair.profit_margin_pct > 0 ? '+' : ''}{formatNumberEU(pair.profit_margin_pct, 1, 1)}%
+                    {profitMarginPct > 0 ? '+' : ''}{formatNumberEU(profitMarginPct, 1, 1)}%
                 </span>
             ) : null,
-            tooltip: `Profit margin: ${pair.profit_margin_pct !== null && pair.profit_margin_pct !== undefined ? formatNumberEU(pair.profit_margin_pct, 2, 2) : 'N/A'}% (${pair.profit_margin_raw !== null && pair.profit_margin_raw !== undefined ? (pair.profit_margin_raw > 0 ? '+' : '') + formatNumberEU(pair.profit_margin_raw, 2, 2) + ' ' + pair.get : 'N/A'})`
+            tooltip: `Profit margin (median): ${profitMarginPct !== null && profitMarginPct !== undefined ? formatNumberEU(profitMarginPct, 2, 2) : 'N/A'}% (${profitMarginRaw !== null && profitMarginRaw !== undefined ? (profitMarginRaw > 0 ? '+' : '') + formatNumberEU(profitMarginRaw, 2, 2) + ' ' + pair.get : 'N/A'})`
         }
     }
 

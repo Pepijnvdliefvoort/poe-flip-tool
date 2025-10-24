@@ -168,6 +168,7 @@ class PriceSnapshot:
     timestamp: datetime
     best_rate: float
     avg_rate: float
+    median_rate: float
     listing_count: int
 
 
@@ -201,6 +202,7 @@ class HistoricalCache:
                             timestamp=ts,
                             best_rate=s["best_rate"],
                             avg_rate=s["avg_rate"],
+                            median_rate=s["median_rate"],
                             listing_count=s["listing_count"]
                         ))
                     except Exception as e:
@@ -220,33 +222,38 @@ class HistoricalCache:
             log.error(f"Failed to load history from database: {e}")
     
     def add_snapshot(self, league: str, have: str, want: str, listings: List[ListingSummary]):
-        """Record current price data as a historical snapshot"""
+        """Record current price data as a historical snapshot, avoiding duplicates"""
         if not listings:
             return
-        
+        import statistics
         key = (league, have, want)
         best_rate = listings[0].rate
         avg_rate = sum(l.rate for l in listings) / len(listings)
-        
+        median_rate = statistics.median([l.rate for l in listings])
+        now = datetime.utcnow()
+        # Prevent duplicate median snapshot within 1 minute and same value
+        last_snap = self._history.get(key, [])[-1] if self._history.get(key) else None
+        if last_snap:
+            time_diff = (now - last_snap.timestamp).total_seconds()
+            median_diff = abs(last_snap.median_rate - median_rate)
+            if time_diff < 60 and median_diff < 1e-6:
+                log.debug(f"Skipped duplicate snapshot for {have}->{want}: median unchanged ({median_rate:.6f})")
+                return
         snapshot = PriceSnapshot(
-            timestamp=datetime.utcnow(),
+            timestamp=now,
             best_rate=best_rate,
             avg_rate=avg_rate,
+            median_rate=median_rate,
             listing_count=len(listings),
         )
-        
         if key not in self._history:
             self._history[key] = []
-        
         self._history[key].append(snapshot)
-        
         # Clean up old data
         self._cleanup(key)
-        
         # Persist to database
-        db.save_snapshot(league, have, want, snapshot.timestamp, best_rate, avg_rate, len(listings))
-        
-        log.debug(f"Historical snapshot added: {have}->{want} best={best_rate:.2f} avg={avg_rate:.2f}")
+        db.save_snapshot(league, have, want, snapshot.timestamp, best_rate, avg_rate, median_rate, len(listings))
+        log.debug(f"Historical snapshot added: {have}->{want} best={best_rate:.2f} avg={avg_rate:.2f} median={median_rate:.2f}")
     
     def _cleanup(self, key: Tuple[str, str, str]):
         """No-op: keep all snapshots forever. Only filter for API output."""
@@ -265,7 +272,7 @@ class HistoricalCache:
         return [
             {
                 "timestamp": s.timestamp.isoformat(),
-                "best_rate": round(s.best_rate, 6),
+                "median_rate": round(s.median_rate, 6),
                 "avg_rate": round(s.avg_rate, 6),
                 "listing_count": s.listing_count,
             }
@@ -289,10 +296,10 @@ class HistoricalCache:
             }
         # Use median price at start and end of window
         import statistics
-        start_prices = [s.best_rate for s in snapshots[:max(1, len(snapshots)//8)]]
-        end_prices = [s.best_rate for s in snapshots[-max(1, len(snapshots)//8):]]
-        start_median = statistics.median(start_prices)
-        end_median = statistics.median(end_prices)
+        start_medians = [s.median_rate for s in snapshots[:max(1, len(snapshots)//8)]]
+        end_medians = [s.median_rate for s in snapshots[-max(1, len(snapshots)//8):]]
+        start_median = statistics.median(start_medians)
+        end_median = statistics.median(end_medians)
         # Prevent division by zero/extreme %
         if start_median == 0:
             change_percent = 0.0
@@ -300,7 +307,7 @@ class HistoricalCache:
             change_percent = ((end_median - start_median) / start_median) * 100
         direction = "up" if change_percent > 2 else "down" if change_percent < -2 else "neutral"
         # Sparkline
-        series = [s.best_rate for s in snapshots]
+        series = [s.median_rate for s in snapshots]
         if len(series) > SPARKLINE_POINTS:
             step = len(series) / SPARKLINE_POINTS
             indices = [int(i * step) for i in range(SPARKLINE_POINTS)]
@@ -308,8 +315,8 @@ class HistoricalCache:
                 indices[-1] = len(series) - 1
             series = [series[i] for i in indices]
         # Lowest/highest median in window
-        lowest_median = min([statistics.median([s.best_rate for s in snapshots[i:i+max(1,len(snapshots)//8)]]) for i in range(0, len(snapshots), max(1,len(snapshots)//8))])
-        highest_median = max([statistics.median([s.best_rate for s in snapshots[i:i+max(1,len(snapshots)//8)]]) for i in range(0, len(snapshots), max(1,len(snapshots)//8))])
+        lowest_median = min([statistics.median([s.median_rate for s in snapshots[i:i+max(1,len(snapshots)//8)]]) for i in range(0, len(snapshots), max(1,len(snapshots)//8))])
+        highest_median = max([statistics.median([s.median_rate for s in snapshots[i:i+max(1,len(snapshots)//8)]]) for i in range(0, len(snapshots), max(1,len(snapshots)//8))])
         return {
             "direction": direction,
             "change_percent": round(change_percent, 2),
@@ -459,8 +466,7 @@ def fetch_listings_with_cache(
             listings = summarize_exchange_json(raw, top_n=20)  # Always fetch 20 for cache
             fetched_at = datetime.utcnow()
             cache.set(league, have, want, listings, fetched_at=fetched_at)
-            # Add to historical tracking
-            historical_cache.add_snapshot(league, have, want, listings)
+            # Do not insert snapshot here; handled in API endpoint
             return (listings[:top_n], False, fetched_at)
         if attempt < retries:
             time.sleep(backoff_s * (2 ** attempt))
@@ -485,8 +491,7 @@ def fetch_listings_force(
             listings = summarize_exchange_json(raw, top_n=20)  # Always fetch 20 for cache
             fetched_at = datetime.utcnow()
             cache.set(league, have, want, listings, fetched_at=fetched_at)
-            # Add to historical tracking
-            historical_cache.add_snapshot(league, have, want, listings)
+            # Do not insert snapshot here; handled in API endpoint
             return (listings[:top_n], False, fetched_at)
         if attempt < retries:
             time.sleep(backoff_s * (2 ** attempt))

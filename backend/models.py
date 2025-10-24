@@ -44,6 +44,7 @@ class PairSummary(BaseModel):
     status: str  # "ok" | "error" | "invalid" | "rate_limited"
     listings: List[ListingSummary] = Field(default_factory=list)
     best_rate: Optional[float] = None
+    median_rate: Optional[float] = None
     count_returned: int = 0
     trend: Optional[PriceTrend] = None  # Price trend for sparkline
     fetched_at: Optional[str] = None  # ISO timestamp of when data was fetched

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 interface LoginProps {
   onLogin: (token: string) => void
@@ -10,6 +10,13 @@ export function Login({ onLogin }: LoginProps) {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
+  const usernameRef = useRef<HTMLInputElement>(null)
+  // Auto-focus username input on mount
+  useEffect(() => {
+    if (usernameRef.current) {
+      usernameRef.current.focus()
+    }
+  }, [])
 
   const handleDiscordCopy = () => {
     navigator.clipboard.writeText('pepijn.')
@@ -125,6 +132,7 @@ export function Login({ onLogin }: LoginProps) {
               placeholder="Username"
               disabled={loading}
               autoComplete="username"
+              ref={usernameRef}
               style={{
                 width: '100%',
                 padding: '10px 12px',

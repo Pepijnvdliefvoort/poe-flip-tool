@@ -95,7 +95,7 @@ export type HistoryResponse = {
   league: string
   have: string
   want: string
-  history: { timestamp: string; best_rate: number; avg_rate: number; listing_count: number }[]
+  history: { timestamp: string; median_rate: number; avg_rate: number; listing_count: number }[]
   trend: PriceTrend
 }
 
