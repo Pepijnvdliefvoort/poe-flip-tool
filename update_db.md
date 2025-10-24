@@ -1,0 +1,33 @@
+This guide explains how to safely download, edit, and upload the SQLite database used by the Fly.io backend.
+
+# Prerequisites
+- Ensure you have [Fly.io CLI](https://fly.io/docs/getting-started/installing-flyctl/) installed and configured on your machine.
+
+
+# Commands
+
+## 1. Login to Fly.io
+```pwsh
+fly auth login
+```
+
+## 2. Download the Database
+```pwsh
+fly ssh sftp --app poe-flip-backend get /data/poe_cache.db poe_cache.db
+```
+> **Note:** This outputs the `poe_cache.db` file to your current working directory.
+
+## 3. Backup the Database
+```pwsh
+cp poe_cache.db poe_cache_backup.db
+```
+
+## 4. Edit the Database
+You can use any SQLite database editor of your choice. Here are a couple of popular options:
+- [DB Browser for SQLite](https://sqlitebrowser.org/)
+- [DBeaver](https://dbeaver.io/)
+
+## 5. Upload the Edited Database
+```pwsh
+fly ssh sftp --app poe-flip-backend put "C:\Users\PepijnvandeLiefvoort\poe_cache.db" /data/poe_cache.db
+```
