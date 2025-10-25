@@ -33,7 +33,9 @@ fly ssh console --app poe-flip-backend # SSH into the app
 
 cd /data # Change directory to the /data folder
 
-rm poe_cache.db
+rm poe_cache.db # remove the DB file (fly ssh can't overwrite db files)
+
+exit # exit SSH
 ```
 
 ## 5. Upload the Edited Database
