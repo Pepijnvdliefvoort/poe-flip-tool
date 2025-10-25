@@ -42,3 +42,8 @@ exit # exit SSH
 ```pwsh
 fly ssh sftp --app poe-flip-backend put "C:\Users\PepijnvandeLiefvoort\poe_cache.db" /data/poe_cache.db
 ```
+
+## 6. Redeploy the Fly.io app
+```pwsh
+fly deploy -a poe-flip-backend
+```
