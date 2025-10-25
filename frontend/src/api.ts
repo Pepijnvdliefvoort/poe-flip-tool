@@ -80,7 +80,7 @@ export const Api = {
         return j(await fetch(`${BASE}/api/trades/refresh_cache?top_n=${top_n}`, { method: 'POST', headers: headers() }))
     },
     async latestCached(top_n = 5): Promise<TradesResponse> {
-        return j(await fetch(`${BASE}/api/trades/latest_cached?top_n=${top_n}`, { headers: headers() }))
+        return j(await fetch(`${BASE}/api/cache/latest_cached?top_n=${top_n}`, { headers: headers() }))
     },
     async cacheStatus(): Promise<CacheStatus> {
         return j(await fetch(`${BASE}/api/cache/status`, { headers: headers() }))

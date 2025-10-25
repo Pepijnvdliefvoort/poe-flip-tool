@@ -1,5 +1,5 @@
 import time
-from rate_limiter import rate_limiter
+from backend.rate_limiter import rate_limiter
 
 
 def simulate(headers):

@@ -214,13 +214,11 @@ export default function App() {
     try {
       const refreshed = await Api.refreshOne(index, topN);
       setData(prev => {
-        console.log(1);
         if (!prev) return prev;
         const results = [...prev.results];
         results[index] = refreshed;
         // Recalculate profit margins after updating this pair
         const updatedResults = calculateProfitMargins(results);
-        console.log(updatedResults);
         return { ...prev, results: updatedResults };
       });
     } catch (e) {
@@ -410,6 +408,7 @@ export default function App() {
               onRefresh={() => load(true)} 
               accountName={accountName} 
               onDataUpdate={handleTradeDataUpdate}
+              topN={topN}
             />
           </div>
           <aside className="config-sidebar">

@@ -10,9 +10,9 @@ from datetime import datetime, timedelta
 import requests
 from dotenv import load_dotenv
 
-from models import ListingSummary
-from rate_limiter import rate_limiter
-from persistence import db
+from backend.models import ListingSummary
+from backend.rate_limiter import rate_limiter
+from backend.persistence import db
 
 load_dotenv()
 

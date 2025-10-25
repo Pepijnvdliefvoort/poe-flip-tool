@@ -659,7 +659,8 @@ export function TradesTable({
     onReload,
     onRefresh,
     accountName,
-    onDataUpdate
+    onDataUpdate,
+    topN
 }: {
     data: PairSummary[];
     loading: boolean;
@@ -667,6 +668,7 @@ export function TradesTable({
     onRefresh?: () => void;
     accountName?: string | null;
     onDataUpdate?: (newData: PairSummary[]) => void;
+    topN: number;
 }) {
     const [allExpanded, setAllExpanded] = useState(false)
 
@@ -683,7 +685,7 @@ export function TradesTable({
             if (cancelled) return
             try {
                 console.log('[TradesTable] Fetching latest cached data (30s timer)...')
-                const response = await Api.latestCached(5)
+                const response = await Api.latestCached(topN)
                 if (!cancelled && response.results) {
                     console.log('[TradesTable] Received cached data with timestamps:',
                         response.results.map(r => `${r.get}/${r.pay}: ${r.fetched_at}`))
@@ -709,7 +711,7 @@ export function TradesTable({
             cancelled = true
             if (timer !== null) clearTimeout(timer)
         }
-    }, [onDataUpdate])
+    }, [onDataUpdate, topN])
 
     // Always display all metrics
     const selectedMetrics = ['spread', 'median', 'profit'] as const

@@ -1,0 +1,76 @@
+{
+  "league": "Standard",
+  "trades": [
+    {
+      "get": "divine",
+      "pay": "chaos",
+      "hot": false
+    },
+    {
+      "get": "chaos",
+      "pay": "divine",
+      "hot": false
+    },
+    {
+      "get": "mirror",
+      "pay": "divine",
+      "hot": true
+    },
+    {
+      "get": "divine",
+      "pay": "mirror",
+      "hot": true
+    },
+    {
+      "get": "divine",
+      "pay": "hinekoras-lock",
+      "hot": true
+    },
+    {
+      "get": "hinekoras-lock",
+      "pay": "divine",
+      "hot": false
+    },
+    {
+      "get": "mirror",
+      "pay": "hinekoras-lock",
+      "hot": false
+    },
+    {
+      "get": "hinekoras-lock",
+      "pay": "mirror",
+      "hot": false
+    },
+    {
+      "get": "divine",
+      "pay": "mirror-shard",
+      "hot": false
+    },
+    {
+      "get": "mirror-shard",
+      "pay": "divine",
+      "hot": false
+    },
+    {
+      "get": "exalted",
+      "pay": "chaos",
+      "hot": false
+    },
+    {
+      "get": "chaos",
+      "pay": "exalted",
+      "hot": false
+    },
+    {
+      "get": "divine",
+      "pay": "exalted",
+      "hot": false
+    },
+    {
+      "get": "exalted",
+      "pay": "divine",
+      "hot": false
+    }
+  ],
+  "account_name": "iNeoxiz#3422"
+}

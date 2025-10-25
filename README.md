@@ -111,7 +111,7 @@ copy .env.example .env
 # Then edit .env with your actual POESESSID and CF_CLEARANCE
 
 # Run the backend
-python -m uvicorn main:app --reload
+python -m uvicorn backend.main:app --reload
 ```
 
 **Configuration Options** (Optional - edit `.env` file):
