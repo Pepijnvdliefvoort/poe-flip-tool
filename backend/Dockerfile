@@ -2,10 +2,13 @@
 # Build: docker build -t poe-flip-backend:latest -f backend/Dockerfile .
 # Run (dev/test): docker run --env-file backend/.env -p 8000:8000 poe-flip-backend:latest
 
+
 FROM python:3.12-slim
 
+# Ensure backend is importable as a package
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
 
 # Copy entire project root (for backend imports to work)
 WORKDIR /app/backend
