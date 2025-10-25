@@ -319,43 +319,64 @@ const ProfitTracker: React.FC = () => {
   }
   function clearHover() { setHoverIdx(null); }
 
-  function iconFor(currency: string) { return `${import.meta.env.BASE_URL}currency/${currency}.webp`; }
+  function iconFor(currency: string) {
+    // Normalize to match available image filenames
+    const map: Record<string, string> = {
+      'divine orb': 'divine',
+      'divine': 'divine',
+      'exalted orb': 'exalted',
+      'exalt': 'exalted',
+      'exalted': 'exalted',
+      'chaos orb': 'chaos',
+      'chaos': 'chaos',
+      'mirror of kalandra': 'mirror',
+      'mirror': 'mirror',
+      'hinekoras-lock': 'hinekoras-lock',
+      'mirror-shard': 'mirror-shard',
+    };
+    const key = currency.trim().toLowerCase();
+    const file = map[key] || key.replace(/ /g, '-');
+    return `${import.meta.env.BASE_URL}currency/${file}.webp`;
+  }
 
   function pluralize(currency: string, quantity: number): string {
+    // Use user-specified short names
+    const singularMap: Record<string, string> = {
+      'Divine Orb': 'divine',
+      'Chaos Orb': 'chaos',
+      'Exalted Orb': 'exalt',
+      'Mirror Shard': 'mirror shard',
+      'Mirror Of Kalandra': 'mirror',
+      'Hinekoras Lock': 'lock',
+    };
+    const pluralMap: Record<string, string> = {
+      'Divine Orb': 'divines',
+      'Chaos Orb': 'chaos',
+      'Exalted Orb': 'exalts',
+      'Mirror Shard': 'mirror shards',
+      'Mirror Of Kalandra': 'mirrors',
+      'Hinekoras Lock': 'locks',
+    };
     if (quantity === 1) {
-      // Singular forms
-      const singularMap: Record<string, string> = {
-        'divine': 'divine',
-        'mirror': 'mirror',
-        'hinekoras-lock': 'lock',
-        'exalted': 'exalt',
-        'chaos': 'chaos',
-        'mirror-shard': 'mirror shard',
-      };
       return singularMap[currency] || currency;
     } else {
-      // Plural forms
-      const pluralMap: Record<string, string> = {
-        'divine': 'divines',
-        'mirror': 'mirrors',
-        'hinekoras-lock': 'locks',
-        'exalted': 'exalts',
-        'chaos': 'chaos',
-        'mirror-shard': 'mirror shards',
-      };
-      return pluralMap[currency] || currency + 's';
+      return pluralMap[currency] || currency;
     }
   }
 
   const donut = useMemo(() => {
     if (!snapshot) return [];
-    const entries = snapshot.breakdown.filter(b => b.total_divine != null && b.total_divine! > 0);
-    const total = entries.reduce((a, b) => a + (b.total_divine || 0), 0) || 1;
+    const entries = snapshot.breakdown
+      .filter(e => typeof e.quantity === 'number' && e.quantity > 0)
+      .map(e => ({
+        currency: e.currency,
+        quantity: e.quantity,
+        value: e.total_divine || 0,
+      }));
+    const total = entries.reduce((a, b) => a + (b.value || 0), 0) || 1;
     return entries.map(e => ({
-      currency: e.currency,
-      quantity: e.quantity,
-      value: e.total_divine!,
-      pct: (e.total_divine! / total),
+      ...e,
+      pct: (e.value / total),
     })).sort((a, b) => b.value - a.value);
   }, [snapshot]);
 
@@ -375,7 +396,10 @@ const ProfitTracker: React.FC = () => {
       const midAngle = startAngle + angle/2;
       const lx = cx + (r+25)*Math.cos(midAngle); const ly = cy + (r+25)*Math.sin(midAngle);
       startAngle = endAngle;
-      return { path, color: palette[i % palette.length], labelPos: { x: lx, y: ly }, data: d };
+      // Gray out zero-value slices
+      const color = d.value > 0 ? palette[i % palette.length] : '#334155';
+      const opacity = d.value > 0 ? 1 : 0.35;
+      return { path, color, opacity, labelPos: { x: lx, y: ly }, data: d };
     });
     return { size, segments, cx, cy, total: donut.reduce((a,b)=>a+b.value,0) };
   }, [donut]);
@@ -722,109 +746,116 @@ const ProfitTracker: React.FC = () => {
         </div>
       )}
 
-      {snapshot && donutSvg && (
-        <div style={{ marginBottom: 34 }}>
-          <div style={{ display:'flex', gap:24, alignItems:'center', justifyContent:'center', flexWrap:'wrap' }}>
-            <div style={{ flex:'0 0 auto', maxWidth:350 }}>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-                {donut.map((d,i)=>(
-                  <div
-                    key={d.currency}
-                    style={{
-                      background: donutHoverIdx===i ? '#1e293b' : '#0f172a',
-                      border: donutHoverIdx===i ? `1px solid ${palette[i%palette.length]}` : '1px solid #1e293b',
-                      borderRadius:6,
-                      padding:'6px 10px',
-                      display:'flex',
-                      alignItems:'center',
-                      gap:6,
-                      cursor:'pointer',
-                      transition:'all 0.2s',
-                      transform: donutHoverIdx===i ? 'scale(1.03)' : 'scale(1)'
-                    }}
-                    onMouseEnter={() => setDonutHoverIdx(i)}
-                    onMouseLeave={() => setDonutHoverIdx(null)}
-                  >
-                    <span style={{ width:12, height:12, borderRadius:'50%', background:palette[i%palette.length], flexShrink:0 }} />
-                    <img src={iconFor(d.currency)} alt={d.currency} style={{ width:20, height:20, flexShrink:0 }} />
-                    <div style={{ flex:1, overflow:'hidden' }}>
-                      <div style={{ fontSize:12, fontWeight:600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{d.currency}</div>
-                      <div style={{ fontSize:11, opacity:0.7, fontVariantNumeric:'tabular-nums' }}>{formatNumber(d.pct*100, 1)}% • {formatNumber(d.quantity, 0)} {pluralize(d.currency, d.quantity)}</div>
+      {snapshot && (
+        donutSvg && donut.length > 0 ? (
+          <div style={{ marginBottom: 34 }}>
+            <div style={{ display:'flex', gap:24, alignItems:'center', justifyContent:'center', flexWrap:'wrap' }}>
+              <div style={{ flex:'0 0 auto', maxWidth:350 }}>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                  {donut.map((d,i)=>(
+                    <div
+                      key={d.currency}
+                      style={{
+                        background: donutHoverIdx===i ? '#1e293b' : '#0f172a',
+                        border: donutHoverIdx===i ? `1px solid ${palette[i%palette.length]}` : '1px solid #1e293b',
+                        borderRadius:6,
+                        padding:'6px 10px',
+                        display:'flex',
+                        alignItems:'center',
+                        gap:6,
+                        cursor:'pointer',
+                        transition:'all 0.2s',
+                        transform: donutHoverIdx===i ? 'scale(1.03)' : 'scale(1)'
+                      }}
+                      onMouseEnter={() => setDonutHoverIdx(i)}
+                      onMouseLeave={() => setDonutHoverIdx(null)}
+                    >
+                      <span style={{ width:12, height:12, borderRadius:'50%', background:palette[i%palette.length], flexShrink:0 }} />
+                      <img src={iconFor(d.currency)} alt={d.currency} style={{ width:20, height:20, flexShrink:0 }} />
+                      <div style={{ flex:1, overflow:'hidden' }}>
+                        <div style={{ fontSize:12, fontWeight:600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{d.currency}</div>
+                        <div style={{ fontSize:11, opacity:0.7, fontVariantNumeric:'tabular-nums' }}>{formatNumber(d.pct*100, 1)}% • {formatNumber(d.quantity, 0)} {pluralize(d.currency, d.quantity)}</div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-            <svg width={donutSvg.size} height={donutSvg.size} style={{ display:'block', flex:'0 0 auto' }}>
-              {donutSvg.segments.map((seg,i)=>(
-                <g key={i}>
-                  <path
-                    d={seg.path}
-                    fill={seg.color}
-                    stroke="#0f172a"
-                    strokeWidth={1}
-                    style={{ cursor:'pointer', transition:'opacity 0.2s', opacity: donutHoverIdx!=null && donutHoverIdx!==i ? 0.4 : 1 }}
-                    onMouseEnter={() => setDonutHoverIdx(i)}
-                    onMouseLeave={() => setDonutHoverIdx(null)}
+              <svg width={donutSvg.size} height={donutSvg.size} style={{ display:'block', flex:'0 0 auto' }}>
+                {donutSvg.segments.map((seg,i)=>(
+                  <g key={i}>
+                    <path
+                      d={seg.path}
+                      fill={seg.color}
+                      stroke="#0f172a"
+                      strokeWidth={1}
+                      style={{ cursor:'pointer', transition:'opacity 0.2s', opacity: donutHoverIdx!=null && donutHoverIdx!==i ? 0.4 : 1 }}
+                      onMouseEnter={() => setDonutHoverIdx(i)}
+                      onMouseLeave={() => setDonutHoverIdx(null)}
+                    />
+                    {donutHoverIdx===i && (
+                      <g>
+                        <text x={seg.labelPos.x} y={seg.labelPos.y} textAnchor="middle" fontSize={13} fill="#fff" fontWeight={600}>{seg.data.currency}</text>
+                        <text x={seg.labelPos.x} y={seg.labelPos.y+16} textAnchor="middle" fontSize={12} fill="#e2e8f0">{formatNumber(seg.data.quantity, 0)} {pluralize(seg.data.currency, seg.data.quantity)} ({formatNumber(seg.data.pct*100, 1)}%)</text>
+                      </g>
+                    )}
+                  </g>
+                ))}
+                {/* Divine Orbs total with icon */}
+                <g transform={`translate(${donutSvg.cx}, ${donutSvg.cy - 18})`}>
+                  <image 
+                    href={`${import.meta.env.BASE_URL}currency/divine.webp`} 
+                    x={-50} 
+                    y={-12} 
+                    width="24" 
+                    height="24" 
                   />
-                  {donutHoverIdx===i && (
-                    <g>
-                      <text x={seg.labelPos.x} y={seg.labelPos.y} textAnchor="middle" fontSize={13} fill="#fff" fontWeight={600}>{seg.data.currency}</text>
-                      <text x={seg.labelPos.x} y={seg.labelPos.y+16} textAnchor="middle" fontSize={12} fill="#e2e8f0">{formatNumber(seg.data.quantity, 0)} {pluralize(seg.data.currency, seg.data.quantity)} ({formatNumber(seg.data.pct*100, 1)}%)</text>
-                    </g>
-                  )}
+                  <text 
+                    x={-20} 
+                    y={4} 
+                    textAnchor="start" 
+                    fontSize={18} 
+                    fill="#e2e8f0" 
+                    fontWeight={700}
+                    style={{letterSpacing:0.5}}
+                  >
+                    {formatNumber(grandTotal, 2)}
+                  </text>
                 </g>
-              ))}
-              {/* Divine Orbs total with icon */}
-              <g transform={`translate(${donutSvg.cx}, ${donutSvg.cy - 18})`}>
-                <image 
-                  href={`${import.meta.env.BASE_URL}currency/divine.webp`} 
-                  x={-50} 
-                  y={-12} 
-                  width="24" 
-                  height="24" 
-                />
-                <text 
-                  x={-20} 
-                  y={4} 
-                  textAnchor="start" 
-                  fontSize={18} 
-                  fill="#e2e8f0" 
-                  fontWeight={700}
-                  style={{letterSpacing:0.5}}
-                >
-                  {formatNumber(grandTotal, 2)}
-                </text>
-              </g>
-              {/* Mirror equivalent with icon */}
-              <g transform={`translate(${donutSvg.cx}, ${donutSvg.cy + 12})`}>
-                <image 
-                  href={`${import.meta.env.BASE_URL}currency/mirror.webp`} 
-                  x={-50} 
-                  y={-12} 
-                  width="24" 
-                  height="24" 
-                />
-                <text 
-                  x={-20} 
-                  y={4} 
-                  textAnchor="start" 
-                  fontSize={16} 
-                  fill="#94a3b8" 
-                  fontWeight={600}
-                  style={{letterSpacing:0.5}}
-                >
-                  {(() => {
-                    // Find mirror in breakdown using the short key 'mirror'
-                    const mirrorEntry = snapshot.breakdown.find(b => b.currency === 'mirror');
-                    const divPerMirror = mirrorEntry?.divine_per_unit || 80;
-                    return formatNumber((grandTotal ?? 0) / divPerMirror, 2);
-                  })()}
-                </text>
-              </g>
-            </svg>
+                {/* Mirror equivalent with icon */}
+                <g transform={`translate(${donutSvg.cx}, ${donutSvg.cy + 12})`}>
+                  <image 
+                    href={`${import.meta.env.BASE_URL}currency/mirror.webp`} 
+                    x={-50} 
+                    y={-12} 
+                    width="24" 
+                    height="24" 
+                  />
+                  <text 
+                    x={-20} 
+                    y={4} 
+                    textAnchor="start" 
+                    fontSize={16} 
+                    fill="#94a3b8" 
+                    fontWeight={600}
+                    style={{letterSpacing:0.5}}
+                  >
+                    {(() => {
+                      // Find mirror in breakdown using the display name as used by backend
+                      const mirrorEntry = snapshot.breakdown.find(b => b.currency.toLowerCase() === 'mirror of kalandra');
+                      const divPerMirror = mirrorEntry?.divine_per_unit || 80;
+                      return formatNumber((grandTotal ?? 0) / divPerMirror, 2);
+                    })()}
+                  </text>
+                </g>
+              </svg>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div style={{ margin: '32px 0', textAlign: 'center', color: '#94a3b8', fontSize: 18, fontWeight: 500 }}>
+            No portfolio breakdown data available.<br />
+            Make sure your stash tabs are set up and rates are cached.
+          </div>
+        )
       )}
 
       {snapshot && (
