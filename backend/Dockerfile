@@ -7,14 +7,12 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-WORKDIR /app
+# Copy entire project root (for backend imports to work)
+WORKDIR /app/backend
+COPY . /app
 
-# System deps (optional: for faster builds you could add --no-cache-dir)
-COPY backend/requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
-
-# Copy backend source
-COPY backend /app
+# Install dependencies
+RUN pip install --no-cache-dir -r /app/backend/requirements.txt
 
 # Expose FastAPI port
 EXPOSE 8000
