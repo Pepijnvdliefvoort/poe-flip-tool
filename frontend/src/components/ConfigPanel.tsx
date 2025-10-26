@@ -1,4 +1,5 @@
-import { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
+
 import { Api } from '../api'
 import type { ConfigData } from '../types'
 import { CurrencyIcon } from './CurrencyIcon'
@@ -12,15 +13,7 @@ export function ConfigPanel({
     topN, 
     onTopNChanged,
     onAccountNameChanged
-}: { 
-    onChanged: () => void; 
-    onHotToggled?: (index: number, hot: boolean) => void;
-    onPairAdded?: (get: string, pay: string) => void;
-    onPairRemoved?: (index: number) => void;
-    topN: number;
-    onTopNChanged: (value: number) => void;
-    onAccountNameChanged?: (name: string | null) => void;
-}) {
+}: any) {
     const { isAuthenticated } = useAuth()
     const [cfg, setCfg] = useState<ConfigData | null>(null)
     const [get, setGet] = useState('')
@@ -120,9 +113,11 @@ export function ConfigPanel({
 
     if (!cfg) return <div className="card"><p style={{color: 'var(--muted)'}}>Loading…</p></div>
 
+
     return (
         <div className="card" style={{ fontSize: '14px' }}>
             <h2 style={{ fontSize: '20px', marginBottom: '16px' }}>Config</h2>
+
 
             {/* League selector and Top Results - side by side */}
             <div style={{ display: 'flex', gap: '12px', marginBottom: 16 }}>
@@ -225,6 +220,8 @@ export function ConfigPanel({
                     </div>
                 </div>
             </div>
+            
+            <ForumThreadLink />
 
             {/* Account Name for Highlighting */}
             <div style={{ marginBottom: 16 }}>
@@ -393,6 +390,25 @@ export function ConfigPanel({
                     </button>
                 </div>
             </div>
+
         </div>
     )
+}
+
+// ForumThreadLink component fetches and displays the forum thread link
+function ForumThreadLink() {
+    const [threadId, setThreadId] = React.useState(null as string | null);
+    React.useEffect(() => {
+        Api.getForumThreadId().then(id => setThreadId(id || null));
+    }, []);
+    if (!threadId) return null;
+    const url = `https://www.pathofexile.com/forum/view-thread/${threadId}`;
+    const length = 50;
+    const display = url.length > length ? url.slice(0, length - 3) + '...' : url;
+    return (
+        <div style={{ marginBottom: 16 }}>
+            <label className="muted" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '4px' }}>Forum Thread</label>
+            <a href={url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '13px', wordBreak: 'break-all', color: 'var(--accent)' }}>{display}</a>
+        </div>
+    );
 }

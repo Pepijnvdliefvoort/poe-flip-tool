@@ -60,7 +60,7 @@ def start_scheduler():
     t.start()
 
 # Register routers with appropriate prefixes
-app.include_router(root_router, prefix="")
+app.include_router(root_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(config_router, prefix="/api")
 app.include_router(trades_router, prefix="/api")

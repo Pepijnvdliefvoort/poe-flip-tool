@@ -34,6 +34,13 @@ async function j<T>(res: Response): Promise<T> {
 }
 
 export const Api = {
+    // Fetch forum thread ID from backend
+    async getForumThreadId(): Promise<string | null> {
+        const res = await fetch(`${BASE}/api/forum-thread-id`);
+        if (!res.ok) return null;
+        const data = await res.json();
+        return data.thread_id || null;
+    },
     async undercut(index: number, new_rate: string): Promise<{ status: number; new_rate: string; forum_location?: string }> {
         return j(await fetch(`${BASE}/api/trades/undercut`, {
             method: 'POST',
