@@ -221,15 +221,16 @@ class HistoricalCache:
         except Exception as e:
             log.error(f"Failed to load history from database: {e}")
     
-    def add_snapshot(self, league: str, have: str, want: str, listings: List[ListingSummary]):
-        """Record current price data as a historical snapshot, avoiding duplicates"""
+    def add_snapshot(self, league: str, have: str, want: str, listings: List[ListingSummary], top_n: int = 5):
+        """Record current price data as a historical snapshot, avoiding duplicates. Median is based on top_n listings (default 5)."""
         if not listings:
             return
         import statistics
         key = (league, have, want)
-        best_rate = listings[0].rate
-        avg_rate = sum(l.rate for l in listings) / len(listings)
-        median_rate = statistics.median([l.rate for l in listings])
+        top_listings = listings[:top_n] if len(listings) > top_n else listings
+        best_rate = top_listings[0].rate
+        avg_rate = sum(l.rate for l in top_listings) / len(top_listings)
+        median_rate = statistics.median([l.rate for l in top_listings])
         now = datetime.utcnow()
         # Prevent duplicate median snapshot within 1 minute and same value
         last_snap = self._history.get(key, [])[-1] if self._history.get(key) else None
@@ -244,7 +245,7 @@ class HistoricalCache:
             best_rate=best_rate,
             avg_rate=avg_rate,
             median_rate=median_rate,
-            listing_count=len(listings),
+            listing_count=len(top_listings),
         )
         if key not in self._history:
             self._history[key] = []
@@ -252,7 +253,7 @@ class HistoricalCache:
         # Clean up old data
         self._cleanup(key)
         # Persist to database
-        db.save_snapshot(league, have, want, snapshot.timestamp, best_rate, avg_rate, median_rate, len(listings))
+        db.save_snapshot(league, have, want, snapshot.timestamp, best_rate, avg_rate, median_rate, len(top_listings))
         log.debug(f"Historical snapshot added: {have}->{want} best={best_rate:.2f} avg={avg_rate:.2f} median={median_rate:.2f}")
     
     def _cleanup(self, key: Tuple[str, str, str]):
@@ -294,11 +295,10 @@ class HistoricalCache:
                 "lowest_median": None,
                 "highest_median": None,
             }
-        # Use median price at start and end of window
+        # Use median price at end of window, and the earliest snapshot's median as start
         import statistics
-        start_medians = [s.median_rate for s in snapshots[:max(1, len(snapshots)//8)]]
+        start_median = snapshots[0].median_rate  # Earliest snapshot in graph (at most 7 days ago)
         end_medians = [s.median_rate for s in snapshots[-max(1, len(snapshots)//8):]]
-        start_median = statistics.median(start_medians)
         end_median = statistics.median(end_medians)
         # Prevent division by zero/extreme %
         if start_median == 0:

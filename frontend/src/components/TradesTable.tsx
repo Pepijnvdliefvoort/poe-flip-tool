@@ -99,6 +99,7 @@ const Sparkline = memo(function Sparkline({ values, width = 70, height = 24, str
     const min = Math.min(...values);
     const last = values[values.length - 1]
     const base = values[0]
+    const first = values[0]
     const changePct = base !== 0 ? ((last - base) / base) * 100 : 0
     const sorted = [...values].sort((a, b) => a - b)
     const mid = Math.floor(sorted.length / 2)
@@ -172,6 +173,17 @@ const Sparkline = memo(function Sparkline({ values, width = 70, height = 24, str
             setContainerPos({ left: rect.left, top: rect.top });
         }
     }, [hoverIdx]);
+    // Optionally accept timestamps for each value (for tooltip)
+    // Try to get timestamps from props if available (not in original SparklineProps, but can be added)
+    // @ts-ignore
+    const timestamps: string[] | undefined = arguments[0]?.timestamps;
+    // Helper to format date
+    function formatDDMMHHMM(dateStr: string | undefined) {
+        if (!dateStr) return '';
+        const d = new Date(dateStr);
+        const pad = (n: number) => n.toString().padStart(2, '0');
+        return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
     return (
         <div ref={containerRef} style={{ position: 'relative', width, height }}>
             <svg
@@ -217,19 +229,20 @@ const Sparkline = memo(function Sparkline({ values, width = 70, height = 24, str
                         />
                     );
                 })}
-                {/* Render only min, max, and latest as dots */}
+                {/* Render min, max, earliest, and latest as dots */}
                 {values.map((v, i) => {
                     const x = i * stepX;
                     const y = computeY(v);
                     const isMin = i === values.indexOf(min);
                     const isMax = i === values.indexOf(max);
                     const isLast = i === values.length - 1;
-                    const isHoverable = isMin || isMax || isLast;
+                    const isFirst = i === 0;
+                    const isHoverable = isMin || isMax || isLast || isFirst;
                     if (!isHoverable) return null;
                     const isHover = i === hoverIdx;
-                    let fill = isHover ? '#fff' : isMin ? '#10b981' : isMax ? '#ef4444' : 'var(--accent)';
+                    let fill = isHover ? '#fff' : isFirst ? '#f59e42' : isMin ? '#10b981' : isMax ? '#ef4444' : 'var(--accent)';
                     let r = isHover ? 4 : 3;
-                    let stroke = isHover ? 'var(--accent)' : isMin ? '#10b981' : isMax ? '#ef4444' : '#111827';
+                    let stroke = isHover ? 'var(--accent)' : isFirst ? '#f59e42' : isMin ? '#10b981' : isMax ? '#ef4444' : '#111827';
                     let strokeWidth = isHover ? 2 : 1;
                     return (
                         <circle
@@ -268,6 +281,11 @@ const Sparkline = memo(function Sparkline({ values, width = 70, height = 24, str
                     }}
                 >
                     {formatRate(values[hoverIdx], haveCurrency, wantCurrency)}
+                    {timestamps && timestamps[hoverIdx] && (
+                        <div style={{ fontSize: 11, color: '#f59e42', fontWeight: 400, marginTop: 2 }}>
+                            {formatDDMMHHMM(timestamps[hoverIdx])}
+                        </div>
+                    )}
                 </div>,
                 document.body
             )}
@@ -414,22 +432,22 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
     let defaultNewPrice = String(bestRate);
     let defaultFraction = '';
     const bestFractionMatch = bestRateFraction.match(/^1\/(\d+)$/);
-    if (bestFractionMatch && myIndex === 0 && typeof myRate === 'number') {
-        const denom = parseInt(bestFractionMatch[1], 10);
-        if (Math.abs(myRate - (1 / denom)) < 1e-8) {
-            defaultNewPrice = `1/${denom}`;
-            defaultFraction = `1/${denom}`;
-        } else {
-            defaultNewPrice = `1/${denom + 1}`;
-            defaultFraction = `1/${denom + 1}`;
-        }
-    } else if (bestFractionMatch) {
-        const denom = parseInt(bestFractionMatch[1], 10);
-        defaultNewPrice = `1/${denom + 1}`;
-        defaultFraction = `1/${denom + 1}`;
-    } else if (myIndex === 0 && nextBestRate != null && Number.isFinite(nextBestRate)) {
-        // User is best, undercut next best
-        if (nextBestRate > 1 && nextBestRate % 1 !== 0) {
+    if (myIndex === 0 && nextBestRate != null && Number.isFinite(nextBestRate)) {
+        // User is best, always undercut the next best (second) rate
+        // If nextBestRate is a fraction 1/N, suggest 1/(N+1)
+        const asFraction = (() => {
+            if (nextBestRate > 0 && nextBestRate < 1) {
+                const denom = Math.round(1 / nextBestRate);
+                if (Math.abs(nextBestRate - 1 / denom) < 1e-8) {
+                    return denom;
+                }
+            }
+            return null;
+        })();
+        if (asFraction) {
+            defaultNewPrice = `1/${asFraction + 1}`;
+            defaultFraction = `1/${asFraction + 1}`;
+        } else if (nextBestRate > 1 && nextBestRate % 1 !== 0) {
             const frac = getFractionUndercut(nextBestRate);
             if (frac) {
                 defaultNewPrice = frac.value;
@@ -454,6 +472,10 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
             defaultNewPrice = String(nextBestRate);
             defaultFraction = '';
         }
+    } else if (bestFractionMatch) {
+        const denom = parseInt(bestFractionMatch[1], 10);
+        defaultNewPrice = `1/${denom + 1}`;
+        defaultFraction = `1/${denom + 1}`;
     } else if (myIndex === -1) {
         // User is not present in listings, undercut best
         if (Number.isFinite(bestRate) && bestRate > 1 && bestRate % 1 !== 0) {

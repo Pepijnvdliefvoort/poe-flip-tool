@@ -6,6 +6,7 @@ def refresh_cache_all_service(top_n: int = 5):
     from backend.utils.config import load_config
     cfg = load_config()
     results = []
+    from backend.trade_logic import historical_cache
     for idx, t in enumerate(cfg.trades):
         listings, was_cached, fetched_at = fetch_listings_with_cache(
             league=cfg.league,
@@ -13,6 +14,9 @@ def refresh_cache_all_service(top_n: int = 5):
             want=t.get,
             top_n=top_n,
         )
+        # Always add a snapshot so sparkline and metrics are in sync
+        if listings:
+            historical_cache.add_snapshot(cfg.league, t.pay, t.get, listings, top_n=top_n)
         best_rate = listings[0].rate if listings else None
         count_returned = len(listings) if listings else 0
         summary = PairSummary(
@@ -40,6 +44,7 @@ async def stream_trades_service(request, delay_s: int = 2, top_n: int = 5, force
     from backend.utils.config import load_config
     cfg = load_config()
     async def event_generator():
+        from backend.trade_logic import historical_cache
         for idx, t in enumerate(cfg.trades):
             listings, was_cached, fetched_at = fetch_listings_with_cache(
                 league=cfg.league,
@@ -47,6 +52,9 @@ async def stream_trades_service(request, delay_s: int = 2, top_n: int = 5, force
                 want=t.get,
                 top_n=top_n,
             )
+            # Always add a snapshot so sparkline and metrics are in sync
+            if listings:
+                historical_cache.add_snapshot(cfg.league, t.pay, t.get, listings, top_n=top_n)
             best_rate = listings[0].rate if listings else None
             count_returned = len(listings) if listings else 0
             summary = PairSummary(
@@ -76,12 +84,16 @@ def refresh_one_trade_service(index: int, top_n: int = 5):
     if not (0 <= index < len(cfg.trades)):
         raise Exception("Trade pair not found")
     t = cfg.trades[index]
+    from backend.trade_logic import historical_cache
     listings, was_cached, fetched_at = fetch_listings_force(
         league=cfg.league,
         have=t.pay,
         want=t.get,
         top_n=top_n,
     )
+    # Always add a snapshot so sparkline and metrics are in sync
+    if listings:
+        historical_cache.add_snapshot(cfg.league, t.pay, t.get, listings, top_n=top_n)
     best_rate = listings[0].rate if listings else None
     count_returned = len(listings) if listings else 0
     return PairSummary(
