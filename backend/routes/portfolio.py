@@ -10,6 +10,9 @@ router = APIRouter()
 @router.post("/portfolio/snapshot")
 
 def create_portfolio_snapshot(api_key: str = Depends(verify_api_key)):
+	# Allow scheduler to bypass API key check
+	if api_key == "__scheduler__":
+		pass
 	from backend.services.stash_service import get_stash_tab_service
 	from backend.utils.config import load_config
 	from backend.trade_logic import cache

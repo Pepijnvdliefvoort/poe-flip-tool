@@ -34,6 +34,13 @@ async function j<T>(res: Response): Promise<T> {
 }
 
 export const Api = {
+    async undercut(index: number, new_rate: string): Promise<{ status: number; new_rate: string; forum_location?: string }> {
+        return j(await fetch(`${BASE}/api/trades/undercut`, {
+            method: 'POST',
+            headers: headers(),
+            body: JSON.stringify({ index, new_rate })
+        }))
+    },
     async logout(): Promise<void> {
         await fetch(`${BASE}/api/auth/logout`, {
             method: 'POST',

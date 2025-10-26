@@ -52,3 +52,7 @@ def verify_session(token: str) -> bool:
         del active_sessions[token]
         return False
     return True
+
+def remove_session(token: str) -> bool:
+    """Remove a session token from active_sessions. Returns True if removed, False if not found."""
+    return active_sessions.pop(token, None) is not None

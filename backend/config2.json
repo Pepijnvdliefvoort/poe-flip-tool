@@ -2,8 +2,8 @@
   "league": "Standard",
   "trades": [
     {
-      "get": "divine",
-      "pay": "chaos",
+      "get": "mirror",
+      "pay": "hinekoras-lock",
       "hot": false
     }
   ],

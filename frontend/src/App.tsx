@@ -212,14 +212,13 @@ export default function App() {
       return { ...prev, results };
     });
     try {
-      const refreshed = await Api.refreshOne(index, topN);
+      await Api.refreshOne(index, topN);
+      // Fetch latest cached data to ensure UI is up to date
+      const latest = await Api.latestCached(topN);
       setData(prev => {
         if (!prev) return prev;
-        const results = [...prev.results];
-        results[index] = refreshed;
-        // Recalculate profit margins after updating this pair
-        const updatedResults = calculateProfitMargins(results);
-        return { ...prev, results: updatedResults };
+        // Use the latest results from backend cache
+        return { ...prev, results: calculateProfitMargins(latest.results) };
       });
     } catch (e) {
       setData(prev => {

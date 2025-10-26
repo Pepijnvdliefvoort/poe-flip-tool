@@ -1,21 +1,33 @@
+
+
 import { useState, useEffect, useRef, memo } from 'react'
 import { createPortal } from 'react-dom'
 import '../spinner.css'
 import { PairSummary } from '../types'
 import { Api } from '../api'
-// (Reverted) Removed cache watch specific imports/logic
 
-// Tiny sparkline component using SVG with optional baseline alignment
+
+
+type TradesTableProps = {
+    data: PairSummary[];
+    loading?: boolean;
+    onReload?: (index: number) => void;
+    onRefresh?: () => void;
+    accountName?: string | null;
+    onDataUpdate?: (newData: PairSummary[]) => void;
+    topN: number;
+};
+
 interface SparklineProps {
     values: number[]
     width?: number
     height?: number
     stroke?: string
     relativeFirst?: boolean
-    globalMaxAbsDelta?: number // treated as max absolute percent change for baseline-centering across all series
+    globalMaxAbsDelta?: number
     showMinMax?: boolean
-    visualCapPct?: number // clamp global scaling to at most this percent for visibility (e.g. 50)
-    adaptive?: boolean // if true, use per-series max instead of global for finer detail (still centered)
+    visualCapPct?: number
+    adaptive?: boolean
     haveCurrency?: string
     wantCurrency?: string
 }
@@ -83,10 +95,8 @@ const Sparkline = memo(function Sparkline({ values, width = 70, height = 24, str
             </div>
         );
     }
-
-    // Use values prop directly, which should be median_rate array
-    const min = Math.min(...values)
     const max = Math.max(...values)
+    const min = Math.min(...values);
     const last = values[values.length - 1]
     const base = values[0]
     const changePct = base !== 0 ? ((last - base) / base) * 100 : 0
@@ -301,9 +311,251 @@ function formatRate(num: number, have?: string, want?: string): string {
     }
     // Default localized 2 decimals
     return formatNumberEU(num, 2, 2)
+        if (!Number.isFinite(num)) return '—'
+        // Whole numbers
+        if (num % 1 === 0) return formatNumberEU(num)
+        // Always show as 1/N for any 0 < num < 1
+        if (num > 0 && num < 1) {
+            const denom = Math.round(1 / num)
+            return `1/${denom}`
+        }
+        // Default localized 2 decimals
+        return formatNumberEU(num, 2, 2)
 }
 
 function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAbsDelta, accountName, selectedMetrics }: { pair: PairSummary; defaultExpanded: boolean; loading: boolean; onReload: (index: number) => void; globalMaxAbsDelta: number; accountName?: string | null; selectedMetrics: readonly string[] }) {
+
+    // Timer state for undercut refresh countdown
+    const [refreshCountdown, setRefreshCountdown] = useState(0);
+
+    const [undercutDialogOpen, setUndercutDialogOpen] = useState(false);
+    // Improved undercut logic: if user is best, undercut next best; else undercut best
+    // Use the displayed best rate (fraction string) as the base for undercutting if available
+    let bestRate = pair.best_rate ?? 1;
+    let bestRateFraction = '';
+    if (pair.best_rate && pair.pay && pair.get) {
+        const display = formatRate(pair.best_rate, pair.pay, pair.get);
+        const m = display.match(/^1\/(\d+)$/);
+        if (m) {
+            bestRateFraction = display;
+            // Use the denominator to suggest the next best fraction
+            const denom = parseInt(m[1], 10);
+            if (denom > 1) {
+                bestRate = 1 / denom;
+            }
+        }
+    }
+    // Helper: reduce a fraction
+    function gcd(a: number, b: number): number {
+        return b === 0 ? a : gcd(b, a % b);
+    }
+    function toReducedFraction(x: number, maxDen: number = 100): { num: number, den: number } | null {
+        let bestNum = 1, bestDen = 1, bestError = Math.abs(x - 1);
+        for (let den = 1; den <= maxDen; den++) {
+            let num = Math.round(x * den);
+            let error = Math.abs(x - num / den);
+            if (error < bestError) {
+                bestNum = num;
+                bestDen = den;
+                bestError = error;
+            }
+            if (error < 1e-6) break;
+        }
+        const d = gcd(bestNum, bestDen);
+        return { num: bestNum / d, den: bestDen / d };
+    }
+    function getFractionUndercut(rate: number): { value: string, display: string } | null {
+        // If we have a bestRateFraction, use its denominator
+        if (bestRateFraction) {
+            const m = bestRateFraction.match(/^1\/(\d+)$/);
+            if (m) {
+                const denom = parseInt(m[1], 10);
+                return { value: `1/${denom + 1}`, display: `1/${denom + 1}` };
+            }
+        }
+        // For rates > 1 and not whole, suggest closest reduced fraction
+        if (rate > 1 && rate % 1 !== 0) {
+            const frac = toReducedFraction(rate, 100);
+            if (frac && frac.den !== 1) {
+                return { value: `${frac.num}/${frac.den}`, display: `${frac.num}/${frac.den}` };
+            }
+        }
+        for (let N = 2; N <= 10000; N++) {
+            if (Math.abs(rate - 1 / N) < 1e-8) {
+                // Suggest 1/(N+1) as the undercut
+                return { value: `1/${N + 1}`, display: `1/${N + 1}` };
+            }
+        }
+        return null;
+    }
+    // Find user's own listing index and rate
+    let myIndex = -1;
+    let myRate = null;
+    let nextBestRate = null;
+    if (pair.listings && pair.listings.length > 0) {
+        const sourceNames = accountName && accountName.length > 0 ? accountName : (import.meta.env.VITE_ACCOUNT_NAME || '');
+    const rawNames = sourceNames.split(',').map((s: string) => s.trim()).filter((val: string) => !!val);
+    const normalize = (name: string | undefined | null) => (name || '').replace(/#\d{3,5}$/, '').toLowerCase();
+        for (let i = 0; i < pair.listings.length; i++) {
+            const l = pair.listings[i];
+            const normalizedListing = normalize(l.account_name);
+            if (rawNames.some((envName: string) => normalize(envName) === normalizedListing)) {
+                myIndex = i;
+                myRate = l.rate;
+                break;
+            }
+        }
+        // If user is best (first listing), find next best after them
+        if (myIndex === 0 && pair.listings.length > 1) {
+            nextBestRate = pair.listings[1].rate;
+        }
+    }
+    // If the best rate is a fraction and the user is the best with that rate, do not suggest a better rate
+    let defaultNewPrice = String(bestRate);
+    let defaultFraction = '';
+    const bestFractionMatch = bestRateFraction.match(/^1\/(\d+)$/);
+    if (bestFractionMatch && myIndex === 0 && typeof myRate === 'number') {
+        const denom = parseInt(bestFractionMatch[1], 10);
+        if (Math.abs(myRate - (1 / denom)) < 1e-8) {
+            defaultNewPrice = `1/${denom}`;
+            defaultFraction = `1/${denom}`;
+        } else {
+            defaultNewPrice = `1/${denom + 1}`;
+            defaultFraction = `1/${denom + 1}`;
+        }
+    } else if (bestFractionMatch) {
+        const denom = parseInt(bestFractionMatch[1], 10);
+        defaultNewPrice = `1/${denom + 1}`;
+        defaultFraction = `1/${denom + 1}`;
+    } else if (myIndex === 0 && nextBestRate != null && Number.isFinite(nextBestRate)) {
+        // User is best, undercut next best
+        if (nextBestRate > 1 && nextBestRate % 1 !== 0) {
+            const frac = getFractionUndercut(nextBestRate);
+            if (frac) {
+                defaultNewPrice = frac.value;
+                defaultFraction = frac.display;
+            } else {
+                defaultNewPrice = String(Math.floor(nextBestRate));
+                defaultFraction = '';
+            }
+        } else if (nextBestRate > 1) {
+            defaultNewPrice = String(nextBestRate - 1);
+            defaultFraction = '';
+        } else if (nextBestRate > 0.01 && nextBestRate % 1 !== 0) {
+            const frac = getFractionUndercut(nextBestRate);
+            if (frac) {
+                defaultNewPrice = frac.value;
+                defaultFraction = frac.display;
+            } else {
+                defaultNewPrice = '';
+                defaultFraction = '';
+            }
+        } else {
+            defaultNewPrice = String(nextBestRate);
+            defaultFraction = '';
+        }
+    } else if (myIndex === -1) {
+        // User is not present in listings, undercut best
+        if (Number.isFinite(bestRate) && bestRate > 1 && bestRate % 1 !== 0) {
+            const frac = getFractionUndercut(bestRate);
+            if (frac) {
+                defaultNewPrice = frac.value;
+                defaultFraction = frac.display;
+            } else {
+                defaultNewPrice = String(Math.floor(bestRate));
+                defaultFraction = '';
+            }
+        } else if (Number.isFinite(bestRate) && bestRate > 1) {
+            defaultNewPrice = String(bestRate - 1);
+            defaultFraction = '';
+        } else if (Number.isFinite(bestRate) && bestRate > 0.01 && bestRate % 1 !== 0) {
+            const frac = getFractionUndercut(bestRate);
+            if (frac) {
+                defaultNewPrice = frac.value;
+                defaultFraction = frac.display;
+            } else {
+                defaultNewPrice = '';
+                defaultFraction = '';
+            }
+        }
+    } else if (myIndex > 0) {
+        // User is present but not the best, undercut best
+        if (Number.isFinite(bestRate) && bestRate > 1 && bestRate % 1 !== 0) {
+            const frac = getFractionUndercut(bestRate);
+            if (frac) {
+                defaultNewPrice = frac.value;
+                defaultFraction = frac.display;
+            } else {
+                defaultNewPrice = String(Math.floor(bestRate));
+                defaultFraction = '';
+            }
+        } else if (Number.isFinite(bestRate) && bestRate > 1) {
+            defaultNewPrice = String(bestRate - 1);
+            defaultFraction = '';
+        } else if (Number.isFinite(bestRate) && bestRate > 0.01 && bestRate % 1 !== 0) {
+            const frac = getFractionUndercut(bestRate);
+            if (frac) {
+                defaultNewPrice = frac.value;
+                defaultFraction = frac.display;
+            } else {
+                defaultNewPrice = '';
+                defaultFraction = '';
+            }
+        }
+    }
+
+    // Always use string for newPrice so it can be a fraction or decimal
+    const [newPrice, setNewPrice] = useState(String(defaultNewPrice));
+    const [fraction, setFraction] = useState(defaultFraction);
+
+    // Reset newPrice and fraction to defaults every time the dialog is opened
+    useEffect(() => {
+        if (undercutDialogOpen) {
+            setNewPrice(String(defaultNewPrice));
+            setFraction(defaultFraction);
+        }
+    }, [undercutDialogOpen, defaultNewPrice, defaultFraction]);
+    const [undercutLoading, setUndercutLoading] = useState(false);
+    const [undercutResult, setUndercutResult] = useState<string|null>(null);
+    const [undercutMenuPos, setUndercutMenuPos] = useState<{top: number, left: number} | null>(null);
+    const undercutBtnRef = useRef<HTMLButtonElement | null>(null);
+
+    // Close undercut menu on outside click
+    useEffect(() => {
+        if (!undercutDialogOpen) return;
+        function handleClick(event: MouseEvent) {
+            const menu = document.getElementById('undercut-menu');
+            const btn = undercutBtnRef.current;
+            if (menu && !menu.contains(event.target as Node) && btn && !btn.contains(event.target as Node)) {
+                setUndercutDialogOpen(false);
+                setUndercutResult(null);
+                setUndercutMenuPos(null);
+            }
+        }
+        document.addEventListener('mousedown', handleClick);
+        return () => document.removeEventListener('mousedown', handleClick);
+    }, [undercutDialogOpen]);
+
+    useEffect(() => {
+        if (!undercutDialogOpen && undercutMenuPos !== null) {
+            setUndercutMenuPos(null);
+        }
+    }, [undercutDialogOpen]);
+    
+    // Reset menu position when dialog closes
+    useEffect(() => {
+        if (!undercutDialogOpen && undercutMenuPos !== null) {
+            setUndercutMenuPos(null);
+        }
+    }, [undercutDialogOpen]);
+
+    // Reset menu position when dialog closes
+    useEffect(() => {
+        if (!undercutDialogOpen && undercutMenuPos !== null) {
+            setUndercutMenuPos(null);
+        }
+    }, [undercutDialogOpen]);
+    
     const [isExpanded, setIsExpanded] = useState(defaultExpanded)
     const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
     const [copiedAccountIndex, setCopiedAccountIndex] = useState<number | null>(null);
@@ -399,6 +651,14 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
     const isRateLimited = pair.status === 'rate_limited'
 
 
+    // Handler for row click: only toggle if not clicking a button inside controls
+    const handleHeaderClick = (e: React.MouseEvent<HTMLDivElement>) => {
+        // If the click target is a button or inside a button, do nothing
+        const target = e.target as HTMLElement;
+        if (target.closest('.pair-controls button')) return;
+        setIsExpanded(v => !v);
+    };
+
     return (
         <div style={{ position: 'relative', maxWidth: '100%', overflow: 'hidden' }}>
             <div
@@ -412,8 +672,8 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
             >
                 <div
                     className="pair-header collapsible"
-                    onClick={() => setIsExpanded(!isExpanded)}
                     style={{ cursor: 'pointer' }}
+                    onClick={handleHeaderClick}
                 >
                     <div className="pair-info">
                         <span className="pair-badge">
@@ -497,13 +757,38 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
                             )}
                         </div>
                         <div style={{ display: 'flex', gap: 6 }}>
-                            <button className="collapse-btn" onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded) }}>
+                            <button
+                                className="collapse-btn"
+                                ref={undercutBtnRef}
+                                disabled={undercutLoading || pair.status !== 'ok'}
+                                title="Undercut best rate by 1 (or custom)"
+                                onClick={e => {
+                                    e.stopPropagation();
+                                    if (undercutBtnRef.current) {
+                                        const rect = undercutBtnRef.current.getBoundingClientRect();
+                                        setUndercutMenuPos({
+                                            top: rect.bottom + 8,
+                                            left: rect.left
+                                        });
+                                    }
+                                    setUndercutDialogOpen(true);
+                                }}
+                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 8px' }}
+                            >
+                                {/* Dollar icon SVG */}
+                                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'block' }}>
+                                    <circle cx="10" cy="10" r="8" stroke="#f59e42" strokeWidth="2" fill="none" />
+                                    <path d="M10 5v10" stroke="#f59e42" strokeWidth="1.5" strokeLinecap="round"/>
+                                    <path d="M13 7.5c0-1.1-1.3-2-3-2s-3 .9-3 2c0 1.1 1.3 2 3 2s3 .9 3 2-1.3 2-3 2-3-.9-3-2" stroke="#f59e42" strokeWidth="1.5" fill="none"/>
+                                </svg>
+                            </button>
+                            <button className="collapse-btn" onClick={e => { e.stopPropagation(); setIsExpanded(!isExpanded); }}>
                                 {isExpanded ? '▼' : '▶'}
                             </button>
                             <button
                                 className="collapse-btn"
                                 disabled={pair.status === 'loading'}
-                                onClick={(e) => { e.stopPropagation(); onReload(pair.index) }}
+                                onClick={e => { e.stopPropagation(); onReload(pair.index); }}
                                 style={{ fontSize: '14px' }}
                                 title="Refresh this trade"
                             >⟳</button>
@@ -511,6 +796,161 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
                     </div>
                 </div>
 
+                {/* Undercut dialog is always available, not gated by isExpanded */}
+                {undercutDialogOpen && undercutMenuPos && createPortal(
+                    <div
+                        id="undercut-menu"
+                        style={{
+                            position: 'fixed',
+                            top: undercutMenuPos.top,
+                            left: undercutMenuPos.left,
+                            zIndex: 9999,
+                            background: '#222',
+                            border: '1px solid #f59e42',
+                            borderRadius: 8,
+                            padding: 16,
+                            minWidth: 260,
+                            boxShadow: '0 2px 16px #000a',
+                            color: '#fff'
+                        }}
+                    >
+                        <div style={{ fontWeight: 700, marginBottom: 8 }}>
+                            New price
+                            <input
+                                type="text"
+                                value={(() => {
+                                    // If the value is a decimal, convert to fraction for display
+                                    const val = fraction || newPrice;
+                                    if (/^\d+\/\d+$/.test(val)) return val;
+                                    const num = Number(val);
+                                    if (!isNaN(num) && num > 0 && num < 1) {
+                                        const denom = Math.round(1 / num);
+                                        return `1/${denom}`;
+                                    }
+                                    return val;
+                                })()}
+                                onChange={e => {
+                                    setFraction(e.target.value);
+                                    setNewPrice(e.target.value);
+                                }}
+                                style={{ width: 80, fontSize: 14, marginLeft: 8, marginRight: 4 }}
+                            />
+                            {pair.pay}
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                            <button
+                                disabled={
+                                    refreshCountdown > 0 ||
+                                    undercutLoading ||
+                                    (
+                                        // If myRate is a fraction and matches the new fraction, disable
+                                        typeof myRate === 'number' &&
+                                        /^1\/\d+$/.test(newPrice) &&
+                                        (() => {
+                                            const m = newPrice.match(/^1\/(\d+)$/);
+                                            if (m) {
+                                                const denom = parseInt(m[1], 10);
+                                                return Math.abs(myRate - (1 / denom)) < 1e-8;
+                                            }
+                                            return false;
+                                        })()
+                                    ) ||
+                                    (
+                                        typeof myRate === 'number' &&
+                                        !isNaN(Number(newPrice)) &&
+                                        Math.abs(Number(newPrice) - myRate) < 1e-6 &&
+                                        !/^\d+\/\d+$/.test(newPrice)
+                                    )
+                                }
+                                style={{
+                                    background: '#f59e42',
+                                    color: '#222',
+                                    border: 'none',
+                                    borderRadius: 4,
+                                    padding: '4px 12px',
+                                    fontWeight: 600,
+                                    cursor: (refreshCountdown > 0 || undercutLoading || (
+                                        typeof myRate === 'number' &&
+                                        /^1\/\d+$/.test(newPrice) &&
+                                        (() => {
+                                            const m = newPrice.match(/^1\/(\d+)$/);
+                                            if (m) {
+                                                const denom = parseInt(m[1], 10);
+                                                return Math.abs(myRate - (1 / denom)) < 1e-8;
+                                            }
+                                            return false;
+                                        })()
+                                    ) || (
+                                        typeof myRate === 'number' &&
+                                        !isNaN(Number(newPrice)) &&
+                                        Math.abs(Number(newPrice) - myRate) < 1e-6 &&
+                                        !/^\d+\/\d+$/.test(newPrice)
+                                    )) ? 'not-allowed' : 'pointer',
+                                    opacity: (refreshCountdown > 0 || undercutLoading || (
+                                        typeof myRate === 'number' &&
+                                        /^1\/\d+$/.test(newPrice) &&
+                                        (() => {
+                                            const m = newPrice.match(/^1\/(\d+)$/);
+                                            if (m) {
+                                                const denom = parseInt(m[1], 10);
+                                                return Math.abs(myRate - (1 / denom)) < 1e-8;
+                                            }
+                                            return false;
+                                        })()
+                                    ) || (
+                                        typeof myRate === 'number' &&
+                                        !isNaN(Number(newPrice)) &&
+                                        Math.abs(Number(newPrice) - myRate) < 1e-6 &&
+                                        !/^\d+\/\d+$/.test(newPrice)
+                                    )) ? 0.5 : 1,
+                                    pointerEvents: 'auto', // Always allow pointer events so cursor style works
+                                }}
+                                onClick={async () => {
+                                    setUndercutLoading(true);
+                                    setUndercutResult(null);
+                                    setRefreshCountdown(10);
+                                    let timer: NodeJS.Timeout | null = null;
+                                    try {
+                                        // Always send the fraction string if present, otherwise the decimal
+                                        const rateToSend = (fraction && fraction !== '1' && fraction !== '1/1') ? fraction : newPrice.toString();
+                                        const res = await Api.undercut(pair.index, rateToSend);
+                                        setUndercutResult(`Success! New rate: ${res.new_rate}`);
+                                        // Start countdown
+                                        timer = setInterval(() => {
+                                            setRefreshCountdown(prev => {
+                                                if (prev <= 1) {
+                                                    clearInterval(timer!);
+                                                    return 0;
+                                                }
+                                                return prev - 1;
+                                            });
+                                        }, 1000);
+                                        setTimeout(() => {
+                                            setUndercutDialogOpen(false);
+                                            setUndercutMenuPos(null);
+                                            setUndercutResult(null);
+                                            setRefreshCountdown(0);
+                                            // Simulate manual refresh (call onReload only)
+                                            if (onReload) onReload(pair.index);
+                                        }, 10000);
+                                    } catch (err: any) {
+                                        setUndercutResult('Failed: ' + (err?.message || 'Unknown error'));
+                                        setRefreshCountdown(0);
+                                    } finally {
+                                        setUndercutLoading(false);
+                                    }
+                                }}>
+                                {refreshCountdown > 0 ? `Refreshing (${refreshCountdown})` : 'Confirm'}
+                            </button>
+                            <button disabled={undercutLoading} style={{ background: '#444', color: '#fff', border: 'none', borderRadius: 4, padding: '4px 12px', fontWeight: 600, cursor: 'pointer' }}
+                                onClick={() => { setUndercutDialogOpen(false); setUndercutResult(null); setUndercutMenuPos(null); }}>
+                                Cancel
+                            </button>
+                        </div>
+                        {undercutResult && <div style={{ marginTop: 6, color: undercutResult.startsWith('Success') ? '#10b981' : '#ef4444', fontWeight: 500 }}>{undercutResult}</div>}
+                    </div>,
+                    document.body
+                )}
                 {isExpanded && (
                     <>
                         {pair.status === 'rate_limited' ? (
@@ -653,65 +1093,46 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
     )
 }
 
-export function TradesTable({
-    data,
-    loading,
-    onReload,
-    onRefresh,
-    accountName,
-    onDataUpdate,
-    topN
-}: {
-    data: PairSummary[];
-    loading: boolean;
-    onReload: (index: number) => void;
-    onRefresh?: () => void;
-    accountName?: string | null;
-    onDataUpdate?: (newData: PairSummary[]) => void;
-    topN: number;
-}) {
-    const [allExpanded, setAllExpanded] = useState(false)
 
-    // Page-specific 30s refresh timer - updates to latest cached data
+export function TradesTable(props: TradesTableProps) {
+    const { data, loading, onReload, onRefresh, accountName, onDataUpdate, topN } = props;
+    const [allExpanded, setAllExpanded] = useState(false);
+
     useEffect(() => {
-        if (!onDataUpdate) return
-
-        console.log('[TradesTable] Starting 30s refresh timer')
-
-        let cancelled = false
-        let timer: number | null = null
+        let cancelled = false;
+        let timer: number | null = null;
 
         const fetchLatestCached = async () => {
-            if (cancelled) return
+            if (cancelled) return;
             try {
-                console.log('[TradesTable] Fetching latest cached data (30s timer)...')
-                const response = await Api.latestCached(topN)
-                if (!cancelled && response.results) {
+                console.log('[TradesTable] Fetching latest cached data (30s timer)...');
+                const response = await Api.latestCached(topN);
+                if (!cancelled && response.results && onDataUpdate) {
                     console.log('[TradesTable] Received cached data with timestamps:',
-                        response.results.map(r => `${r.get}/${r.pay}: ${r.fetched_at}`))
-                    onDataUpdate(response.results)
+                        response.results.map(r => `${r.get}/${r.pay}: ${r.fetched_at}`));
+                    onDataUpdate(response.results);
                 }
             } catch (error) {
-                console.error('[TradesTable] Failed to fetch latest cached data:', error)
+                console.error('[TradesTable] Failed to fetch latest cached data:', error);
             }
-        }
+        };
 
         const schedule = () => {
-            if (cancelled) return
+            if (cancelled) return;
             timer = window.setTimeout(() => {
-                fetchLatestCached().then(schedule)
-            }, 30000) // 30s
-        }
+                fetchLatestCached().then(schedule);
+            }, 30000); // 30s
+        };
 
         // Fetch immediately on mount, then start the timer
-        fetchLatestCached().then(schedule)
+        fetchLatestCached().then(schedule);
 
         return () => {
-            console.log('[TradesTable] Stopping 30s refresh timer')
-            cancelled = true
-            if (timer !== null) clearTimeout(timer)
-        }
-    }, [onDataUpdate, topN])
+            console.log('[TradesTable] Stopping 30s refresh timer');
+            cancelled = true;
+            if (timer !== null) clearTimeout(timer);
+        };
+    }, [onDataUpdate, topN]);
 
     // Always display all metrics
     const selectedMetrics = ['spread', 'median', 'profit'] as const
@@ -962,11 +1383,11 @@ export function TradesTable({
                 <div className="pairs-grid">
                     {sortedData.map((p, i) => (
                         <CollapsiblePair
-                            key={p.index}
+                            key={`${p.pay}->${p.get}`}
                             pair={p}
                             defaultExpanded={allExpanded}
-                            loading={loading && i === loadingIndex}
-                            onReload={onReload}
+                            loading={!!loading && i === loadingIndex}
+                            onReload={onReload ? onReload : () => {}}
                             globalMaxAbsDelta={globalMaxAbsDelta}
                             accountName={accountName}
                             selectedMetrics={selectedMetrics}

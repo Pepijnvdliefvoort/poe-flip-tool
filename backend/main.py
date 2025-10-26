@@ -37,6 +37,28 @@ from backend.routes.rate_limit import router as rate_limit_router
 from backend.routes.stash import router as stash_router
 from backend.routes.portfolio import router as portfolio_router
 
+# Scheduler imports
+import threading
+import time
+from datetime import datetime
+from backend.routes import portfolio
+
+SNAPSHOT_INTERVAL_SECONDS = 900  # 15 minutes
+
+def scheduler_loop():
+    while True:
+        try:
+            # Call the snapshot logic directly, using a special API key or bypass auth
+            portfolio.create_portfolio_snapshot(api_key="__scheduler__")
+        except Exception as e:
+            log.error(f"Scheduler snapshot error: {e}")
+        time.sleep(SNAPSHOT_INTERVAL_SECONDS)
+
+@app.on_event("startup")
+def start_scheduler():
+    t = threading.Thread(target=scheduler_loop, daemon=True)
+    t.start()
+
 # Register routers with appropriate prefixes
 app.include_router(root_router, prefix="")
 app.include_router(auth_router, prefix="/api")
