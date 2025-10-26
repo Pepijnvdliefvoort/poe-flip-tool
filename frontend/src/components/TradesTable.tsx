@@ -384,11 +384,26 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
     }
     function getFractionUndercut(rate: number): { value: string, display: string } | null {
         // If we have a bestRateFraction, use its denominator
-        if (bestRateFraction) {
+        if (bestRateFraction && pair.listings) {
             const m = bestRateFraction.match(/^1\/(\d+)$/);
             if (m) {
                 const denom = parseInt(m[1], 10);
-                return { value: `1/${denom + 1}`, display: `1/${denom + 1}` };
+                // Collect all denominators in listings of the form 1/N
+                const usedDenoms = new Set<number>();
+                for (const l of pair.listings) {
+                    if (l.rate > 0 && l.rate < 1) {
+                        const d = Math.round(1 / l.rate);
+                        if (Math.abs(l.rate - 1 / d) < 1e-8) {
+                            usedDenoms.add(d);
+                        }
+                    }
+                }
+                // Find the next unused denominator after denom
+                let nextDenom = denom + 1;
+                while (usedDenoms.has(nextDenom)) {
+                    nextDenom++;
+                }
+                return { value: `1/${nextDenom}`, display: `1/${nextDenom}` };
             }
         }
         // For rates > 1 and not whole, suggest closest reduced fraction
@@ -408,8 +423,8 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
     }
     // Find user's own listing index and rate
     let myIndex = -1;
-    let myRate = null;
-    let nextBestRate = null;
+    let myRate: number | null = null;
+    let nextBestRate: number | null = null;
     if (pair.listings && pair.listings.length > 0) {
         const sourceNames = accountName && accountName.length > 0 ? accountName : (import.meta.env.VITE_ACCOUNT_NAME || '');
     const rawNames = sourceNames.split(',').map((s: string) => s.trim()).filter((val: string) => !!val);
@@ -502,7 +517,36 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
         }
     } else if (myIndex > 0) {
         // User is present but not the best, undercut best
-        if (Number.isFinite(bestRate) && bestRate > 1 && bestRate % 1 !== 0) {
+        // If both best and user are 1/N fractions, suggest next unused denominator after both
+        let userDenom: number | null = null;
+        if (typeof myRate === 'number' && myRate > 0 && myRate < 1) {
+            const d = Math.round(1 / myRate);
+            if (Math.abs(myRate - 1 / d) < 1e-8) userDenom = d;
+        }
+        let bestDenom: number | null = null;
+        if (typeof bestRate === 'number' && bestRate > 0 && bestRate < 1) {
+            const d = Math.round(1 / bestRate);
+            if (Math.abs(bestRate - 1 / d) < 1e-8) bestDenom = d;
+        }
+        if (bestDenom !== null && pair.listings) {
+            // Collect all denominators in listings of the form 1/N
+            const usedDenoms = new Set<number>();
+            for (const l of pair.listings) {
+                if (l.rate > 0 && l.rate < 1) {
+                    const d = Math.round(1 / l.rate);
+                    if (Math.abs(l.rate - 1 / d) < 1e-8) {
+                        usedDenoms.add(d);
+                    }
+                }
+            }
+            // Start from max(bestDenom, userDenom) + 1
+            let startDenom = Math.max(bestDenom, userDenom ?? 0) + 1;
+            while (usedDenoms.has(startDenom)) {
+                startDenom++;
+            }
+            defaultNewPrice = `1/${startDenom}`;
+            defaultFraction = `1/${startDenom}`;
+        } else if (Number.isFinite(bestRate) && bestRate > 1 && bestRate % 1 !== 0) {
             const frac = getFractionUndercut(bestRate);
             if (frac) {
                 defaultNewPrice = frac.value;
@@ -827,13 +871,15 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
                             top: undercutMenuPos.top,
                             left: undercutMenuPos.left,
                             zIndex: 9999,
-                            background: '#222',
-                            border: '1px solid #f59e42',
-                            borderRadius: 8,
-                            padding: 16,
-                            minWidth: 260,
-                            boxShadow: '0 2px 16px #000a',
-                            color: '#fff'
+                            background: 'var(--card)',
+                            border: '1px solid var(--border)',
+                            borderRadius: 12,
+                            padding: 20,
+                            minWidth: 280,
+                            boxShadow: '0 4px 24px #000b',
+                            color: 'var(--text)',
+                            fontSize: 15,
+                            transition: 'box-shadow 0.2s',
                         }}
                     >
                         <div style={{ fontWeight: 700, marginBottom: 8 }}>
@@ -855,7 +901,19 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
                                     setFraction(e.target.value);
                                     setNewPrice(e.target.value);
                                 }}
-                                style={{ width: 80, fontSize: 14, marginLeft: 8, marginRight: 4 }}
+                                style={{
+                                    width: 90,
+                                    fontSize: 15,
+                                    marginLeft: 10,
+                                    marginRight: 6,
+                                    background: 'var(--bg-secondary)',
+                                    color: 'var(--text)',
+                                    border: '1px solid var(--border)',
+                                    borderRadius: 6,
+                                    padding: '6px 10px',
+                                    outline: 'none',
+                                    transition: 'border-color 0.2s',
+                                }}
                             />
                             {pair.pay}
                         </div>
@@ -884,30 +942,13 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
                                         !/^\d+\/\d+$/.test(newPrice)
                                     )
                                 }
+                                className="btn primary"
                                 style={{
-                                    background: '#f59e42',
-                                    color: '#222',
-                                    border: 'none',
-                                    borderRadius: 4,
-                                    padding: '4px 12px',
-                                    fontWeight: 600,
-                                    cursor: (refreshCountdown > 0 || undercutLoading || (
-                                        typeof myRate === 'number' &&
-                                        /^1\/\d+$/.test(newPrice) &&
-                                        (() => {
-                                            const m = newPrice.match(/^1\/(\d+)$/);
-                                            if (m) {
-                                                const denom = parseInt(m[1], 10);
-                                                return Math.abs(myRate - (1 / denom)) < 1e-8;
-                                            }
-                                            return false;
-                                        })()
-                                    ) || (
-                                        typeof myRate === 'number' &&
-                                        !isNaN(Number(newPrice)) &&
-                                        Math.abs(Number(newPrice) - myRate) < 1e-6 &&
-                                        !/^\d+\/\d+$/.test(newPrice)
-                                    )) ? 'not-allowed' : 'pointer',
+                                    minWidth: 90,
+                                    padding: '8px 0',
+                                    fontSize: 15,
+                                    borderRadius: 6,
+                                    pointerEvents: 'auto',
                                     opacity: (refreshCountdown > 0 || undercutLoading || (
                                         typeof myRate === 'number' &&
                                         /^1\/\d+$/.test(newPrice) &&
@@ -925,7 +966,6 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
                                         Math.abs(Number(newPrice) - myRate) < 1e-6 &&
                                         !/^\d+\/\d+$/.test(newPrice)
                                     )) ? 0.5 : 1,
-                                    pointerEvents: 'auto', // Always allow pointer events so cursor style works
                                 }}
                                 onClick={async () => {
                                     setUndercutLoading(true);
@@ -964,7 +1004,15 @@ function CollapsiblePair({ pair, defaultExpanded, loading, onReload, globalMaxAb
                                 }}>
                                 {refreshCountdown > 0 ? `Refreshing (${refreshCountdown})` : 'Confirm'}
                             </button>
-                            <button disabled={undercutLoading} style={{ background: '#444', color: '#fff', border: 'none', borderRadius: 4, padding: '4px 12px', fontWeight: 600, cursor: 'pointer' }}
+                            <button
+                                disabled={undercutLoading}
+                                className="btn secondary"
+                                style={{
+                                    minWidth: 90,
+                                    padding: '8px 0',
+                                    fontSize: 15,
+                                    borderRadius: 6,
+                                }}
                                 onClick={() => { setUndercutDialogOpen(false); setUndercutResult(null); setUndercutMenuPos(null); }}>
                                 Cancel
                             </button>

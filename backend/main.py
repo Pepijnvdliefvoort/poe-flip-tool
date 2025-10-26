@@ -5,6 +5,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
+from fastapi import Request
+
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -22,6 +24,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add a direct root route for GET /
+@app.get("/")
+async def root(request: Request):
+    return {"status": "ok", "message": "PoE Trade Backend running"}
 
 # Import and register routers from routes
 from backend.routes.root import router as root_router
