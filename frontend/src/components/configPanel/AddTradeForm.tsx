@@ -6,12 +6,13 @@ interface AddTradeFormProps {
   pay: string;
   setPay: (v: string) => void;
   saving: boolean;
+  setSaving: (saving: boolean) => void;
   addPair: (get: string, pay: string, setCfg: any, setGet: any, setPay: any, setSaving: any, onPairAdded: any) => void;
   setCfg: any;
   onPairAdded: any;
 }
 
-const AddTradeForm: React.FC<AddTradeFormProps> = ({ get, setGet, pay, setPay, saving, addPair, setCfg, onPairAdded }) => (
+const AddTradeForm: React.FC<AddTradeFormProps> = ({ get, setGet, pay, setPay, saving, setSaving, addPair, setCfg, onPairAdded }) => (
   <div>
     <label className="muted" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px', display: 'block' }}>
       Add Trade
@@ -33,7 +34,7 @@ const AddTradeForm: React.FC<AddTradeFormProps> = ({ get, setGet, pay, setPay, s
       />
       <button 
         className="btn primary" 
-        onClick={() => addPair(get, pay, setCfg, setGet, setPay, saving, onPairAdded)} 
+        onClick={() => addPair(get, pay, setCfg, setGet, setPay, setSaving, onPairAdded)} 
         disabled={saving || !get.trim() || !pay.trim()}
         style={{width: '100%', fontSize: '13px', padding: '8px'}}
       >

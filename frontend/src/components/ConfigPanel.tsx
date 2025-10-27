@@ -76,7 +76,7 @@ export function ConfigPanel({
             <TradePairsList trades={cfg.trades} cfg={cfg} setCfg={setCfg} setSaving={setSaving} onHotToggled={onHotToggled} onPairRemoved={onPairRemoved} saving={saving} toggleHot={toggleHot} removePair={removePair} />
 
             {/* Add new trade - compact */}
-            <AddTradeForm get={get} setGet={setGet} pay={pay} setPay={setPay} saving={saving} addPair={addPair} setCfg={setCfg} onPairAdded={onPairAdded} />
+            <AddTradeForm get={get} setGet={setGet} pay={pay} setPay={setPay} saving={saving} setSaving={setSaving} addPair={addPair} setCfg={setCfg} onPairAdded={onPairAdded} />
 
     </Card>
     )
