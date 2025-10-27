@@ -1,4 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
+import { Button } from './ui/Button';
+import { Input } from './ui/Input';
+import { Card } from './ui/Card';
 
 interface LoginProps {
   onLogin: (token: string) => void
@@ -37,11 +40,11 @@ export function Login({ onLogin }: LoginProps) {
 
     // Login and get session token
     try {
-      const BASE = import.meta.env.VITE_BACKEND_URL || 
+      const BASE = import.meta.env.VITE_BACKEND_URL ||
         (typeof location !== 'undefined' && location.hostname.endsWith('github.io')
           ? 'https://poe-flip-backend.fly.dev'
           : 'http://localhost:8000')
-      
+
       const response = await fetch(`${BASE}/api/auth/login`, {
         method: 'POST',
         headers: {
@@ -77,23 +80,15 @@ export function Login({ onLogin }: LoginProps) {
       background: 'var(--bg)',
       padding: '20px'
     }}>
-      <div style={{
-        background: 'var(--card)',
-        border: '1px solid var(--border)',
-        borderRadius: '8px',
-        padding: '32px',
-        maxWidth: '400px',
-        width: '100%',
-        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)'
-      }}>
+      <Card style={{ maxWidth: 400, width: '100%', padding: 32, boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)' }}>
         <div style={{
           display: 'flex',
           justifyContent: 'center',
           marginBottom: '16px'
         }}>
-          <img 
-            src={`${import.meta.env.BASE_URL}favicon.png`} 
-            alt="PoE Logo" 
+          <img
+            src={`${import.meta.env.BASE_URL}favicon.png`}
+            alt="PoE Logo"
             style={{ width: '48px', height: '48px' }}
           />
         </div>
@@ -106,103 +101,58 @@ export function Login({ onLogin }: LoginProps) {
         }}>
           PoE Currency Flip Tool
         </h1>
-        <p style={{
-          fontSize: '14px',
-          color: 'var(--muted)',
-          marginBottom: '24px',
-          textAlign: 'center'
-        }}>
-          Sign in to continue
-        </p>
+
+
+
 
         <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{
-              display: 'block',
-              fontSize: '13px',
-              fontWeight: 500,
-              marginBottom: '6px',
-              color: 'var(--text)'
-            }}>
-              Username
-            </label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Username"
+          <Input
+            label="Username"
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="Username"
+            disabled={loading}
+            autoComplete="username"
+            ref={usernameRef}
+            containerStyle={{ marginBottom: 16 }}
+            onFocus={(e) => e.currentTarget.style.borderColor = 'var(--accent)'}
+            onBlur={(e) => e.currentTarget.style.borderColor = 'var(--border)'}
+          />
+          <div style={{ marginBottom: '16px', position: 'relative' }}>
+            <Input
+              label="Password"
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
               disabled={loading}
-              autoComplete="username"
-              ref={usernameRef}
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                fontSize: '14px',
-                border: '1px solid var(--border)',
-                borderRadius: '4px',
-                background: 'var(--bg-secondary)',
-                color: 'var(--text)',
-                outline: 'none',
-                transition: 'border-color 0.2s'
-              }}
-              onFocus={(e) => e.target.style.borderColor = 'var(--accent)'}
-              onBlur={(e) => e.target.style.borderColor = 'var(--border)'}
+              autoComplete="current-password"
+              style={{ paddingRight: 40 }}
+              onFocus={(e) => e.currentTarget.style.borderColor = 'var(--accent)'}
+              onBlur={(e) => e.currentTarget.style.borderColor = 'var(--border)'}
             />
-          </div>
-
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{
-              display: 'block',
-              fontSize: '13px',
-              fontWeight: 500,
-              marginBottom: '6px',
-              color: 'var(--text)'
-            }}>
-              Password
-            </label>
-            <div style={{ position: 'relative' }}>
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
-                disabled={loading}
-                autoComplete="current-password"
-                style={{
-                  width: '100%',
-                  padding: '10px 36px 10px 12px',
-                  fontSize: '14px',
-                  border: '1px solid var(--border)',
-                  borderRadius: '4px',
-                  background: 'var(--bg-secondary)',
-                  color: 'var(--text)',
-                  outline: 'none',
-                  transition: 'border-color 0.2s'
-                }}
-                onFocus={(e) => e.target.style.borderColor = 'var(--accent)'}
-                onBlur={(e) => e.target.style.borderColor = 'var(--border)'}
-              />
-              <button
-                type="button"
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-                onClick={() => setShowPassword(v => !v)}
-                style={{
-                  position: 'absolute',
-                  right: 8,
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
-                  color: 'inherit',
-                  cursor: 'pointer',
-                  fontSize: '16px',
-                  padding: 0
-                }}
-                tabIndex={-1}
-              >
-                {showPassword ? '🙈' : '👁️'}
-              </button>
-            </div>
+            <Button
+              type="button"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              onClick={() => setShowPassword(v => !v)}
+              style={{
+                position: 'absolute',
+                right: 8,
+                top: '55%',
+                background: 'none',
+                border: 'none',
+                color: 'inherit',
+                cursor: 'pointer',
+                fontSize: '16px',
+                padding: 0,
+                minWidth: 30
+              }}
+              tabIndex={-1}
+              variant="ghost"
+            >
+              {showPassword ? '🙈' : '👁️'}
+            </Button>
           </div>
 
           {error && (
@@ -219,40 +169,22 @@ export function Login({ onLogin }: LoginProps) {
             </div>
           )}
 
-          <button
+          <Button
             type="submit"
-            disabled={loading}
+            loading={loading}
             style={{
               width: '100%',
               padding: '10px 16px',
               fontSize: '14px',
               fontWeight: 600,
-              color: 'white',
-              background: loading ? 'var(--muted)' : 'var(--accent)',
-              border: 'none',
               borderRadius: '4px',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              transition: 'background 0.2s'
-            }}
-            onMouseEnter={(e) => {
-              if (!loading) e.currentTarget.style.background = 'var(--accent-hover)'
-            }}
-            onMouseLeave={(e) => {
-              if (!loading) e.currentTarget.style.background = 'var(--accent)'
             }}
           >
-            {loading ? 'Verifying...' : 'Login'}
-          </button>
+            Login
+          </Button>
         </form>
 
-        <div style={{
-          marginTop: '24px',
-          padding: '16px',
-          background: 'var(--bg-secondary)',
-          border: '1px solid var(--border)',
-          borderRadius: '6px',
-          textAlign: 'center'
-        }}>
+        <Card style={{ marginTop: 24, padding: 16, background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 6, textAlign: 'center' }}>
           <p style={{
             fontSize: '13px',
             color: 'var(--text)',
@@ -267,7 +199,8 @@ export function Login({ onLogin }: LoginProps) {
           }}>
             Contact me on Discord
           </p>
-          <button
+
+          <Button
             onClick={handleDiscordCopy}
             style={{
               padding: '8px 16px',
@@ -280,21 +213,15 @@ export function Login({ onLogin }: LoginProps) {
               borderRadius: '4px',
               cursor: 'pointer',
               transition: 'all 0.2s',
-              position: 'relative'
+              position: 'relative',
+              marginTop: 4
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = 'var(--accent)'
-              e.currentTarget.style.background = 'var(--card)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = 'var(--border)'
-              e.currentTarget.style.background = 'var(--bg)'
-            }}
+            variant="ghost"
           >
             {copied ? '✓ Copied!' : 'pepijn.'}
-          </button>
-        </div>
-      </div>
+          </Button>
+        </Card>
+      </Card>
     </div>
   )
 }

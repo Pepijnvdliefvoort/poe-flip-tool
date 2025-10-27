@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, useRef } from 'react'
 import './spinner.css'
+import { Button } from './components/ui/Button';
 import { Api } from './api'
 import type { TradesResponse, PairSummary } from './types'
 import { TradesTable } from './components/TradesTable'
@@ -9,61 +10,11 @@ import ProfitTracker from './components/ProfitTracker'
 import { Login } from './components/Login'
 import { useAuth } from './hooks/useAuth'
 import { useGlobalPolling } from './hooks/useGlobalPolling'
+import { BASE, getApiKey } from './utils/apiHelpers'
+import { calculateProfitMargins } from './utils/profit'
+import { updateRateLimit } from './utils/rateLimit'
+import { reloadPair, addNewPair, removePair, updateHotStatus, handleTradeDataUpdate } from './utils/tradeData'
 
-// Backend base resolution (same logic as api.ts)
-const BASE =
-  import.meta.env.VITE_API_BASE ||
-  import.meta.env.VITE_BACKEND_URL ||
-  (typeof location !== 'undefined' && location.hostname.endsWith('github.io')
-    ? 'https://poe-flip-backend.fly.dev'
-    : 'http://localhost:8000');
-
-// Get API key from env or sessionStorage
-const getApiKey = () => import.meta.env.VITE_API_KEY || sessionStorage.getItem('api_key') || '';
-
-// Helper function to calculate profit margins for linked pairs
-function calculateProfitMargins(pairs: PairSummary[]): PairSummary[] {
-  const result = pairs.map(p => ({ ...p })); // Clone to avoid mutation
-  
-  for (let i = 0; i < result.length; i++) {
-    const pairA = result[i];
-    // Skip if already calculated or no valid median_rate
-    if (pairA.linked_pair_index != null || pairA.median_rate == null) {
-      continue;
-    }
-    // Find the reverse pair
-    for (let j = 0; j < result.length; j++) {
-      if (i === j) continue;
-      const pairB = result[j];
-      // Check if this is the reverse pair (get/pay swapped)
-      if (pairA.get === pairB.pay && pairA.pay === pairB.get) {
-        if (pairB.median_rate != null && pairB.median_rate > 0) {
-          // Link them together
-          pairA.linked_pair_index = j;
-          pairB.linked_pair_index = i;
-          // Calculate profit margin using median_rate
-          // pairA: pay X to get Y (rate = Y/X)
-          // pairB: pay Y to get X (rate = X/Y)
-          // Amount of pairA.get currency we receive per 1 pairA.pay
-          const receivePerCycle = pairA.median_rate;
-          // Amount of pairA.get currency we need to spend to get back 1 pairA.pay
-          const spendToGetBack = 1.0 / pairB.median_rate;
-          // Raw profit in pairA.get currency per 1 pairA.pay spent
-          const rawProfit = receivePerCycle - spendToGetBack;
-          // Percentage profit margin
-          const profitPct = spendToGetBack > 0 ? (rawProfit / spendToGetBack * 100) : 0;
-          pairA.profit_margin_raw = Math.round(rawProfit * 10000) / 10000;
-          pairA.profit_margin_pct = Math.round(profitPct * 100) / 100;
-          pairB.profit_margin_raw = Math.round(rawProfit * 10000) / 10000;
-          pairB.profit_margin_pct = Math.round(profitPct * 100) / 100;
-        }
-        break;
-      }
-    }
-  }
-  
-  return result;
-}
 
 export default function App() {
   const { isAuthenticated, setIsAuthenticated } = useAuth()
@@ -103,35 +54,10 @@ export default function App() {
     setIsAuthenticated(false);
   };
 
-  // Helper to update rate limit info after every API call
-  const updateRateLimit = async () => {
-    try {
-      const status = await Api.rateLimitStatus();
-      setRateLimit(status);
-      setRateLimitDisplay(status);
-      // Near-limit heuristic: treat small windows differently so 1/5 doesn't immediately trigger.
-      // Rules:
-      // - Ignore expired windows (reset_s <= 0)
-      // - For small limits (<= 10): near if current >= ceil(limit * 0.6)
-      // - For larger limits: near if utilization >= 0.7 and at least 3 requests used
-      const isNearLimit = (r: { current: number; limit: number; reset_s: number }) => {
-        if (r.reset_s <= 0 || r.limit <= 0) return false;
-        if (r.limit <= 10) {
-          // For very small windows require being one request away from the cap (e.g. 4/5, 5/6, 9/10)
-          return r.current >= (r.limit - 1) && r.current < r.limit;
-        }
-        return r.current >= 3 && (r.current / r.limit) >= 0.7 && r.current < r.limit;
-      };
-      const near = Object.values(status.rules).some(ruleArr => ruleArr.some(isNearLimit));
-      setNearLimit(near);
-    } catch (e) {
-      // ignore
-    }
-  };
+
 
   const load = useCallback((forceRefresh = false) => {
     setLoading(true)
-    // Pre-populate results with empty rows for each trade
     Api.getConfig().then(cfg => {
       const emptyResults = (cfg.trades || []).map((t, idx) => ({
         index: idx,
@@ -147,8 +73,6 @@ export default function App() {
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
       }
-      // Use force parameter: true for manual refresh, false for initial load
-      // Include API key as query param for EventSource (doesn't support headers)
       const apiKey = getApiKey();
       const apiKeyParam = apiKey ? `&api_key=${encodeURIComponent(apiKey)}` : '';
       const url = `${BASE}/api/trades/stream?top_n=${topN}&force=${forceRefresh}${apiKeyParam}`;
@@ -162,30 +86,27 @@ export default function App() {
           const results = [...(prev?.results || [])];
           results[summary.index] = summary;
           const arrivedCount = results.filter(r => r.status !== 'loading').length;
-          
-          // Calculate profit margins if all pairs have arrived
           const updatedResults = (pairs && arrivedCount >= pairs) 
             ? calculateProfitMargins(results)
             : results;
-          
           if (pairs && arrivedCount >= pairs) {
             setLoading(false);
           }
           return { league, pairs, results: updatedResults };
         });
-        updateRateLimit();
+        updateRateLimit(setRateLimit, setRateLimitDisplay, setNearLimit);
       };
       es.onerror = () => {
         es.close();
         setLoading(false);
-        updateRateLimit();
+        updateRateLimit(setRateLimit, setRateLimitDisplay, setNearLimit);
       };
       es.onopen = () => {
         setLoading(true);
-        updateRateLimit();
+        updateRateLimit(setRateLimit, setRateLimitDisplay, setNearLimit);
       };
     });
-    updateRateLimit();
+    updateRateLimit(setRateLimit, setRateLimitDisplay, setNearLimit);
   }, [topN])
 
   // Initial load uses cache, subsequent manual refreshes force fresh data
@@ -200,128 +121,24 @@ export default function App() {
   }, [load, isAuthenticated])
 
 
-  const reloadPair = async (index: number) => {
-    if (!data) return;
-    setData(prev => {
-      if (!prev) return prev;
-      const results = [...prev.results];
-      const p = results[index];
-      if (p) {
-        results[index] = { ...p, status: 'loading', listings: [], best_rate: null, count_returned: 0 };
-      }
-      return { ...prev, results };
-    });
-    try {
-      await Api.refreshOne(index, topN);
-      // Fetch latest cached data to ensure UI is up to date
-      const latest = await Api.latestCached(topN);
-      setData(prev => {
-        if (!prev) return prev;
-        // Use the latest results from backend cache
-        return { ...prev, results: calculateProfitMargins(latest.results) };
-      });
-    } catch (e) {
-      setData(prev => {
-        if (!prev) return prev;
-        const results = [...prev.results];
-        const p = results[index];
-        if (p) {
-          results[index] = { ...p, status: 'error' };
-        }
-        return { ...prev, results };
-      });
-    }
-    updateRateLimit();
-  }
+  // Modularized reloadPair
+  // Usage: reloadPair(index, data, setData, topN, () => updateRateLimit(setRateLimit, setRateLimitDisplay, setNearLimit))
 
   // Stable callback for TradesTable data updates
-  const handleTradeDataUpdate = useCallback((newResults: PairSummary[]) => {
-    console.log('[App] Trade page data update callback called with timestamps:', 
-      newResults.map(r => `${r.get}/${r.pay}: ${r.fetched_at}`))
-    // Force new object reference to ensure React re-renders with updated timestamps
-    const updatedResults = calculateProfitMargins(newResults.map(r => ({ ...r })))
-    console.log('[App] Setting updated data with timestamps:', 
-      updatedResults.map(r => `${r.get}/${r.pay}: ${r.fetched_at}`))
-    setData(prev => {
-      const newData = prev ? { 
-        league: prev.league,
-        pairs: prev.pairs,
-        results: updatedResults 
-      } : null
-      console.log('[App] Data state updated')
-      return newData
-    })
-  }, []) // Empty deps - this function doesn't depend on any props/state
+  // Modularized handleTradeDataUpdate
 
-  const updateHotStatus = (index: number, hot: boolean) => {
-    setData(prev => {
-      if (!prev) return prev;
-      const results = [...prev.results];
-      if (results[index]) {
-        results[index] = { ...results[index], hot };
-      }
-      return { ...prev, results };
-    });
-  };
+  // Modularized updateHotStatus
 
-  const addNewPair = async (get: string, pay: string) => {
-    if (!data) return;
-    const newIndex = data.results.length;
-    
-    // Add placeholder for the new pair
-    setData(prev => {
-      if (!prev) return prev;
-      const results = [...prev.results, {
-        index: newIndex,
-        get,
-        pay,
-        hot: false,
-        status: 'loading' as const,
-        listings: [],
-        best_rate: null,
-        count_returned: 0
-      }];
-      return { ...prev, pairs: results.length, results };
-    });
+  // Modularized addNewPair
 
-    // Fetch data for the new pair
-    try {
-      const refreshed = await Api.refreshOne(newIndex, topN);
-      setData(prev => {
-        if (!prev) return prev;
-        const results = [...prev.results];
-        results[newIndex] = refreshed;
-        // Recalculate profit margins after adding new pair
-        const updatedResults = calculateProfitMargins(results);
-        return { ...prev, results: updatedResults };
-      });
-    } catch (e) {
-      setData(prev => {
-        if (!prev) return prev;
-        const results = [...prev.results];
-        results[newIndex] = { ...results[newIndex], status: 'error' };
-        return { ...prev, results };
-      });
-    }
-    updateRateLimit();
-  };
-
-  const removePair = (index: number) => {
-    setData(prev => {
-      if (!prev) return prev;
-      const results = prev.results.filter((_, i) => i !== index);
-      // Re-index remaining pairs
-      const reindexed = results.map((r, i) => ({ ...r, index: i }));
-      return { ...prev, pairs: reindexed.length, results: reindexed };
-    });
-  };
+  // Modularized removePair
 
   // Optionally, fallback poll every 30s in case no user actions
   useEffect(() => {
     if (!isAuthenticated) return;
     
     const interval = setInterval(() => {
-      updateRateLimit();
+  updateRateLimit(setRateLimit, setRateLimitDisplay, setNearLimit);
     }, 30000);
     return () => clearInterval(interval);
   }, [isAuthenticated]);
@@ -360,21 +177,21 @@ export default function App() {
           <h1 style={{ margin: 0 }}>PoE Currency Flip Tool</h1>
         </div>
         <div style={{ justifySelf: 'center', display: 'flex', gap: 8 }}>
-          <button
-            className={`btn ${view === 'trades' ? 'primary' : 'ghost'}`}
+          <Button
+            variant={view === 'trades' ? 'primary' : 'ghost'}
             onClick={() => setView('trades')}
-            style={{ padding: '6px 16px', minWidth: 90 }}
-          >Trades</button>
-          <button
-            className={`btn ${view === 'system' ? 'primary' : 'ghost'}`}
+            style={{ minWidth: 90 }}
+          >Trades</Button>
+          <Button
+            variant={view === 'system' ? 'primary' : 'ghost'}
             onClick={() => setView('system')}
-            style={{ padding: '6px 16px', minWidth: 90 }}
-          >System</button>
-          <button
-            className={`btn ${view === 'profit' ? 'primary' : 'ghost'}`}
+            style={{ minWidth: 90 }}
+          >System</Button>
+          <Button
+            variant={view === 'profit' ? 'primary' : 'ghost'}
             onClick={() => setView('profit')}
-            style={{ padding: '6px 16px', minWidth: 90 }}
-          >Profit</button>
+            style={{ minWidth: 90 }}
+          >Profit</Button>
         </div>
         <div style={{ justifySelf: 'end', display: 'flex', alignItems: 'center', gap: 12 }}>
           {rateLimit && (rateLimit.blocked || nearLimit) && (
@@ -386,14 +203,14 @@ export default function App() {
               )}
             </div>
           )}
-          <button
+          <Button
+            variant="ghost"
             onClick={handleLogout}
-            className="btn ghost"
             style={{ padding: '6px 12px', fontSize: '13px' }}
             title="Logout"
           >
             Logout
-          </button>
+          </Button>
         </div>
       </header>
 
@@ -403,19 +220,30 @@ export default function App() {
             <TradesTable 
               data={data?.results || []} 
               loading={loading} 
-              onReload={reloadPair} 
+              onReload={async (index, newPrice) => {
+                if (newPrice) {
+                  try {
+                    await Api.undercut(index, newPrice);
+                  } catch (err) {
+                    // Optionally handle error (show toast, etc)
+                  }
+                  reloadPair(index, data, setData, topN, () => updateRateLimit(setRateLimit, setRateLimitDisplay, setNearLimit));
+                } else {
+                  reloadPair(index, data, setData, topN, () => updateRateLimit(setRateLimit, setRateLimitDisplay, setNearLimit));
+                }
+              }} 
               onRefresh={() => load(true)} 
               accountName={accountName} 
-              onDataUpdate={handleTradeDataUpdate}
+              onDataUpdate={(newResults) => handleTradeDataUpdate(newResults, setData)}
               topN={topN}
             />
           </div>
           <aside className="config-sidebar">
             <ConfigPanel 
               onChanged={() => load(false)} 
-              onHotToggled={updateHotStatus} 
-              onPairAdded={addNewPair} 
-              onPairRemoved={removePair} 
+              onHotToggled={(index: number, hot: boolean) => updateHotStatus(index, hot, setData)} 
+              onPairAdded={(get: string, pay: string) => addNewPair(get, pay, data, setData, topN, () => updateRateLimit(setRateLimit, setRateLimitDisplay, setNearLimit))} 
+              onPairRemoved={(index: number) => removePair(index, setData)} 
               topN={topN} 
               onTopNChanged={setTopN}
               onAccountNameChanged={setAccountName}

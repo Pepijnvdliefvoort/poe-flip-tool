@@ -1,23 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import TimeRangePicker from './profitTracker/TimeRangePicker';
+import SnapshotStatusBar from './profitTracker/SnapshotStatusBar';
 import { Api } from '../api';
 import type { PortfolioSnapshot, PortfolioHistoryResponse } from '../types';
 import { useAuth } from '../hooks/useAuth';
-
-// Format numbers with thousand/million separators and fixed decimals
-// Uses European format: dots for thousands, commas for decimals (e.g., 12.330,91)
-function formatNumber(value: number | null | undefined, decimals = 2) {
-  if (value == null || isNaN(value)) return '—';
-  return value.toLocaleString('nl-NL', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-}
-
-// Ensure timestamps without timezone are treated as UTC by appending 'Z'
-function parseUtcTimestamp(ts: string): number {
-  // If already ends with Z or has timezone offset (+/-), rely on Date parsing.
-  if (/[zZ]$/.test(ts) || /[+-]\d{2}:?\d{2}$/.test(ts)) {
-    return new Date(ts).getTime();
-  }
-  return new Date(ts + 'Z').getTime();
-}
+import { formatNumber, parseUtcTimestamp, iconFor, pluralize } from '../utils/profitTrackerUtils';
+import { BreakdownTable } from './profitTracker/BreakdownTable';
+import { EmptyState } from './profitTracker/EmptyState';
+import { ErrorDisplay } from './profitTracker/ErrorDisplay';
+import { extractErrorMessage } from '../utils/error';
 
 const ProfitTracker: React.FC = () => {
   const { isAuthenticated } = useAuth()
@@ -54,69 +45,19 @@ const ProfitTracker: React.FC = () => {
 
   const lastSnapshotRef = useRef<string | null>(null);
 
-  async function takeSnapshot(source: 'initial' | 'interval' | 'visibility') {
-    if (!isAuthenticated) return
-    
-    setLoading(true); setError(null);
-    try {
-      const snap = await Api.portfolioSnapshot();
-  lastSnapshotRef.current = snap.timestamp;
-  // schedule next snapshot 15 minutes from NOW (not from saved timestamp to avoid drift)
-  nextSnapshotAtRef.current = Date.now() + 15 * 60 * 1000;
-      // Log only for scheduled 15-minute intervals
-      if (source === 'interval') {
-        console.log(`[ProfitTracker] Snapshot taken: ${snap.total_divines.toFixed(3)} Divine Orbs @ ${new Date(snap.timestamp).toLocaleTimeString()}`);
-      }
-  setSnapshot(snap);
-  updateSnapshotAge(snap.timestamp);
-      setHistory(h => {
-        if (!h) return h;
-        if (h.snapshots.find(s => s.timestamp === snap.timestamp)) return h;
-        return { ...h, snapshots: [...h.snapshots, { timestamp: snap.timestamp, total_divines: snap.total_divines, breakdown: snap.breakdown }] };
-      });
-    } catch (e: any) {
-      console.error(`[ProfitTracker] snapshot error:`, e);
-      setError(e.message || 'Failed to create snapshot');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function loadHistory(limit = 120) {
-    if (!isAuthenticated) return
-    
-    setHistoryLoading(true); setError(null);
-    try {
-      const h = await Api.portfolioHistory(limit, timeRange ?? undefined);
-      setHistory(h);
-    } catch (e: any) {
-      setError(e.message || 'Failed to load history');
-    } finally {
-      setHistoryLoading(false);
-    }
-  }
-
-  useEffect(() => { 
-    if (!isAuthenticated) return
-    
-    // Load history and latest snapshot on mount
-    loadHistory();
-    loadLatestSnapshot();
-    loadSchedulerStatus();
-  }, [isAuthenticated, timeRange]); // Re-load when time range changes
-
+  // --- API Data Loading Logic ---
+  // Load latest snapshot from backend
   async function loadLatestSnapshot() {
-    if (!isAuthenticated) return
-    
+    if (!isAuthenticated) return;
     try {
       const h = await Api.portfolioHistory(1); // Get just the latest snapshot
       if (h.snapshots.length > 0) {
         const latest = h.snapshots[0];
         setSnapshot({
-          saved: true, // Loaded from history, so it's already saved
+          saved: true,
           timestamp: latest.timestamp,
           total_divines: latest.total_divines,
-          league: '', // Not critical for display purposes
+          league: '',
           breakdown: latest.breakdown.map(b => ({
             currency: b.currency,
             quantity: b.quantity,
@@ -133,11 +74,26 @@ const ProfitTracker: React.FC = () => {
           nextSnapshotAtRef.current = lastTs + schedulerIntervalRef.current * 1000;
         }
       }
-    } catch (e: any) {
+    } catch (e) {
       console.error('[ProfitTracker] Failed to load latest snapshot:', e);
     }
   }
 
+  // Load full history from backend
+  async function loadHistory(limit = 120) {
+    if (!isAuthenticated) return;
+    setHistoryLoading(true); setError(null);
+    try {
+      const h = await Api.portfolioHistory(limit, timeRange ?? undefined);
+      setHistory(h);
+    } catch (e: any) {
+      setError(e.message || 'Failed to load history');
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  // Load scheduler status from backend
   async function loadSchedulerStatus() {
     if (!isAuthenticated) return;
     try {
@@ -147,9 +103,7 @@ const ProfitTracker: React.FC = () => {
         if (s.last_success) {
           const lastSuccess = parseUtcTimestamp(s.last_success);
           schedulerLastSuccessRef.current = lastSuccess;
-          // Establish next snapshot time
           nextSnapshotAtRef.current = lastSuccess + s.interval_seconds * 1000;
-          // If we have a newer locally loaded snapshot, override
           if (lastSnapshotRef.current) {
             const localLast = parseUtcTimestamp(lastSnapshotRef.current);
             if (localLast > lastSuccess) {
@@ -163,54 +117,30 @@ const ProfitTracker: React.FC = () => {
     }
   }
 
-  useEffect(() => {
-    if (!isAuthenticated) return
-    
-    // Use backend scheduler interval if available; fallback to 15m
-    const intervalMs = (schedulerIntervalRef.current || (15 * 60)) * 1000;
-    let cancelled = false;
-    const scheduleNext = () => {
-      if (cancelled) return;
-      const now = Date.now();
-      if (!nextSnapshotAtRef.current) {
-        if (lastSnapshotRef.current) {
-          nextSnapshotAtRef.current = parseUtcTimestamp(lastSnapshotRef.current) + intervalMs;
-        } else if (schedulerLastSuccessRef.current) {
-          nextSnapshotAtRef.current = schedulerLastSuccessRef.current + intervalMs;
-        } else {
-          nextSnapshotAtRef.current = now + intervalMs;
-        }
-      }
-      const delay = Math.max(1000, nextSnapshotAtRef.current - now);
-      setTimeout(async () => {
-        if (cancelled) return;
-        // Refresh latest snapshot & history (backend scheduler created new snapshot)
-        await loadLatestSnapshot();
-        await loadHistory();
-        if (lastSnapshotRef.current) {
-          nextSnapshotAtRef.current = parseUtcTimestamp(lastSnapshotRef.current) + intervalMs;
-        } else {
-          nextSnapshotAtRef.current = Date.now() + intervalMs;
-        }
-        scheduleNext();
-      }, delay);
-    };
-    scheduleNext();
-    // Visibility re-check: if away longer than interval, refresh immediately
-    const onVis = () => {
-      if (document.visibilityState === 'visible') {
-        if (!lastSnapshotRef.current) return; // Don't auto-snapshot if never taken before
-        const last = parseUtcTimestamp(lastSnapshotRef.current);
-        if (Date.now() - last > intervalMs - 5000) {
-          loadLatestSnapshot();
-          loadHistory();
-        }
-      }
-    };
-    document.addEventListener('visibilitychange', onVis);
-    return () => { cancelled = true; document.removeEventListener('visibilitychange', onVis); };
-  }, [isAuthenticated]);
+  // Take a new snapshot (manual refresh)
+  async function takeSnapshot(source: 'initial' | 'interval' | 'manual' | 'visibility' = 'manual') {
+    if (!isAuthenticated) return;
+    setLoading(true); setError(null);
+    try {
+      const snap = await Api.portfolioSnapshot();
+      lastSnapshotRef.current = snap.timestamp;
+      nextSnapshotAtRef.current = Date.now() + 15 * 60 * 1000;
+      setSnapshot(snap);
+      updateSnapshotAge(snap.timestamp);
+      setHistory(h => {
+        if (!h) return h;
+        if (h.snapshots.find(s => s.timestamp === snap.timestamp)) return h;
+        return { ...h, snapshots: [...h.snapshots, { timestamp: snap.timestamp, total_divines: snap.total_divines, breakdown: snap.breakdown }] };
+      });
+      await loadHistory();
+    } catch (e: any) {
+      setError(e.message || 'Failed to create snapshot');
+    } finally {
+      setLoading(false);
+    }
+  }
 
+  // Update snapshot age display
   function updateSnapshotAge(ts: string) {
     const then = parseUtcTimestamp(ts);
     const diffMs = Date.now() - then;
@@ -228,6 +158,7 @@ const ProfitTracker: React.FC = () => {
     setSnapshotAge(`${diffHr}h ago`);
   }
 
+  // Update countdown to next snapshot
   function updateCountdown() {
     if (!nextSnapshotAtRef.current) { setNextCountdown('—'); return; }
     const remainingMs = nextSnapshotAtRef.current - Date.now();
@@ -245,12 +176,20 @@ const ProfitTracker: React.FC = () => {
     }
   }
 
+  // Initial load: history, snapshot, scheduler status
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    loadHistory();
+    loadLatestSnapshot();
+    loadSchedulerStatus();
+  }, [isAuthenticated, timeRange]);
+
   // Periodically refresh age + countdown display
   useEffect(() => {
     const id = setInterval(() => {
       if (snapshot?.timestamp) updateSnapshotAge(snapshot.timestamp);
       updateCountdown();
-    }, 1000); // update every 1s
+    }, 1000);
     return () => clearInterval(id);
   }, [snapshot]);
 
@@ -319,50 +258,7 @@ const ProfitTracker: React.FC = () => {
   }
   function clearHover() { setHoverIdx(null); }
 
-  function iconFor(currency: string) {
-    // Normalize to match available image filenames
-    const map: Record<string, string> = {
-      'divine orb': 'divine',
-      'divine': 'divine',
-      'exalted orb': 'exalted',
-      'exalt': 'exalted',
-      'exalted': 'exalted',
-      'chaos orb': 'chaos',
-      'chaos': 'chaos',
-      'mirror of kalandra': 'mirror',
-      'mirror': 'mirror',
-      'hinekoras-lock': 'hinekoras-lock',
-      'mirror-shard': 'mirror-shard',
-    };
-    const key = currency.trim().toLowerCase();
-    const file = map[key] || key.replace(/ /g, '-');
-    return `${import.meta.env.BASE_URL}currency/${file}.webp`;
-  }
 
-  function pluralize(currency: string, quantity: number): string {
-    // Use user-specified short names
-    const singularMap: Record<string, string> = {
-      'Divine Orb': 'divine',
-      'Chaos Orb': 'chaos',
-      'Exalted Orb': 'exalt',
-      'Mirror Shard': 'mirror shard',
-      'Mirror Of Kalandra': 'mirror',
-      'Hinekoras Lock': 'lock',
-    };
-    const pluralMap: Record<string, string> = {
-      'Divine Orb': 'divines',
-      'Chaos Orb': 'chaos',
-      'Exalted Orb': 'exalts',
-      'Mirror Shard': 'mirror shards',
-      'Mirror Of Kalandra': 'mirrors',
-      'Hinekoras Lock': 'locks',
-    };
-    if (quantity === 1) {
-      return singularMap[currency] || currency;
-    } else {
-      return pluralMap[currency] || currency;
-    }
-  }
 
   const donut = useMemo(() => {
     if (!snapshot) return [];
@@ -406,6 +302,7 @@ const ProfitTracker: React.FC = () => {
 
   return (
     <div ref={containerRef} style={{ padding: '10px 14px 60px' }}>
+      {/* Header */}
       <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:12, marginBottom: 8 }}>
         <div style={{ flex: 1 }}>
           <h2 style={{ marginTop: 0, marginBottom: 4 }}>Profit Tracker</h2>
@@ -413,291 +310,26 @@ const ProfitTracker: React.FC = () => {
             Automatic snapshots of your portfolio every 15 minutes. Track your total divine value and currency composition over time.
           </p>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, maxWidth: chartWidth, paddingRight:'13px'}}>
-          {snapshot && (
-            <div style={{
-              display:'flex',
-              alignItems:'center',
-              gap:8,
-              background:'linear-gradient(90deg, rgba(30,41,59,0.7), rgba(15,23,42,0.7))',
-              border:'1px solid #334155',
-              padding:'6px 12px',
-              borderRadius:8,
-              fontSize:12,
-              fontWeight:500,
-              letterSpacing:'.3px',
-              boxShadow:'0 2px 4px rgba(0,0,0,0.4)'
-            }}>
-              <span style={{ opacity:0.65 }}>Last Snapshot:</span>
-              <span style={{ color:'#38bdf8', fontVariant:'tabular-nums' }}>{new Date(parseUtcTimestamp(snapshot.timestamp)).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' })}</span>
-              <span style={{ opacity:0.6 }}>({snapshotAge})</span>
-              <span style={{ opacity:0.35 }}>•</span>
-              <span style={{ opacity:0.65 }}>Next:</span>
-              <span style={{ color:'#94a3b8', fontVariant:'tabular-nums' }}>{nextCountdown}</span>
-            </div>
-          )}
-          <button
-            onClick={() => takeSnapshot('initial')}
-            disabled={loading}
-            style={{
-              background: loading ? '#1e293b' : '#334155',
-              border: '1px solid #475569',
-              color: loading ? '#64748b' : '#e2e8f0',
-              padding: '6px 14px',
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: 500,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              transition: 'background 0.2s, border-color 0.2s',
-              alignSelf: 'flex-end'
-            }}
-            onMouseEnter={(e) => {
-              if (!loading) {
-                e.currentTarget.style.background = '#475569';
-                e.currentTarget.style.borderColor = '#64748b';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!loading) {
-                e.currentTarget.style.background = '#334155';
-                e.currentTarget.style.borderColor = '#475569';
-              }
-            }}
-          >
-            <span style={{ fontSize: 16 }}>↻</span>
-            {loading ? 'Taking Snapshot...' : 'Refresh Now'}
-          </button>
-        </div>
+        <SnapshotStatusBar
+          snapshot={snapshot ?? undefined}
+          snapshotAge={snapshotAge}
+          nextCountdown={nextCountdown}
+          loading={loading}
+          takeSnapshot={(source: string) => { void takeSnapshot(source as any); }}
+        />
       </div>
+
+      {/* Error message */}
       {error && <div style={{ color: '#f87171', marginBottom: 12 }}>{error}</div>}
 
-      {history && history.snapshots.length > 0 && (
+      {/* Line Chart: Total Divine Value Over Time */}
+      {history && history.snapshots.length > 1 && (
         <div style={{ marginBottom: 34 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10, gap: 12, maxWidth: chartWidth }}>
             <h3 style={{ margin: 0, fontSize: 16, display:'flex', alignItems:'center', gap:12, flexWrap: 'wrap', flex: 1 }}>
               Total Divine Value Over Time
-              <span style={{ fontSize:12, opacity:0.6 }}>Range: {formatNumber(minVal, 2)} – {formatNumber(maxVal, 2)} Div</span>
             </h3>
-            {profitStats && (
-              <div style={{
-                background: profitStats.isPositive ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                border: `1px solid ${profitStats.isPositive ? '#10b981' : '#ef4444'}`,
-                borderRadius: 6,
-                padding: '6px 12px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                flexShrink: 0
-              }}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                  <div style={{ fontSize: 9, opacity: 0.7, fontWeight: 500, marginBottom: 1 }}>Overall</div>
-                  <div style={{ 
-                    fontSize: 15, 
-                    fontWeight: 700, 
-                    color: profitStats.isPositive ? '#10b981' : '#ef4444',
-                    letterSpacing: 0.3
-                  }}>
-                    {profitStats.isPositive ? '+' : ''}{formatNumber(profitStats.percentChange, 2)}%
-                  </div>
-                </div>
-                <div style={{ 
-                  fontSize: 12, 
-                  fontWeight: 600,
-                  color: profitStats.isPositive ? '#10b981' : '#ef4444',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 3
-                }}>
-                  <span style={{ fontSize: 16 }}>{profitStats.isPositive ? '▲' : '▼'}</span>
-                  {profitStats.isPositive ? '+' : ''}{formatNumber(profitStats.absoluteChange, 2)}
-                </div>
-              </div>
-            )}
           </div>
-          
-          {/* Time Range Picker */}
-          <div style={{ 
-            marginBottom: 12, 
-            maxWidth: chartWidth
-          }}>
-            <div style={{
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: 8, 
-              flexWrap: 'wrap',
-              padding: '8px 12px',
-              background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.6), rgba(30, 41, 59, 0.6))',
-              borderRadius: 8,
-              border: '1px solid #334155'
-            }}>
-              <span style={{ fontSize: 13, fontWeight: 600, opacity: 0.8, marginRight: 4 }}>Time Range:</span>
-              {[
-                { label: 'All', hours: null },
-                { label: '1y', hours: 8760 },
-                { label: '1mo', hours: 720 },
-                { label: '1w', hours: 168 },
-                { label: '1d', hours: 24 },
-                { label: '12h', hours: 12 },
-                { label: '6h', hours: 6 },
-                { label: '1h', hours: 1 },
-                { label: '30m', hours: 0.5 },
-              ].map((range) => (
-                <button
-                  key={range.label}
-                  onClick={() => {
-                    setTimeRange(range.hours);
-                    setShowCustomRange(false);
-                  }}
-                  style={{
-                    background: timeRange === range.hours && !showCustomRange
-                      ? '#334155' 
-                      : 'transparent',
-                    border: timeRange === range.hours && !showCustomRange ? '1px solid #64748b' : '1px solid #475569',
-                    color: timeRange === range.hours && !showCustomRange ? '#e2e8f0' : '#94a3b8',
-                    padding: '4px 12px',
-                    borderRadius: 6,
-                    fontSize: 12,
-                    fontWeight: timeRange === range.hours && !showCustomRange ? 600 : 500,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (timeRange !== range.hours || showCustomRange) {
-                      e.currentTarget.style.background = 'rgba(51, 65, 85, 0.5)';
-                      e.currentTarget.style.borderColor = '#64748b';
-                      e.currentTarget.style.color = '#cbd5e1';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (timeRange !== range.hours || showCustomRange) {
-                      e.currentTarget.style.background = 'transparent';
-                      e.currentTarget.style.borderColor = '#475569';
-                      e.currentTarget.style.color = '#94a3b8';
-                    }
-                  }}
-                >
-                  {range.label}
-                </button>
-              ))}
-              <button
-                onClick={() => setShowCustomRange(!showCustomRange)}
-                style={{
-                  background: showCustomRange ? '#334155' : 'transparent',
-                  border: showCustomRange ? '1px solid #64748b' : '1px solid #475569',
-                  color: showCustomRange ? '#e2e8f0' : '#94a3b8',
-                  padding: '4px 12px',
-                  borderRadius: 6,
-                  fontSize: 12,
-                  fontWeight: showCustomRange ? 600 : 500,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                }}
-                onMouseEnter={(e) => {
-                  if (!showCustomRange) {
-                    e.currentTarget.style.background = 'rgba(51, 65, 85, 0.5)';
-                    e.currentTarget.style.borderColor = '#64748b';
-                    e.currentTarget.style.color = '#cbd5e1';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!showCustomRange) {
-                    e.currentTarget.style.background = 'transparent';
-                    e.currentTarget.style.borderColor = '#475569';
-                    e.currentTarget.style.color = '#94a3b8';
-                  }
-                }}
-              >
-                Custom
-              </button>
-            </div>
-            
-            {showCustomRange && (
-              <div style={{
-                marginTop: 8,
-                padding: '12px',
-                background: 'rgba(15, 23, 42, 0.8)',
-                borderRadius: 8,
-                border: '1px solid #334155',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                flexWrap: 'wrap'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <label style={{ fontSize: 12, fontWeight: 500, opacity: 0.8 }}>From:</label>
-                  <input
-                    type="datetime-local"
-                    value={customStartDate}
-                    onChange={(e) => setCustomStartDate(e.target.value)}
-                    style={{
-                      background: '#1e293b',
-                      border: '1px solid #475569',
-                      color: '#e2e8f0',
-                      padding: '4px 8px',
-                      borderRadius: 6,
-                      fontSize: 12,
-                    }}
-                  />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <label style={{ fontSize: 12, fontWeight: 500, opacity: 0.8 }}>To:</label>
-                  <input
-                    type="datetime-local"
-                    value={customEndDate}
-                    onChange={(e) => setCustomEndDate(e.target.value)}
-                    style={{
-                      background: '#1e293b',
-                      border: '1px solid #475569',
-                      color: '#e2e8f0',
-                      padding: '4px 8px',
-                      borderRadius: 6,
-                      fontSize: 12,
-                    }}
-                  />
-                </div>
-                <button
-                  onClick={() => {
-                    if (customStartDate && customEndDate) {
-                      const start = new Date(customStartDate).getTime();
-                      const end = new Date(customEndDate).getTime();
-                      const hoursRange = (end - start) / (1000 * 60 * 60);
-                      setTimeRange(hoursRange);
-                    }
-                  }}
-                  disabled={!customStartDate || !customEndDate}
-                  style={{
-                    background: (!customStartDate || !customEndDate) ? '#1e293b' : '#334155',
-                    border: '1px solid #475569',
-                    color: (!customStartDate || !customEndDate) ? '#64748b' : '#e2e8f0',
-                    padding: '4px 12px',
-                    borderRadius: 6,
-                    fontSize: 12,
-                    fontWeight: 500,
-                    cursor: (!customStartDate || !customEndDate) ? 'not-allowed' : 'pointer',
-                    transition: 'all 0.2s',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (customStartDate && customEndDate) {
-                      e.currentTarget.style.background = '#475569';
-                      e.currentTarget.style.borderColor = '#64748b';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (customStartDate && customEndDate) {
-                      e.currentTarget.style.background = '#334155';
-                      e.currentTarget.style.borderColor = '#475569';
-                    }
-                  }}
-                >
-                  Apply
-                </button>
-              </div>
-            )}
-          </div>
-          
           <svg
             width={chartWidth}
             height={300}
@@ -746,156 +378,121 @@ const ProfitTracker: React.FC = () => {
         </div>
       )}
 
-      {snapshot && (
-        donutSvg && donut.length > 0 ? (
-          <div style={{ marginBottom: 34 }}>
-            <div style={{ display:'flex', gap:24, alignItems:'center', justifyContent:'center', flexWrap:'wrap' }}>
-              <div style={{ flex:'0 0 auto', maxWidth:350 }}>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-                  {donut.map((d,i)=>(
-                    <div
-                      key={d.currency}
-                      style={{
-                        background: donutHoverIdx===i ? '#1e293b' : '#0f172a',
-                        border: donutHoverIdx===i ? `1px solid ${palette[i%palette.length]}` : '1px solid #1e293b',
-                        borderRadius:6,
-                        padding:'6px 10px',
-                        display:'flex',
-                        alignItems:'center',
-                        gap:6,
-                        cursor:'pointer',
-                        transition:'all 0.2s',
-                        transform: donutHoverIdx===i ? 'scale(1.03)' : 'scale(1)'
-                      }}
-                      onMouseEnter={() => setDonutHoverIdx(i)}
-                      onMouseLeave={() => setDonutHoverIdx(null)}
-                    >
-                      <span style={{ width:12, height:12, borderRadius:'50%', background:palette[i%palette.length], flexShrink:0 }} />
-                      <img src={iconFor(d.currency)} alt={d.currency} style={{ width:20, height:20, flexShrink:0 }} />
-                      <div style={{ flex:1, overflow:'hidden' }}>
-                        <div style={{ fontSize:12, fontWeight:600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{d.currency}</div>
-                        <div style={{ fontSize:11, opacity:0.7, fontVariantNumeric:'tabular-nums' }}>{formatNumber(d.pct*100, 1)}% • {formatNumber(d.quantity, 0)} {pluralize(d.currency, d.quantity)}</div>
-                      </div>
+      {/* Donut Chart: Currency Composition Breakdown */}
+      {snapshot && donutSvg && donut.length > 0 && (
+        <div style={{ marginBottom: 34 }}>
+          <div style={{ display:'flex', gap:24, alignItems:'center', justifyContent:'center', flexWrap:'wrap' }}>
+            <div style={{ flex:'0 0 auto', maxWidth:350 }}>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                {donut.map((d,i)=>(
+                  <div
+                    key={d.currency}
+                    style={{
+                      background: donutHoverIdx===i ? '#1e293b' : '#0f172a',
+                      border: donutHoverIdx===i ? `1px solid ${palette[i%palette.length]}` : '1px solid #1e293b',
+                      borderRadius:6,
+                      padding:'6px 10px',
+                      display:'flex',
+                      alignItems:'center',
+                      gap:6,
+                      cursor:'pointer',
+                      transition:'all 0.2s',
+                      transform: donutHoverIdx===i ? 'scale(1.03)' : 'scale(1)'
+                    }}
+                    onMouseEnter={() => setDonutHoverIdx(i)}
+                    onMouseLeave={() => setDonutHoverIdx(null)}
+                  >
+                    <span style={{ width:12, height:12, borderRadius:'50%', background:palette[i%palette.length], flexShrink:0 }} />
+                    <img src={iconFor(d.currency)} alt={d.currency} style={{ width:20, height:20, flexShrink:0 }} />
+                    <div style={{ flex:1, overflow:'hidden' }}>
+                      <div style={{ fontSize:12, fontWeight:600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{d.currency}</div>
+                      <div style={{ fontSize:11, opacity:0.7, fontVariantNumeric:'tabular-nums' }}>{formatNumber(d.pct*100, 1)}% • {formatNumber(d.quantity, 0)} {pluralize(d.currency, d.quantity)}</div>
                     </div>
-                  ))}
-                </div>
-              </div>
-              <svg width={donutSvg.size} height={donutSvg.size} style={{ display:'block', flex:'0 0 auto' }}>
-                {donutSvg.segments.map((seg,i)=>(
-                  <g key={i}>
-                    <path
-                      d={seg.path}
-                      fill={seg.color}
-                      stroke="#0f172a"
-                      strokeWidth={1}
-                      style={{ cursor:'pointer', transition:'opacity 0.2s', opacity: donutHoverIdx!=null && donutHoverIdx!==i ? 0.4 : 1 }}
-                      onMouseEnter={() => setDonutHoverIdx(i)}
-                      onMouseLeave={() => setDonutHoverIdx(null)}
-                    />
-                    {donutHoverIdx===i && (
-                      <g>
-                        <text x={seg.labelPos.x} y={seg.labelPos.y} textAnchor="middle" fontSize={13} fill="#fff" fontWeight={600}>{seg.data.currency}</text>
-                        <text x={seg.labelPos.x} y={seg.labelPos.y+16} textAnchor="middle" fontSize={12} fill="#e2e8f0">{formatNumber(seg.data.quantity, 0)} {pluralize(seg.data.currency, seg.data.quantity)} ({formatNumber(seg.data.pct*100, 1)}%)</text>
-                      </g>
-                    )}
-                  </g>
+                  </div>
                 ))}
-                {/* Divine Orbs total with icon */}
-                <g transform={`translate(${donutSvg.cx}, ${donutSvg.cy - 18})`}>
-                  <image 
-                    href={`${import.meta.env.BASE_URL}currency/divine.webp`} 
-                    x={-50} 
-                    y={-12} 
-                    width="24" 
-                    height="24" 
-                  />
-                  <text 
-                    x={-20} 
-                    y={4} 
-                    textAnchor="start" 
-                    fontSize={18} 
-                    fill="#e2e8f0" 
-                    fontWeight={700}
-                    style={{letterSpacing:0.5}}
-                  >
-                    {formatNumber(grandTotal, 2)}
-                  </text>
-                </g>
-                {/* Mirror equivalent with icon */}
-                <g transform={`translate(${donutSvg.cx}, ${donutSvg.cy + 12})`}>
-                  <image 
-                    href={`${import.meta.env.BASE_URL}currency/mirror.webp`} 
-                    x={-50} 
-                    y={-12} 
-                    width="24" 
-                    height="24" 
-                  />
-                  <text 
-                    x={-20} 
-                    y={4} 
-                    textAnchor="start" 
-                    fontSize={16} 
-                    fill="#94a3b8" 
-                    fontWeight={600}
-                    style={{letterSpacing:0.5}}
-                  >
-                    {(() => {
-                      // Find mirror in breakdown using the display name as used by backend
-                      const mirrorEntry = snapshot.breakdown.find(b => b.currency.toLowerCase() === 'mirror of kalandra');
-                      const divPerMirror = mirrorEntry?.divine_per_unit || 80;
-                      return formatNumber((grandTotal ?? 0) / divPerMirror, 2);
-                    })()}
-                  </text>
-                </g>
-              </svg>
+              </div>
             </div>
+            <svg width={donutSvg.size} height={donutSvg.size} style={{ display:'block', flex:'0 0 auto' }}>
+              {donutSvg.segments.map((seg,i)=>(
+                <g key={i}>
+                  <path
+                    d={seg.path}
+                    fill={seg.color}
+                    stroke="#0f172a"
+                    strokeWidth={1}
+                    style={{ cursor:'pointer', transition:'opacity 0.2s', opacity: donutHoverIdx!=null && donutHoverIdx!==i ? 0.4 : 1 }}
+                    onMouseEnter={() => setDonutHoverIdx(i)}
+                    onMouseLeave={() => setDonutHoverIdx(null)}
+                  />
+                  {donutHoverIdx===i && (
+                    <g>
+                      <text x={seg.labelPos.x} y={seg.labelPos.y} textAnchor="middle" fontSize={13} fill="#fff" fontWeight={600}>{seg.data.currency}</text>
+                      <text x={seg.labelPos.x} y={seg.labelPos.y+16} textAnchor="middle" fontSize={12} fill="#e2e8f0">{formatNumber(seg.data.quantity, 0)} {pluralize(seg.data.currency, seg.data.quantity)} ({formatNumber(seg.data.pct*100, 1)}%)</text>
+                    </g>
+                  )}
+                </g>
+              ))}
+              {/* Divine Orbs total with icon */}
+              <g transform={`translate(${donutSvg.cx}, ${donutSvg.cy - 18})`}>
+                <image 
+                  href={`${import.meta.env.BASE_URL}currency/divine.webp`} 
+                  x={-50} 
+                  y={-12} 
+                  width="24" 
+                  height="24" 
+                />
+                <text 
+                  x={-20} 
+                  y={4} 
+                  textAnchor="start" 
+                  fontSize={18} 
+                  fill="#e2e8f0" 
+                  fontWeight={700}
+                  style={{letterSpacing:0.5}}
+                >
+                  {formatNumber(grandTotal, 2)}
+                </text>
+              </g>
+              {/* Mirror equivalent with icon */}
+              <g transform={`translate(${donutSvg.cx}, ${donutSvg.cy + 12})`}>
+                <image 
+                  href={`${import.meta.env.BASE_URL}currency/mirror.webp`} 
+                  x={-50} 
+                  y={-12} 
+                  width="24" 
+                  height="24" 
+                />
+                <text 
+                  x={-20} 
+                  y={4} 
+                  textAnchor="start" 
+                  fontSize={16} 
+                  fill="#94a3b8" 
+                  fontWeight={600}
+                  style={{letterSpacing:0.5}}
+                >
+                  {(() => {
+                    const mirrorEntry = snapshot.breakdown.find(b => b.currency.toLowerCase() === 'mirror of kalandra');
+                    const divPerMirror = mirrorEntry?.divine_per_unit || 80;
+                    return formatNumber((grandTotal ?? 0) / divPerMirror, 2);
+                  })()}
+                </text>
+              </g>
+            </svg>
           </div>
-        ) : (
-          <div style={{ margin: '32px 0', textAlign: 'center', color: '#94a3b8', fontSize: 18, fontWeight: 500 }}>
-            No portfolio breakdown data available.<br />
-            Make sure your stash tabs are set up and rates are cached.
-          </div>
-        )
+        </div>
       )}
 
-      {snapshot && (
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, marginTop: 40 }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid #334155' }}>
-              <th style={{ textAlign: 'left', padding: 6 }}>Currency</th>
-              <th style={{ textAlign: 'right', padding: 6 }}>Qty</th>
-              <th style={{ textAlign: 'right', padding: 6 }}>Div / Unit</th>
-              <th style={{ textAlign: 'right', padding: 6 }}>Total (Div)</th>
-              <th style={{ textAlign: 'left', padding: 6 }}>Source Pair</th>
-            </tr>
-          </thead>
-          <tbody>
-            {snapshot.breakdown.map(b => (
-              <tr key={b.currency} style={{ borderBottom: '1px solid #1e293b' }}>
-                <td style={{ padding: 6, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <img src={iconFor(b.currency)} alt={b.currency} style={{ width: 26, height: 26 }} />
-                  {b.currency}
-                </td>
-                <td style={{ padding: 6, textAlign: 'right' }}>{b.quantity}</td>
-                <td style={{ padding: 6, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{formatNumber(b.divine_per_unit, 2)}</td>
-                <td style={{ padding: 6, textAlign: 'right', fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: '#38bdf8' }}>{formatNumber(b.total_divine, 2)}</td>
-                <td style={{ padding: 6, fontSize: 12, opacity: 0.65 }}>{b.source_pair || '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr>
-              <td colSpan={3} style={{ textAlign: 'right', padding: 6, fontWeight: 600 }}>Grand Total</td>
-              <td style={{ textAlign: 'right', padding: 6, fontWeight: 700, color: '#38bdf8', fontVariantNumeric: 'tabular-nums' }}>{formatNumber(grandTotal, 2)}</td>
-              <td />
-            </tr>
-          </tfoot>
-        </table>
+      {/* Breakdown table */}
+      {snapshot && Array.isArray(snapshot.breakdown) && (
+        <BreakdownTable snapshot={snapshot} />
       )}
 
-      {!snapshot && !error && (
-        <p style={{ marginTop: 12, opacity: 0.75 }}>Take a snapshot to populate your portfolio breakdown.</p>
-      )}
+      {/* Empty state */}
+      {!snapshot && !error && <EmptyState />}
+
+      {/* Error display */}
+      {error && <ErrorDisplay error={error} />}
     </div>
   );
 };
