@@ -40,7 +40,7 @@ exit # exit SSH
 
 ## 5. Upload the Edited Database
 ```pwsh
-fly ssh sftp --app poe-flip-backend put "C:\Users\PepijnvandeLiefvoort\poe_cache.db" /data/poe_cache.db
+fly ssh sftp --app poe-flip-backend put "C:\Users\pepij\poe_cache.db" /data/poe_cache.db
 ```
 
 ## 6. Redeploy the Fly.io app

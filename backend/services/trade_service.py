@@ -40,18 +40,26 @@ from fastapi.responses import StreamingResponse
 async def stream_trades_service(request, delay_s: int = 2, top_n: int = 5, force: bool = False):
     """Stream trade summaries for all trade pairs (SSE)."""
     from backend.models import PairSummary
-    from backend.trade_logic import fetch_listings_with_cache
+    from backend.trade_logic import fetch_listings_with_cache, fetch_listings_force
     from backend.utils.config import load_config
     cfg = load_config()
     async def event_generator():
         from backend.trade_logic import historical_cache
         for idx, t in enumerate(cfg.trades):
-            listings, was_cached, fetched_at = fetch_listings_with_cache(
-                league=cfg.league,
-                have=t.pay,
-                want=t.get,
-                top_n=top_n,
-            )
+            if force:
+                listings, was_cached, fetched_at = fetch_listings_force(
+                    league=cfg.league,
+                    have=t.pay,
+                    want=t.get,
+                    top_n=top_n,
+                )
+            else:
+                listings, was_cached, fetched_at = fetch_listings_with_cache(
+                    league=cfg.league,
+                    have=t.pay,
+                    want=t.get,
+                    top_n=top_n,
+                )
             # Always add a snapshot so sparkline and metrics are in sync
             if listings:
                 historical_cache.add_snapshot(cfg.league, t.pay, t.get, listings, top_n=top_n)
