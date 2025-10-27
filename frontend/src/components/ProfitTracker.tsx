@@ -301,6 +301,8 @@ const ProfitTracker: React.FC = () => {
   }, [donut]);
 
   return (
+
+
     <div ref={containerRef} style={{ padding: '10px 14px 60px' }}>
       {/* Header */}
       <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:12, marginBottom: 8 }}>
@@ -319,6 +321,80 @@ const ProfitTracker: React.FC = () => {
         />
       </div>
 
+      {/* Gains Box: Shows profit/loss over selected period */}
+      {profitStats && (
+        <div style={{
+          display: 'flex',
+          justifyContent: 'flex-end',
+          marginBottom: 12,
+          marginRight: 12
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            background: profitStats.isPositive ? 'rgba(34,197,94,0.10)' : 'rgba(239,68,68,0.10)',
+            border: `1.5px solid ${profitStats.isPositive ? '#4ade80' : '#f87171'}`,
+            borderRadius: 8,
+            padding: '6px 18px 6px 12px',
+            minWidth: 0,
+            maxWidth: 240,
+            boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+            overflow: 'hidden'
+          }}>
+            <span style={{
+              fontSize: 14,
+              color: profitStats.isPositive ? '#22c55e' : '#ef4444',
+              fontWeight: 700,
+              lineHeight: 1,
+              marginRight: 8,
+              flexShrink: 0
+            }}>
+              {profitStats.isPositive ? '▲' : '▼'}
+            </span>
+            <span style={{
+              fontSize: 15,
+              fontWeight: 600,
+              color: profitStats.isPositive ? '#22c55e' : '#ef4444',
+              marginRight: 4,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              maxWidth: 90,
+              display: 'inline-block'
+            }}>
+              {profitStats.isPositive ? '+' : ''}{formatNumber(profitStats.absoluteChange, 2)}
+            </span>
+            <span style={{
+              fontSize: 13,
+              fontWeight: 500,
+              color: profitStats.isPositive ? '#22c55e' : '#ef4444',
+              opacity: 0.85,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              maxWidth: 70,
+              display: 'inline-block'
+            }}>
+              ({profitStats.isPositive ? '+' : ''}{formatNumber(profitStats.percentChange, 2)}%)
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Time Range Picker */}
+      <div style={{ marginTop: -6, maxWidth:chartWidth}}>
+        <TimeRangePicker
+          timeRange={timeRange}
+          setTimeRange={setTimeRange}
+          showCustomRange={showCustomRange}
+          setShowCustomRange={setShowCustomRange}
+          customStartDate={customStartDate}
+          setCustomStartDate={setCustomStartDate}
+          customEndDate={customEndDate}
+          setCustomEndDate={setCustomEndDate}
+        />
+      </div>
+
       {/* Error message */}
       {error && <div style={{ color: '#f87171', marginBottom: 12 }}>{error}</div>}
 
@@ -326,9 +402,7 @@ const ProfitTracker: React.FC = () => {
       {history && history.snapshots.length > 1 && (
         <div style={{ marginBottom: 34 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10, gap: 12, maxWidth: chartWidth }}>
-            <h3 style={{ margin: 0, fontSize: 16, display:'flex', alignItems:'center', gap:12, flexWrap: 'wrap', flex: 1 }}>
-              Total Divine Value Over Time
-            </h3>
+
           </div>
           <svg
             width={chartWidth}
