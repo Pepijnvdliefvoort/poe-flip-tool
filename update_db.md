@@ -27,7 +27,7 @@ You can use any SQLite database editor of your choice. Here are a couple of popu
 - [DB Browser for SQLite](https://sqlitebrowser.org/)
 - [DBeaver](https://dbeaver.io/)
 
-## 4.5 Delete old .db file (safety overwrite)
+## 5 Delete old .db file (safety overwrite)
 ```pwsh
 fly ssh console --app poe-flip-backend # SSH into the app
 
@@ -38,12 +38,17 @@ rm poe_cache.db # remove the DB file (fly ssh can't overwrite db files)
 exit # exit SSH
 ```
 
-## 5. Upload the Edited Database
+## 6. Upload the Edited Database
 ```pwsh
 fly ssh sftp --app poe-flip-backend put "C:\Users\pepij\poe_cache.db" /data/poe_cache.db
 ```
 
-## 6. Redeploy the Fly.io app
+## 7. Redeploy the Fly.io app
 ```pwsh
 fly deploy -a poe-flip-backend
+```
+
+## 8. Remove old locally stored db
+```pwsh
+rm poe_cache.db
 ```
