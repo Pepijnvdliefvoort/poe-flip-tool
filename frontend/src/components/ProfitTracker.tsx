@@ -326,13 +326,14 @@ const ProfitTracker: React.FC = () => {
         <div style={{
           display: 'flex',
           justifyContent: 'flex-end',
-          marginBottom: 12,
-          marginRight: 12
+          marginBottom: 20,
+          marginRight: 1,
+          maxWidth: chartWidth
         }}>
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            background: profitStats.isPositive ? 'rgba(34,197,94,0.10)' : 'rgba(239,68,68,0.10)',
+            background: profitStats.isPositive ? 'rgba(34,197,94,0.10)' : 'rgba(255,80,80,0.13)',
             border: `1.5px solid ${profitStats.isPositive ? '#4ade80' : '#f87171'}`,
             borderRadius: 8,
             padding: '6px 18px 6px 12px',
