@@ -581,13 +581,14 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
                   onClick={async () => {
                     setUndercutLoading(true);
                     setUndercutResult(null);
-                    setRefreshCountdown(9); // Start at 9 so the bar starts immediately
+                    setRefreshCountdown(10); // Start at full
                     let timer: NodeJS.Timeout | null = null;
                     try {
                       const rateToSend = (fraction && fraction !== '1' && fraction !== '1/1') ? fraction : newPrice.toString();
                       await onReload(pair.index, rateToSend);
                       setUndercutResult('Success!');
-                      // No immediate decrement; interval will handle countdown
+                      // Immediately decrement so the bar starts animating right away
+                      setRefreshCountdown(prev => prev - 1);
                       timer = setInterval(() => {
                         setRefreshCountdown(prev => {
                           if (prev <= 1) {
