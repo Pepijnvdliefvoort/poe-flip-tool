@@ -524,9 +524,8 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
               {refreshCountdown > 0 && (
                 <div style={{ width: '100%', padding: '8px 0 12px 0' }}>
                   <CountdownBar
-                    duration={10}
-                    remaining={refreshCountdown}
-                    // No label for minimal look
+                    total={10}
+                    current={refreshCountdown}
                   />
                 </div>
               )}
@@ -587,23 +586,23 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
                     try {
                       const rateToSend = (fraction && fraction !== '1' && fraction !== '1/1') ? fraction : newPrice.toString();
                       await onReload(pair.index, rateToSend);
-                      setUndercutResult('Success! Refreshing...');
+                      setUndercutResult('Success!');
                       timer = setInterval(() => {
                         setRefreshCountdown(prev => {
                           if (prev <= 1) {
                             clearInterval(timer!);
+                            setRefreshCountdown(0);
+                            setTimeout(() => {
+                              setUndercutDialogOpen(false);
+                              setUndercutMenuPos(null);
+                              setUndercutResult(null);
+                              onReload(pair.index);
+                            }, 200);
                             return 0;
                           }
                           return prev - 1;
                         });
                       }, 1000);
-                      setTimeout(() => {
-                        setUndercutDialogOpen(false);
-                        setUndercutMenuPos(null);
-                        setUndercutResult(null);
-                        setRefreshCountdown(0);
-                        if (onReload) onReload(pair.index);
-                      }, 10000);
                     } catch (err: any) {
                       setUndercutResult('Failed: ' + (err?.message || 'Unknown error'));
                       setRefreshCountdown(0);
@@ -628,7 +627,15 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
                   Cancel
                 </button>
               </div>
-              {undercutResult && <div style={{ marginTop: 6, color: undercutResult.startsWith('Success') ? '#10b981' : '#ef4444', fontWeight: 500 }}>{undercutResult}</div>}
+              {undercutResult && (
+                <div style={{ marginTop: 6, color: undercutResult.startsWith('Success') ? '#10b981' : '#ef4444', fontWeight: 500 }}>
+                  {undercutResult.startsWith('Success') ? (
+                    <>
+                      {undercutResult}
+                    </>
+                  ) : undercutResult}
+                </div>
+              )}
             </div>,
             document.body
           )}

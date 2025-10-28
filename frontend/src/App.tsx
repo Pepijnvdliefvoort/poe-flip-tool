@@ -218,7 +218,6 @@ export default function App() {
                   } catch (err) {
                     // Optionally handle error (show toast, etc)
                   }
-                  reloadPair(index, data, setData, topN, () => updateRateLimit(setRateLimit, setRateLimitDisplay, setNearLimit));
                 } else {
                   reloadPair(index, data, setData, topN, () => updateRateLimit(setRateLimit, setRateLimitDisplay, setNearLimit));
                 }
