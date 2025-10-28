@@ -525,7 +525,7 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
                 <div style={{ width: '100%', padding: '8px 0 12px 0' }}>
                   <CountdownBar
                     total={10}
-                    current={refreshCountdown}
+                    current={refreshCountdown - 1 }
                   />
                 </div>
               )}
