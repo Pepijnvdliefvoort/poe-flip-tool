@@ -5,6 +5,10 @@
 - Created [Update DB](update_db.md) file on how to update DB externally
 - [x] Refactor
 - [x] Create backend API to update forum post for prices
+- [ ] Expand API endpoints for more granular control or analytics.
+- [ ] Async Rate Limiter: Implement an async version of the backend rate limiter for better SSE streaming performance.
+- [ ] Leagues: Add support for multiple leagues and allow users to select their preferred league. Add league-specific data handling.
+
 
 ### Front end
 - [x] Make the change indicate 7 days in the header & based on the median
@@ -13,11 +17,13 @@
 - [x] Add button to undercut price
 - [x] Make the ratios based on median ratio instead of best ratio to prevent outliers
 - [x] Make a dot appear in the line graph per trade pair for the latest entry (max. 7 days ago, maybe display the date too)
+- [x] Refactor
+- [ ] UI/UX Enhancements: Add more detailed tooltips, animations, or visual feedback for user actions.
 - [ ] Slider to buy more than a single item for a trade
-- [ ] When an item is 'hot', refresh every x (10) seconds
+- [ ] When an item is 'hot', refresh every x (30) seconds
 - [ ] Mobile responsiveness
 - [ ] Toast notifications
-- [ ] Refactor
+- [ ] 'Enter' to submit undercut price
 
 
 ## Bugs
