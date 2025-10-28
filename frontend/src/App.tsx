@@ -194,15 +194,6 @@ export default function App() {
           >Profit</Button>
         </div>
         <div style={{ justifySelf: 'end', display: 'flex', alignItems: 'center', gap: 12 }}>
-          {rateLimit && (rateLimit.blocked || nearLimit) && (
-            <div className={`rate-limit-banner ${rateLimit.blocked ? 'blocked' : 'near'}`} style={{ whiteSpace: 'nowrap' }}>
-              {rateLimit.blocked ? (
-                <span>Rate limited. {rateLimit.block_remaining.toFixed(1)}s…</span>
-              ) : (
-                <span>Near limit – throttling.</span>
-              )}
-            </div>
-          )}
           <Button
             variant="ghost"
             onClick={handleLogout}
@@ -353,13 +344,13 @@ export default function App() {
               <span style={{fontWeight:500}}>{rule}:</span>{' '}
               {arr.map((r, i) => (
                 <span key={i} style={{marginRight:8}}>
-                  {r.current}/{r.limit} ({r.reset_s}s)
+                  {r.current}/{r.limit} ({Math.round(r.reset_s)}s)
                 </span>
               ))}
             </div>
           ))}
           {rateLimitDisplay.blocked && (
-            <div style={{color:'#fee2e2', fontWeight:500}}>Blocked: {rateLimitDisplay.block_remaining.toFixed(1)}s</div>
+            <div style={{color:'#fee2e2', fontWeight:500}}>Blocked: {Math.round(rateLimitDisplay.block_remaining)}s</div>
           )}
         </div>
       )}
