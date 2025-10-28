@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import CountdownBar from './CountdownBar';
 import { createPortal } from 'react-dom';
 import { formatRate, formatNumberEU } from '../../utils/format';
 import { PairSummary, PriceTrend } from '../../types';
@@ -220,8 +221,19 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
         setUndercutMenuPos(null);
       }
     }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setUndercutDialogOpen(false);
+        setUndercutResult(null);
+        setUndercutMenuPos(null);
+      }
+    }
     document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, [undercutDialogOpen]);
 
   useEffect(() => {
@@ -507,6 +519,17 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
                 />
                 {pair.pay}
               </div>
+
+              {/* Countdown bar spanning the menu */}
+              {refreshCountdown > 0 && (
+                <div style={{ width: '100%', padding: '8px 0 12px 0' }}>
+                  <CountdownBar
+                    duration={10}
+                    remaining={refreshCountdown}
+                    // No label for minimal look
+                  />
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                 <button
                   disabled={
@@ -589,7 +612,7 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
                     }
                   }}
                 >
-                  {refreshCountdown > 0 ? `Refreshing (${refreshCountdown})` : 'Confirm'}
+                  {'Confirm'}
                 </button>
                 <button
                   disabled={undercutLoading}

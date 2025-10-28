@@ -153,15 +153,15 @@ def undercut_trade_service(index: int, new_rate: str = None):
     """Set the price for a trade pair to the exact value provided (fraction or decimal) and update the forum post."""
     load_dotenv()
     from backend.models import PairSummary
-    from backend.trade_logic import fetch_listings_force
+    from backend.trade_logic import fetch_listings_with_cache
     from backend.utils.config import load_config
     cfg = load_config()
     if not (0 <= index < len(cfg.trades)):
         raise Exception("Trade pair not found")
     t = cfg.trades[index]
     account_name = cfg.account_name
-    # Fetch listings (force fresh)
-    listings, _, _ = fetch_listings_force(
+    # Fetch listings (use cache)
+    listings, _, _ = fetch_listings_with_cache(
         league=cfg.league,
         have=t.pay,
         want=t.get,
