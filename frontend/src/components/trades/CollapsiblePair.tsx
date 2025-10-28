@@ -525,7 +525,7 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
                 <div style={{ width: '100%', padding: '8px 0 12px 0' }}>
                   <CountdownBar
                     total={10}
-                    current={refreshCountdown - 1 }
+                    current={refreshCountdown }
                   />
                 </div>
               )}
@@ -581,12 +581,14 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
                   onClick={async () => {
                     setUndercutLoading(true);
                     setUndercutResult(null);
-                    setRefreshCountdown(10);
+                    setRefreshCountdown(10); // Start at 10
                     let timer: NodeJS.Timeout | null = null;
                     try {
                       const rateToSend = (fraction && fraction !== '1' && fraction !== '1/1') ? fraction : newPrice.toString();
                       await onReload(pair.index, rateToSend);
                       setUndercutResult('Success!');
+                      // Immediately decrement by 1 so the bar starts moving right away
+                      setRefreshCountdown(prev => prev - 1);
                       timer = setInterval(() => {
                         setRefreshCountdown(prev => {
                           if (prev <= 1) {
