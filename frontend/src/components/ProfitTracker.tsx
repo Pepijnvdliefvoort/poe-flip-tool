@@ -178,7 +178,12 @@ const ProfitTracker: React.FC = () => {
 
   // Initial load: history, snapshot, scheduler status
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated) {
+      setSnapshot(null);
+      setHistory(null);
+      setError(null);
+      return;
+    }
     loadHistory();
     loadLatestSnapshot();
     loadSchedulerStatus();
@@ -186,12 +191,13 @@ const ProfitTracker: React.FC = () => {
 
   // Periodically refresh age + countdown display
   useEffect(() => {
+    if (!isAuthenticated) return;
     const id = setInterval(() => {
       if (snapshot?.timestamp) updateSnapshotAge(snapshot.timestamp);
       updateCountdown();
     }, 1000);
     return () => clearInterval(id);
-  }, [snapshot]);
+  }, [snapshot, isAuthenticated]);
 
   const grandTotal = snapshot?.total_divines ?? null;
 

@@ -1,3 +1,4 @@
+import './pairs-grid.css';
 import React from 'react';
 import CollapsiblePair from '../CollapsiblePair';
 import { PairSummary } from '../../../types';

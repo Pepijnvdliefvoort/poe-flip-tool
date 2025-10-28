@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { formatRate, formatNumberEU } from '../../utils/format';
-import { PairSummary } from '../../types';
+import { PairSummary, PriceTrend } from '../../types';
 import { gcd, toReducedFraction, getFractionUndercut } from '../../utils/tradePriceUtils';
 import Sparkline from './Sparkline';
+import { Api } from '../../api';
 import { CurrencyIcon } from '../CurrencyIcon';
 
 // Props type for CollapsiblePair
@@ -17,7 +19,27 @@ interface CollapsiblePairProps {
 }
 
 
+
 const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded, loading, onReload, globalMaxAbsDelta, accountName, selectedMetrics }) => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  // Local state for trend (sparkline) data
+  const [trend, setTrend] = useState<PriceTrend | null | undefined>(pair.trend);
+
+  // Fetch trend data if missing
+  useEffect(() => {
+    let cancelled = false;
+    if (!trend || !trend.sparkline || trend.sparkline.length < 2) {
+      Api.history(pair.pay, pair.get, 30)
+        .then((res) => {
+          if (!cancelled) setTrend(res.trend);
+        })
+        .catch(() => {});
+    } else {
+      setTrend(trend); // ensure state is set if already present
+    }
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pair.pay, pair.get]);
   // Timer state for undercut refresh countdown
   const [refreshCountdown, setRefreshCountdown] = useState(0);
   const [undercutDialogOpen, setUndercutDialogOpen] = useState(false);
@@ -296,9 +318,7 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
       tooltip: `Profit margin (median): ${profitMarginPct !== null && profitMarginPct !== undefined ? formatNumberEU(profitMarginPct, 2, 2) : 'N/A'}% (${profitMarginRaw !== null && profitMarginRaw !== undefined ? (profitMarginRaw > 0 ? '+' : '') + formatNumberEU(profitMarginRaw, 2, 2) + ' ' + pair.get : 'N/A'})`
     }
   }
-
-  const isRateLimited = pair.status === 'rate_limited'
-
+  
   const handleHeaderClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
     if (target.closest('.pair-controls button')) return;
@@ -306,7 +326,7 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
   };
 
   return (
-    <div style={{ position: 'relative', maxWidth: '100%', overflow: 'hidden' }}>
+    <div ref={containerRef} style={{ position: 'relative', maxWidth: '100%', overflow: 'hidden' }}>
       <div
         className="pair-card"
         style={{
@@ -348,19 +368,12 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
                   ) : null}
                 </span>
                 <span className="summary-item" style={{ width: 130, display: 'inline-flex', gap: 6, alignItems: 'center', justifyContent: 'flex-start' }}>
-                  {pair.trend && pair.trend.sparkline && pair.trend.sparkline.length >= 2 ? (
+                  {trend && trend.sparkline && trend.sparkline.length >= 2 ? (
                     <>
-                      <Sparkline values={pair.trend.sparkline} width={70} relativeFirst={true} globalMaxAbsDelta={globalMaxAbsDelta} adaptive={true} visualCapPct={40} haveCurrency={pair.pay} wantCurrency={pair.get} />
-                      <span style={{ fontSize: '11px', minWidth: 10, textAlign: 'right', color: pair.trend.direction === 'up' ? '#ef4444' : pair.trend.direction === 'down' ? '#10b981' : '#6b7280', whiteSpace: 'nowrap', marginLeft: 4 }}>
-                        {pair.trend.change_percent > 0 ? '+' : ''}{formatNumberEU(pair.trend.change_percent, 1, 1)}%
+                      <Sparkline values={trend.sparkline} width={70} relativeFirst={true} globalMaxAbsDelta={globalMaxAbsDelta} adaptive={true} visualCapPct={40} haveCurrency={pair.pay} wantCurrency={pair.get} />
+                      <span style={{ fontSize: '11px', minWidth: 10, textAlign: 'right', color: trend.direction === 'up' ? '#ef4444' : trend.direction === 'down' ? '#10b981' : '#6b7280', whiteSpace: 'nowrap', marginLeft: 4 }}>
+                        {trend.change_percent > 0 ? '+' : ''}{formatNumberEU(trend.change_percent, 1, 1)}%
                       </span>
-                      {typeof pair.trend.lowest_median === 'number' && typeof pair.trend.highest_median === 'number' ? (
-                        <span style={{ fontSize: '10px', color: '#6b7280', marginLeft: 8 }}>
-                          <span style={{ color: '#10b981', fontWeight: 600 }}>Low:</span> {formatRate(pair.trend.lowest_median, pair.pay, pair.get)}
-                          {' '}
-                          <span style={{ color: '#ef4444', fontWeight: 600 }}>High:</span> {formatRate(pair.trend.highest_median, pair.pay, pair.get)}
-                        </span>
-                      ) : null}
                     </>
                   ) : null}
                 </span>
@@ -410,16 +423,12 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
                 title="Undercut best rate by 1 (or custom)"
                 onClick={e => {
                   e.stopPropagation();
-                  let top = 100, left = 100;
                   if (undercutBtnRef.current) {
-                    const rect = undercutBtnRef.current.getBoundingClientRect();
-                    top = rect.bottom + window.scrollY + 8;
-                    left = rect.left + window.scrollX;
-                  } else if (e && e.pageX && e.pageY) {
-                    top = e.pageY;
-                    left = e.pageX;
+                    const btnRect = undercutBtnRef.current.getBoundingClientRect();
+                    const top = btnRect.bottom + 8; // 8px below the button
+                    const left = btnRect.left;
+                    setUndercutMenuPos({ top, left });
                   }
-                  setUndercutMenuPos({ top, left });
                   setUndercutDialogOpen(true);
                 }}
                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 8px' }}
@@ -445,8 +454,7 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
           </div>
         </div>
 
-        {/* Undercut dialog is always available, not gated by isExpanded */}
-        {undercutDialogOpen && undercutMenuPos && (
+        {undercutDialogOpen && undercutMenuPos && createPortal(
           <div
             id="undercut-menu"
             style={{
@@ -598,8 +606,9 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
                 </button>
               </div>
               {undercutResult && <div style={{ marginTop: 6, color: undercutResult.startsWith('Success') ? '#10b981' : '#ef4444', fontWeight: 500 }}>{undercutResult}</div>}
-            </div>
-        )}
+            </div>,
+            document.body
+          )}
         {isExpanded && (
           <>
             {pair.status === 'rate_limited' ? (

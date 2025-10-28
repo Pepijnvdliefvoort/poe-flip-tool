@@ -291,22 +291,12 @@ class HistoricalCache:
                 "direction": "neutral",
                 "change_percent": 0.0,
                 "data_points": len(snapshots),
-                "sparkline": [s.best_rate for s in snapshots],
+                "sparkline": [s.median_rate for s in snapshots],
                 "lowest_median": None,
                 "highest_median": None,
             }
-        # Use median price at end of window, and the earliest snapshot's median as start
         import statistics
-        start_median = snapshots[0].median_rate  # Earliest snapshot in graph (at most 7 days ago)
-        end_medians = [s.median_rate for s in snapshots[-max(1, len(snapshots)//8):]]
-        end_median = statistics.median(end_medians)
-        # Prevent division by zero/extreme %
-        if start_median == 0:
-            change_percent = 0.0
-        else:
-            change_percent = ((end_median - start_median) / start_median) * 100
-        direction = "up" if change_percent > 2 else "down" if change_percent < -2 else "neutral"
-        # Sparkline
+        # Sparkline (downsampled if needed)
         series = [s.median_rate for s in snapshots]
         if len(series) > SPARKLINE_POINTS:
             step = len(series) / SPARKLINE_POINTS
@@ -314,7 +304,15 @@ class HistoricalCache:
             if indices[-1] != len(series) - 1:
                 indices[-1] = len(series) - 1
             series = [series[i] for i in indices]
-        # Lowest/highest median in window
+        # Use first and last value in sparkline for percent change
+        start_val = series[0]
+        end_val = series[-1]
+        if start_val == 0:
+            change_percent = 0.0
+        else:
+            change_percent = ((end_val - start_val) / start_val) * 100
+        direction = "up" if change_percent > 2 else "down" if change_percent < -2 else "neutral"
+        # Lowest/highest median in window (unchanged)
         lowest_median = min([statistics.median([s.median_rate for s in snapshots[i:i+max(1,len(snapshots)//8)]]) for i in range(0, len(snapshots), max(1,len(snapshots)//8))])
         highest_median = max([statistics.median([s.median_rate for s in snapshots[i:i+max(1,len(snapshots)//8)]]) for i in range(0, len(snapshots), max(1,len(snapshots)//8))])
         return {
