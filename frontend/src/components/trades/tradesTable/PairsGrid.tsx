@@ -20,6 +20,7 @@ export const PairsGrid: React.FC<Props> = ({ data, loading, loadingIndex, onRelo
       <CollapsiblePair
         key={`${p.pay}->${p.get}`}
         pair={p}
+        index={i}
         defaultExpanded={allExpanded}
         loading={!!loading && i === loadingIndex}
         onReload={onReload}

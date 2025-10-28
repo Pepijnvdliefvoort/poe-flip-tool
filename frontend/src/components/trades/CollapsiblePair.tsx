@@ -11,6 +11,7 @@ import { CurrencyIcon } from '../CurrencyIcon';
 // Props type for CollapsiblePair
 interface CollapsiblePairProps {
   pair: PairSummary;
+  index: number;
   defaultExpanded: boolean;
   loading: boolean;
   onReload: (index: number, newPrice?: string) => Promise<any> | void;
@@ -21,16 +22,18 @@ interface CollapsiblePairProps {
 
 
 
-const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded, loading, onReload, globalMaxAbsDelta, accountName, selectedMetrics }) => {
+const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, index, defaultExpanded, loading, onReload, globalMaxAbsDelta, accountName, selectedMetrics }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   // Local state for trend (sparkline) data
   const [trend, setTrend] = useState<PriceTrend | null | undefined>(pair.trend);
+  // Local state for listings and other pair data (for hot refresh)
+  const [localPair, setLocalPair] = useState<PairSummary>(pair);
 
   // Fetch trend data if missing
   useEffect(() => {
     let cancelled = false;
     if (!trend || !trend.sparkline || trend.sparkline.length < 2) {
-      Api.history(pair.pay, pair.get, 30)
+      Api.history(localPair.pay, localPair.get, 30)
         .then((res) => {
           if (!cancelled) setTrend(res.trend);
         })
@@ -40,14 +43,43 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
     }
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pair.pay, pair.get]);
+  }, [localPair.pay, localPair.get]);
+
+  // Keep localPair in sync with prop changes
+  useEffect(() => {
+    setLocalPair(pair);
+  }, [pair]);
+
+  // Poll for hot items every 30s
+  useEffect(() => {
+    if (!localPair.hot) return;
+    let cancelled = false;
+    const fetchLatest = async () => {
+      try {
+        // Fetch latest data for this pair only using its index
+        const res = await Api.refreshOne(index);
+        if (!cancelled && res) {
+          setLocalPair(res);
+          if (res.trend) setTrend(res.trend);
+        }
+      } catch (e) {
+        // Optionally handle error
+      }
+    };
+    fetchLatest(); // fetch immediately
+    const interval = window.setInterval(fetchLatest, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [localPair.hot, index]);
   // Timer state for undercut refresh countdown
   const [refreshCountdown, setRefreshCountdown] = useState(0);
   const [undercutDialogOpen, setUndercutDialogOpen] = useState(false);
-  let bestRate = pair.best_rate ?? 1;
+  let bestRate = localPair.best_rate ?? 1;
   let bestRateFraction = '';
-  if (pair.best_rate && pair.pay && pair.get) {
-    const display = formatRate(pair.best_rate, pair.pay, pair.get);
+  if (localPair.best_rate && localPair.pay && localPair.get) {
+    const display = formatRate(localPair.best_rate, localPair.pay, localPair.get);
     const m = display.match(/^1\/(\d+)$/);
     if (m) {
       bestRateFraction = display;
@@ -60,12 +92,12 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
   let myIndex = -1;
   let myRate: number | null = null;
   let nextBestRate: number | null = null;
-  if (pair.listings && pair.listings.length > 0) {
+  if (localPair.listings && localPair.listings.length > 0) {
     const sourceNames = accountName && accountName.length > 0 ? accountName : (import.meta.env.VITE_ACCOUNT_NAME || '');
     const rawNames = sourceNames.split(',').map((s: string) => s.trim()).filter((val: string) => !!val);
     const normalize = (name: string | undefined | null) => (name || '').replace(/#\d{3,5}$/, '').toLowerCase();
-    for (let i = 0; i < pair.listings.length; i++) {
-      const l = pair.listings[i];
+    for (let i = 0; i < localPair.listings.length; i++) {
+      const l = localPair.listings[i];
       const normalizedListing = normalize(l.account_name);
       if (rawNames.some((envName: string) => normalize(envName) === normalizedListing)) {
         myIndex = i;
@@ -73,8 +105,8 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
         break;
       }
     }
-    if (myIndex === 0 && pair.listings.length > 1) {
-      nextBestRate = pair.listings[1].rate;
+    if (myIndex === 0 && localPair.listings.length > 1) {
+      nextBestRate = localPair.listings[1].rate;
     }
   }
   let defaultNewPrice = String(bestRate);
@@ -94,7 +126,7 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
       defaultNewPrice = `1/${asFraction + 1}`;
       defaultFraction = `1/${asFraction + 1}`;
     } else if (nextBestRate > 1 && nextBestRate % 1 !== 0) {
-      const frac = getFractionUndercut(nextBestRate, bestRateFraction, pair.listings || []);
+  const frac = getFractionUndercut(nextBestRate, bestRateFraction, localPair.listings || []);
       if (frac) {
         defaultNewPrice = frac.value;
         defaultFraction = frac.display;
@@ -124,7 +156,7 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
     defaultFraction = `1/${denom + 1}`;
   } else if (myIndex === -1) {
     if (Number.isFinite(bestRate) && bestRate > 1 && bestRate % 1 !== 0) {
-      const frac = getFractionUndercut(bestRate, bestRateFraction, pair.listings || []);
+  const frac = getFractionUndercut(bestRate, bestRateFraction, localPair.listings || []);
       if (frac) {
         defaultNewPrice = frac.value;
         defaultFraction = frac.display;
@@ -136,7 +168,7 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
       defaultNewPrice = String(bestRate - 1);
       defaultFraction = '';
     } else if (Number.isFinite(bestRate) && bestRate > 0.01 && bestRate % 1 !== 0) {
-      const frac = getFractionUndercut(bestRate, bestRateFraction, pair.listings || []);
+  const frac = getFractionUndercut(bestRate, bestRateFraction, localPair.listings || []);
       if (frac) {
         defaultNewPrice = frac.value;
         defaultFraction = frac.display;
@@ -158,7 +190,7 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
     }
     if (bestDenom !== null && pair.listings) {
       const usedDenoms = new Set<number>();
-      for (const l of pair.listings) {
+  for (const l of localPair.listings) {
         if (l.rate > 0 && l.rate < 1) {
           const d = Math.round(1 / l.rate);
           if (Math.abs(l.rate - 1 / d) < 1e-8) {
@@ -289,7 +321,7 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
     }
   }, [])
 
-  const rates = pair.listings.map(l => l.rate)
+  const rates = localPair.listings.map(l => l.rate)
   const medianRate = (() => {
     if (!rates.length) return null
     const sorted = [...rates].sort((a, b) => a - b)
@@ -303,8 +335,8 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
     return min !== 0 ? ((max - min) / min) * 100 : null
   })()
 
-  const profitMarginRaw = pair.profit_margin_raw ?? null;
-  const profitMarginPct = pair.profit_margin_pct ?? null;
+  const profitMarginRaw = localPair.profit_margin_raw ?? null;
+  const profitMarginPct = localPair.profit_margin_pct ?? null;
 
   const metricRenderers: Record<string, { label: string; value: JSX.Element | null; tooltip: string }> = {
     spread: {
@@ -314,7 +346,7 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
     },
     median: {
       label: 'Median',
-      value: medianRate !== null ? <span className="summary-value">{formatRate(medianRate, pair.pay, pair.get)}</span> : null,
+  value: medianRate !== null ? <span className="summary-value">{formatRate(medianRate, localPair.pay, localPair.get)}</span> : null,
       tooltip: 'Median: Middle value of sorted listing rates. More robust than average against outliers.'
     },
     profit: {
@@ -327,7 +359,7 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
           {profitMarginPct > 0 ? '+' : ''}{formatNumberEU(profitMarginPct, 1, 1)}%
         </span>
       ) : null,
-      tooltip: `Profit margin (median): ${profitMarginPct !== null && profitMarginPct !== undefined ? formatNumberEU(profitMarginPct, 2, 2) : 'N/A'}% (${profitMarginRaw !== null && profitMarginRaw !== undefined ? (profitMarginRaw > 0 ? '+' : '') + formatNumberEU(profitMarginRaw, 2, 2) + ' ' + pair.get : 'N/A'})`
+  tooltip: `Profit margin (median): ${profitMarginPct !== null && profitMarginPct !== undefined ? formatNumberEU(profitMarginPct, 2, 2) : 'N/A'}% (${profitMarginRaw !== null && profitMarginRaw !== undefined ? (profitMarginRaw > 0 ? '+' : '') + formatNumberEU(profitMarginRaw, 2, 2) + ' ' + localPair.get : 'N/A'})`
     }
   }
   
@@ -342,8 +374,8 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
       <div
         className="pair-card"
         style={{
-          border: pair.hot ? '2px solid var(--warning)' : '1px solid var(--border)',
-          background: pair.hot ? 'rgba(245, 158, 11, 0.05)' : undefined,
+          border: localPair.hot ? '2px solid var(--warning)' : '1px solid var(--border)',
+          background: localPair.hot ? 'rgba(245, 158, 11, 0.05)' : undefined,
           width: '100%',
           boxSizing: 'border-box'
         }}
