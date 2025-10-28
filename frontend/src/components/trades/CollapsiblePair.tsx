@@ -126,7 +126,7 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, index, defaultE
       defaultNewPrice = `1/${asFraction + 1}`;
       defaultFraction = `1/${asFraction + 1}`;
     } else if (nextBestRate > 1 && nextBestRate % 1 !== 0) {
-  const frac = getFractionUndercut(nextBestRate, bestRateFraction, localPair.listings || []);
+      const frac = getFractionUndercut(nextBestRate, bestRateFraction, localPair.listings || []);
       if (frac) {
         defaultNewPrice = frac.value;
         defaultFraction = frac.display;
@@ -156,7 +156,7 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, index, defaultE
     defaultFraction = `1/${denom + 1}`;
   } else if (myIndex === -1) {
     if (Number.isFinite(bestRate) && bestRate > 1 && bestRate % 1 !== 0) {
-  const frac = getFractionUndercut(bestRate, bestRateFraction, localPair.listings || []);
+      const frac = getFractionUndercut(bestRate, bestRateFraction, localPair.listings || []);
       if (frac) {
         defaultNewPrice = frac.value;
         defaultFraction = frac.display;
@@ -168,7 +168,7 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, index, defaultE
       defaultNewPrice = String(bestRate - 1);
       defaultFraction = '';
     } else if (Number.isFinite(bestRate) && bestRate > 0.01 && bestRate % 1 !== 0) {
-  const frac = getFractionUndercut(bestRate, bestRateFraction, localPair.listings || []);
+      const frac = getFractionUndercut(bestRate, bestRateFraction, localPair.listings || []);
       if (frac) {
         defaultNewPrice = frac.value;
         defaultFraction = frac.display;
@@ -190,7 +190,7 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, index, defaultE
     }
     if (bestDenom !== null && pair.listings) {
       const usedDenoms = new Set<number>();
-  for (const l of localPair.listings) {
+      for (const l of localPair.listings) {
         if (l.rate > 0 && l.rate < 1) {
           const d = Math.round(1 / l.rate);
           if (Math.abs(l.rate - 1 / d) < 1e-8) {
@@ -238,8 +238,8 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, index, defaultE
     }
   }, [undercutDialogOpen, defaultNewPrice, defaultFraction]);
   const [undercutLoading, setUndercutLoading] = useState(false);
-  const [undercutResult, setUndercutResult] = useState<string|null>(null);
-  const [undercutMenuPos, setUndercutMenuPos] = useState<{top: number, left: number} | null>(null);
+  const [undercutResult, setUndercutResult] = useState<string | null>(null);
+  const [undercutMenuPos, setUndercutMenuPos] = useState<{ top: number, left: number } | null>(null);
   const undercutBtnRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
@@ -346,7 +346,7 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, index, defaultE
     },
     median: {
       label: 'Median',
-  value: medianRate !== null ? <span className="summary-value">{formatRate(medianRate, localPair.pay, localPair.get)}</span> : null,
+      value: medianRate !== null ? <span className="summary-value">{formatRate(medianRate, localPair.pay, localPair.get)}</span> : null,
       tooltip: 'Median: Middle value of sorted listing rates. More robust than average against outliers.'
     },
     profit: {
@@ -359,10 +359,10 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, index, defaultE
           {profitMarginPct > 0 ? '+' : ''}{formatNumberEU(profitMarginPct, 1, 1)}%
         </span>
       ) : null,
-  tooltip: `Profit margin (median): ${profitMarginPct !== null && profitMarginPct !== undefined ? formatNumberEU(profitMarginPct, 2, 2) : 'N/A'}% (${profitMarginRaw !== null && profitMarginRaw !== undefined ? (profitMarginRaw > 0 ? '+' : '') + formatNumberEU(profitMarginRaw, 2, 2) + ' ' + localPair.get : 'N/A'})`
+      tooltip: `Profit margin (median): ${profitMarginPct !== null && profitMarginPct !== undefined ? formatNumberEU(profitMarginPct, 2, 2) : 'N/A'}% (${profitMarginRaw !== null && profitMarginRaw !== undefined ? (profitMarginRaw > 0 ? '+' : '') + formatNumberEU(profitMarginRaw, 2, 2) + ' ' + localPair.get : 'N/A'})`
     }
   }
-  
+
   const handleHeaderClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
     if (target.closest('.pair-controls button')) return;
@@ -480,8 +480,8 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, index, defaultE
                 {/* Dollar icon SVG */}
                 <svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'block' }}>
                   <circle cx="10" cy="10" r="8" stroke="#f59e42" strokeWidth="2" fill="none" />
-                  <path d="M10 5v10" stroke="#f59e42" strokeWidth="1.5" strokeLinecap="round"/>
-                  <path d="M13 7.5c0-1.1-1.3-2-3-2s-3 .9-3 2c0 1.1 1.3 2 3 2s3 .9 3 2-1.3 2-3 2-3-.9-3-2" stroke="#f59e42" strokeWidth="1.5" fill="none"/>
+                  <path d="M10 5v10" stroke="#f59e42" strokeWidth="1.5" strokeLinecap="round" />
+                  <path d="M13 7.5c0-1.1-1.3-2-3-2s-3 .9-3 2c0 1.1 1.3 2 3 2s3 .9 3 2-1.3 2-3 2-3-.9-3-2" stroke="#f59e42" strokeWidth="1.5" fill="none" />
                 </svg>
               </button>
               <button className="collapse-btn" onClick={e => { e.stopPropagation(); setIsExpanded(!isExpanded); }}>
@@ -517,153 +517,153 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, index, defaultE
               transition: 'box-shadow 0.2s',
             }}
           >
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>
-                New price
-                <input
-                  type="text"
-                  value={(() => {
-                    const val = fraction || newPrice;
-                    if (/^\d+\/\d+$/.test(val)) return val;
-                    const num = Number(val);
-                    if (!isNaN(num) && num > 0 && num < 1) {
-                      const denom = Math.round(1 / num);
-                      return `1/${denom}`;
-                    }
-                    return val;
-                  })()}
-                  onChange={e => {
-                    setFraction(e.target.value);
-                    setNewPrice(e.target.value);
-                  }}
-                  style={{
-                    width: 90,
-                    fontSize: 15,
-                    marginLeft: 10,
-                    marginRight: 6,
-                    background: 'var(--bg-secondary)',
-                    color: 'var(--text)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 6,
-                    padding: '6px 10px',
-                    outline: 'none',
-                    transition: 'border-color 0.2s',
-                  }}
-                />
-                {pair.pay}
-              </div>
-
-              {/* Countdown bar spanning the menu */}
-              {refreshCountdown > 0 && (
-                <div style={{ width: '100%', padding: '8px 0 12px 0' }}>
-                  <CountdownBar
-                    duration={10}
-                    remaining={refreshCountdown}
-                    // No label for minimal look
-                  />
-                </div>
-              )}
-              <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                <button
-                  disabled={
-                    refreshCountdown > 0 ||
-                    undercutLoading ||
-                    (
-                      typeof myRate === 'number' &&
-                      /^1\/\d+$/.test(newPrice) &&
-                      (() => {
-                        const m = newPrice.match(/^1\/(\d+)$/);
-                        if (m) {
-                          const denom = parseInt(m[1], 10);
-                          return Math.abs(myRate - (1 / denom)) < 1e-8;
-                        }
-                        return false;
-                      })()
-                    ) ||
-                    (
-                      typeof myRate === 'number' &&
-                      !isNaN(Number(newPrice)) &&
-                      Math.abs(Number(newPrice) - myRate) < 1e-6 &&
-                      !/^\d+\/\d+$/.test(newPrice)
-                    )
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>
+              New price
+              <input
+                type="text"
+                value={(() => {
+                  const val = fraction || newPrice;
+                  if (/^\d+\/\d+$/.test(val)) return val;
+                  const num = Number(val);
+                  if (!isNaN(num) && num > 0 && num < 1) {
+                    const denom = Math.round(1 / num);
+                    return `1/${denom}`;
                   }
-                  className="btn primary"
-                  style={{
-                    minWidth: 90,
-                    padding: '8px 0',
-                    fontSize: 15,
-                    borderRadius: 6,
-                    pointerEvents: 'auto',
-                    opacity: (refreshCountdown > 0 || undercutLoading || (
-                      typeof myRate === 'number' &&
-                      /^1\/\d+$/.test(newPrice) &&
-                      (() => {
-                        const m = newPrice.match(/^1\/(\d+)$/);
-                        if (m) {
-                          const denom = parseInt(m[1], 10);
-                          return Math.abs(myRate - (1 / denom)) < 1e-8;
-                        }
-                        return false;
-                      })()
-                    ) || (
+                  return val;
+                })()}
+                onChange={e => {
+                  setFraction(e.target.value);
+                  setNewPrice(e.target.value);
+                }}
+                style={{
+                  width: 90,
+                  fontSize: 15,
+                  marginLeft: 10,
+                  marginRight: 6,
+                  background: 'var(--bg-secondary)',
+                  color: 'var(--text)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 6,
+                  padding: '6px 10px',
+                  outline: 'none',
+                  transition: 'border-color 0.2s',
+                }}
+              />
+              {pair.pay}
+            </div>
+
+            {/* Countdown bar spanning the menu */}
+            {refreshCountdown > 0 && (
+              <div style={{ width: '100%', padding: '8px 0 12px 0' }}>
+                <CountdownBar
+                  duration={10}
+                  remaining={refreshCountdown}
+                // No label for minimal look
+                />
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <button
+                disabled={
+                  refreshCountdown > 0 ||
+                  undercutLoading ||
+                  (
+                    typeof myRate === 'number' &&
+                    /^1\/\d+$/.test(newPrice) &&
+                    (() => {
+                      const m = newPrice.match(/^1\/(\d+)$/);
+                      if (m) {
+                        const denom = parseInt(m[1], 10);
+                        return Math.abs(myRate - (1 / denom)) < 1e-8;
+                      }
+                      return false;
+                    })()
+                  ) ||
+                  (
+                    typeof myRate === 'number' &&
+                    !isNaN(Number(newPrice)) &&
+                    Math.abs(Number(newPrice) - myRate) < 1e-6 &&
+                    !/^\d+\/\d+$/.test(newPrice)
+                  )
+                }
+                className="btn primary"
+                style={{
+                  minWidth: 90,
+                  padding: '8px 0',
+                  fontSize: 15,
+                  borderRadius: 6,
+                  pointerEvents: 'auto',
+                  opacity: (refreshCountdown > 0 || undercutLoading || (
+                    typeof myRate === 'number' &&
+                    /^1\/\d+$/.test(newPrice) &&
+                    (() => {
+                      const m = newPrice.match(/^1\/(\d+)$/);
+                      if (m) {
+                        const denom = parseInt(m[1], 10);
+                        return Math.abs(myRate - (1 / denom)) < 1e-8;
+                      }
+                      return false;
+                    })()
+                  ) || (
                       typeof myRate === 'number' &&
                       !isNaN(Number(newPrice)) &&
                       Math.abs(Number(newPrice) - myRate) < 1e-6 &&
                       !/^\d+\/\d+$/.test(newPrice)
                     )) ? 0.5 : 1,
-                  }}
-                  onClick={async () => {
-                    setUndercutLoading(true);
-                    setUndercutResult(null);
-                    setRefreshCountdown(10);
-                    let timer: NodeJS.Timeout | null = null;
-                    try {
-                      const rateToSend = (fraction && fraction !== '1' && fraction !== '1/1') ? fraction : newPrice.toString();
-                      await onReload(pair.index, rateToSend);
-                      setUndercutResult('Success! Refreshing...');
-                      timer = setInterval(() => {
-                        setRefreshCountdown(prev => {
-                          if (prev <= 1) {
-                            clearInterval(timer!);
-                            return 0;
-                          }
-                          return prev - 1;
-                        });
-                      }, 1000);
-                      setTimeout(() => {
-                        setUndercutDialogOpen(false);
-                        setUndercutMenuPos(null);
-                        setUndercutResult(null);
-                        setRefreshCountdown(0);
-                        if (onReload) onReload(pair.index);
-                      }, 10000);
-                    } catch (err: any) {
-                      setUndercutResult('Failed: ' + (err?.message || 'Unknown error'));
+                }}
+                onClick={async () => {
+                  setUndercutLoading(true);
+                  setUndercutResult(null);
+                  setRefreshCountdown(10);
+                  let timer: NodeJS.Timeout | null = null;
+                  try {
+                    const rateToSend = (fraction && fraction !== '1' && fraction !== '1/1') ? fraction : newPrice.toString();
+                    await onReload(pair.index, rateToSend);
+                    setUndercutResult('Success! Refreshing...');
+                    timer = setInterval(() => {
+                      setRefreshCountdown(prev => {
+                        if (prev <= 1) {
+                          clearInterval(timer!);
+                          return 0;
+                        }
+                        return prev - 1;
+                      });
+                    }, 1000);
+                    setTimeout(() => {
+                      setUndercutDialogOpen(false);
+                      setUndercutMenuPos(null);
+                      setUndercutResult(null);
                       setRefreshCountdown(0);
-                    } finally {
-                      setUndercutLoading(false);
-                    }
-                  }}
-                >
-                  {'Confirm'}
-                </button>
-                <button
-                  disabled={undercutLoading}
-                  className="btn secondary"
-                  style={{
-                    minWidth: 90,
-                    padding: '8px 0',
-                    fontSize: 15,
-                    borderRadius: 6,
-                  }}
-                  onClick={() => { setUndercutDialogOpen(false); setUndercutResult(null); setUndercutMenuPos(null); }}
-                >
-                  Cancel
-                </button>
-              </div>
-              {undercutResult && <div style={{ marginTop: 6, color: undercutResult.startsWith('Success') ? '#10b981' : '#ef4444', fontWeight: 500 }}>{undercutResult}</div>}
-            </div>,
-            document.body
-          )}
+                      if (onReload) onReload(pair.index);
+                    }, 10000);
+                  } catch (err: any) {
+                    setUndercutResult('Failed: ' + (err?.message || 'Unknown error'));
+                    setRefreshCountdown(0);
+                  } finally {
+                    setUndercutLoading(false);
+                  }
+                }}
+              >
+                {'Confirm'}
+              </button>
+              <button
+                disabled={undercutLoading}
+                className="btn secondary"
+                style={{
+                  minWidth: 90,
+                  padding: '8px 0',
+                  fontSize: 15,
+                  borderRadius: 6,
+                }}
+                onClick={() => { setUndercutDialogOpen(false); setUndercutResult(null); setUndercutMenuPos(null); }}
+              >
+                Cancel
+              </button>
+            </div>
+            {undercutResult && <div style={{ marginTop: 6, color: undercutResult.startsWith('Success') ? '#10b981' : '#ef4444', fontWeight: 500 }}>{undercutResult}</div>}
+          </div>,
+          document.body
+        )}
         {isExpanded && (
           <>
             {pair.status === 'rate_limited' ? (
