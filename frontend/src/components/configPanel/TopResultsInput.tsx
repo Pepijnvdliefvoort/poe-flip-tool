@@ -9,7 +9,13 @@ interface TopResultsInputProps {
 
 const TopResultsInput: React.FC<TopResultsInputProps> = ({ topN, onTopNChanged }) => (
   <div style={{ flex: 1 }}>
-    <label className="muted" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '4px' }}>Top Results</label>
+    <label
+      className="muted"
+      htmlFor="topn-input"
+      style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '4px' }}
+    >
+      Top Results
+    </label>
     <div style={{ position: 'relative', display: 'flex', alignItems: 'stretch' }}>
       <Input
         id="topn-input"

@@ -338,7 +338,11 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
   };
 
   return (
-    <div ref={containerRef} style={{ position: 'relative', maxWidth: '100%', overflow: 'hidden' }}>
+    <div
+      ref={containerRef}
+      id={`pair-${pair.pay}-${pair.get}`}
+      style={{ position: 'relative', maxWidth: '100%', overflow: 'hidden' }}
+    >
       <div
         className="pair-card"
         style={{
@@ -506,6 +510,8 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
             <div style={{ fontWeight: 700, marginBottom: 8 }}>
               New price
               <input
+                id="collapsiblepair-newprice"
+                name="newprice"
                 type="text"
                 value={(() => {
                   const val = fraction || newPrice;

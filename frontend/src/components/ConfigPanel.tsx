@@ -53,8 +53,9 @@ export function ConfigPanel({
             {/* League selector and Top Results - side by side */}
             <div style={{ display: 'flex', gap: '12px', marginBottom: 16 }}>
                 <div style={{ flex: 1 }}>
-                    <label className="muted" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '4px' }}>League</label>
+                    <label className="muted" htmlFor="league-select" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '4px' }}>League</label>
                     <select 
+                        id="league-select"
                         value={cfg.league} 
                         onChange={(e) => changeLeague(e.target.value, setCfg, onChanged)}
                         disabled={saving}

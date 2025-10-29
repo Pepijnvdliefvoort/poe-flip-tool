@@ -2,15 +2,16 @@ import React from 'react';
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
+  id?: string;
   containerStyle?: React.CSSProperties;
   labelStyle?: React.CSSProperties;
 }
 
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ label, containerStyle, labelStyle, style, ...props }, ref) => (
+  ({ label, id, containerStyle, labelStyle, style, ...props }, ref) => (
     <div style={{ width: '100%', ...containerStyle }}>
-      {label && (
-        <label style={{
+      {label && id && (
+        <label htmlFor={id} style={{
           display: 'block',
           fontSize: '13px',
           fontWeight: 500,
@@ -21,6 +22,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
       )}
       <input
         ref={ref}
+        id={id}
         style={{
           width: '100%',
           padding: '10px 12px',

@@ -1,6 +1,5 @@
 import React from 'react';
 import { CurrencyIcon } from '../CurrencyIcon';
-
 import type { TradePair } from '../../types';
 
 interface TradePairsListProps {
@@ -17,9 +16,9 @@ interface TradePairsListProps {
 
 const TradePairsList: React.FC<TradePairsListProps> = ({ trades, cfg, setCfg, setSaving, onHotToggled, onPairRemoved, saving, toggleHot, removePair }) => (
   <div style={{ marginBottom: 16 }}>
-    <label className="muted" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px', display: 'block' }}>
+    <span className="muted" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px', display: 'block' }}>
       Pairs ({trades.length})
-    </label>
+    </span>
     {trades.length > 0 ? (
       <div style={{ 
         display: 'grid', 
@@ -29,8 +28,10 @@ const TradePairsList: React.FC<TradePairsListProps> = ({ trades, cfg, setCfg, se
         gap: '8px' 
       }}>
         {trades.map((t, i) => (
-          <div 
-            key={i} 
+          <div
+            key={i}
+            role="button"
+            tabIndex={0}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -39,8 +40,31 @@ const TradePairsList: React.FC<TradePairsListProps> = ({ trades, cfg, setCfg, se
               background: 'var(--bg-secondary)',
               borderRadius: '6px',
               border: '1px solid var(--border)',
-              fontSize: '12px'
+              fontSize: '12px',
+              width: '100%',
+              cursor: 'pointer',
+              textAlign: 'left',
+              transition: 'background 0.2s',
+              position: 'relative',
             }}
+            onClick={() => {
+              const el = document.getElementById(`pair-${t.pay}-${t.get}`);
+              if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                el.focus?.();
+              }
+            }}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                const el = document.getElementById(`pair-${t.pay}-${t.get}`);
+                if (el) {
+                  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  el.focus?.();
+                }
+              }
+            }}
+            title="Scroll to this trade pair"
           >
             <span style={{ color: 'var(--muted)', fontSize: '11px', width: '14px', flexShrink: 0 }}>{i + 1}</span>
             <div style={{
@@ -55,7 +79,7 @@ const TradePairsList: React.FC<TradePairsListProps> = ({ trades, cfg, setCfg, se
               <CurrencyIcon currency={t.get} size={16} />
             </div>
             <button
-              onClick={() => toggleHot(i, cfg, setCfg, setSaving, onHotToggled)}
+              onClick={e => { e.stopPropagation(); toggleHot(i, cfg, setCfg, setSaving, onHotToggled); }}
               disabled={saving}
               style={{
                 padding: '2px 5px',
@@ -84,6 +108,7 @@ const TradePairsList: React.FC<TradePairsListProps> = ({ trades, cfg, setCfg, se
                 }
               }}
               title={t.hot ? "Mark as normal" : "Mark as hot (priority)"}
+              tabIndex={-1}
             >
               🔥
               {!t.hot && (
@@ -98,8 +123,8 @@ const TradePairsList: React.FC<TradePairsListProps> = ({ trades, cfg, setCfg, se
                 </span>
               )}
             </button>
-            <button 
-              onClick={() => removePair(i, setCfg, setSaving, onPairRemoved)} 
+            <button
+              onClick={e => { e.stopPropagation(); removePair(i, setCfg, setSaving, onPairRemoved); }}
               disabled={saving}
               style={{
                 padding: '2px 5px',
@@ -124,6 +149,7 @@ const TradePairsList: React.FC<TradePairsListProps> = ({ trades, cfg, setCfg, se
                 e.currentTarget.style.color = 'var(--muted)';
               }}
               title="Remove"
+              tabIndex={-1}
             >
               ✕
             </button>

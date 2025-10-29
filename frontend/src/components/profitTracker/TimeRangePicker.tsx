@@ -94,12 +94,12 @@ const TimeRangePicker: React.FC<TimeRangePickerProps> = ({ timeRange, setTimeRan
     {showCustomRange && (
       <div style={{ marginTop: 8, padding: '12px', background: 'rgba(15, 23, 42, 0.8)', borderRadius: 8, border: '1px solid #334155', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <label style={{ fontSize: 12, fontWeight: 500, opacity: 0.8 }}>From:</label>
-          <input type="datetime-local" value={customStartDate} onChange={e => setCustomStartDate(e.target.value)} style={{ background: '#1e293b', border: '1px solid #475569', color: '#e2e8f0', padding: '4px 8px', borderRadius: 6, fontSize: 12 }} />
+          <label htmlFor="custom-start-date" style={{ fontSize: 12, fontWeight: 500, opacity: 0.8 }}>From:</label>
+          <input id="custom-start-date" type="datetime-local" value={customStartDate} onChange={e => setCustomStartDate(e.target.value)} style={{ background: '#1e293b', border: '1px solid #475569', color: '#e2e8f0', padding: '4px 8px', borderRadius: 6, fontSize: 12 }} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <label style={{ fontSize: 12, fontWeight: 500, opacity: 0.8 }}>To:</label>
-          <input type="datetime-local" value={customEndDate} onChange={e => setCustomEndDate(e.target.value)} style={{ background: '#1e293b', border: '1px solid #475569', color: '#e2e8f0', padding: '4px 8px', borderRadius: 6, fontSize: 12 }} />
+          <label htmlFor="custom-end-date" style={{ fontSize: 12, fontWeight: 500, opacity: 0.8 }}>To:</label>
+          <input id="custom-end-date" type="datetime-local" value={customEndDate} onChange={e => setCustomEndDate(e.target.value)} style={{ background: '#1e293b', border: '1px solid #475569', color: '#e2e8f0', padding: '4px 8px', borderRadius: 6, fontSize: 12 }} />
         </div>
         <button
           onClick={() => {

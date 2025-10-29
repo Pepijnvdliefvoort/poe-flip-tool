@@ -15,6 +15,8 @@ export const HistoryViewer: React.FC<{
       <div className="history-header">
         <h3 style={{ margin: 0 }}>History</h3>
         <select
+          id="history-pair-select"
+          name="historyPair"
           value={selectedPair ? `${selectedPair.have}|${selectedPair.want}` : ''}
           onChange={e => {
             const [have, want] = e.target.value.split('|');
