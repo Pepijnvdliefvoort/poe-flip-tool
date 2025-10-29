@@ -437,8 +437,11 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
                   e.stopPropagation();
                   if (undercutBtnRef.current) {
                     const btnRect = undercutBtnRef.current.getBoundingClientRect();
-                    const top = btnRect.bottom + 8; // 8px below the button
-                    const left = btnRect.left;
+                    // Calculate position relative to document, not viewport
+                    const scrollY = window.scrollY || window.pageYOffset;
+                    const scrollX = window.scrollX || window.pageXOffset;
+                    const top = btnRect.bottom + 8 + scrollY;
+                    const left = btnRect.left + scrollX;
                     setUndercutMenuPos({ top, left });
                   }
                   setUndercutDialogOpen(true);
@@ -470,7 +473,7 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
           <div
             id="undercut-menu"
             style={{
-              position: 'fixed',
+              position: 'absolute',
               top: undercutMenuPos.top,
               left: undercutMenuPos.left,
               zIndex: 9999,
@@ -774,7 +777,7 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
               </>
             )}
           </>
-        )}
+  )}
       </div>
     </div>
   )
