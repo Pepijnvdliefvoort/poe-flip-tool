@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import './CollapsiblePair.css';
 import CountdownBar from './CountdownBar';
 import { createPortal } from 'react-dom';
 import { formatRate, formatNumberEU } from '../../utils/format';
@@ -253,6 +254,22 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
   const [copiedAccountIndex, setCopiedAccountIndex] = useState<number | null>(null);
   const timeoutRef = useRef<number | null>(null)
   const accountTimeoutRef = useRef<number | null>(null);
+  // Animation state for border highlight
+  const [highlighted, setHighlighted] = useState(false);
+  // Detect scroll into view and trigger highlight
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node) return;
+    const handle = () => {
+      setHighlighted(true);
+      setTimeout(() => setHighlighted(false), 1200);
+    };
+    // Listen for focus (from scrollIntoView+focus) to trigger highlight
+    node.addEventListener('focus', handle);
+    return () => {
+      node.removeEventListener('focus', handle);
+    };
+  }, []);
   const copyAccountName = (name: string, index: number) => {
     if (accountTimeoutRef.current !== null) {
       clearTimeout(accountTimeoutRef.current);
@@ -341,10 +358,11 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
     <div
       ref={containerRef}
       id={`pair-${pair.pay}-${pair.get}`}
-      style={{ position: 'relative', maxWidth: '100%', overflow: 'hidden' }}
+      tabIndex={-1}
+      style={{ position: 'relative', maxWidth: '100%', overflow: 'hidden', outline: 'none' }}
     >
       <div
-        className="pair-card"
+        className={`pair-card${highlighted ? ' highlight-border' : ''}`}
         style={{
           border: pair.hot ? '2px solid var(--warning)' : '1px solid var(--border)',
           background: pair.hot ? 'rgba(245, 158, 11, 0.05)' : undefined,

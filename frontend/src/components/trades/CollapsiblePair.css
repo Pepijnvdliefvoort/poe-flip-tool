@@ -1,0 +1,29 @@
+/* Border fade animation for CollapsiblePair highlight */
+.pair-card.highlight-border {
+  animation: border-fade-highlight 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 0 0px var(--accent, #f59e42), 0 4px 24px 0 rgba(245, 158, 66, 0.10);
+  border-color: var(--accent, #f59e42) !important;
+}
+
+@keyframes border-fade-highlight {
+  0% {
+    box-shadow: 0 0 0 6px var(--accent, #f59e42), 0 4px 24px 0 rgba(245, 158, 66, 0.18);
+    border-color: var(--accent, #f59e42);
+  }
+  30% {
+    box-shadow: 0 0 0 3px var(--accent, #f59e42), 0 4px 24px 0 rgba(245, 158, 66, 0.14);
+    border-color: var(--accent, #f59e42);
+  }
+  60% {
+    box-shadow: 0 0 0 1.5px var(--accent, #f59e42), 0 4px 24px 0 rgba(245, 158, 66, 0.10);
+    border-color: var(--accent, #f59e42);
+  }
+  90% {
+    box-shadow: 0 0 0 0px var(--accent, #f59e42), 0 4px 24px 0 rgba(245, 158, 66, 0.04);
+    border-color: var(--accent, #f59e42);
+  }
+  100% {
+    box-shadow: none;
+    border-color: var(--border, #e5e7eb);
+  }
+}
