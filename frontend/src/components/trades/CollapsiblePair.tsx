@@ -376,6 +376,22 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
                     <>
                       <span className="summary-label" style={{ fontWeight: 600 }}>Best:</span>
                       <span className="summary-value" style={{ color: 'var(--accent)', fontWeight: 700, fontSize: '14px', display: 'inline-block', paddingRight: 4 }}>{formatRate(pair.best_rate, pair.pay, pair.get)}</span>
+                      {/* Show player position if present */}
+                      {myIndex >= 0 && (
+                        <span className="player-position" style={{
+                          marginLeft: 8,
+                          fontWeight: 600,
+                          color: 'var(--info, #2563eb)',
+                          fontSize: '13px',
+                          background: 'rgba(37,99,235,0.08)',
+                          borderRadius: 4,
+                          padding: '1px 6px'
+                        }}
+                        title="Your position in the list"
+                        >
+                          #{myIndex + 1}
+                        </span>
+                      )}
                     </>
                   ) : null}
                 </span>
