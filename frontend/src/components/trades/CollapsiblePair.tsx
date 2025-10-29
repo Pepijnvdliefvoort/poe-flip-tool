@@ -521,11 +521,11 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
               </div>
 
               {/* Countdown bar spanning the menu */}
-              {refreshCountdown > 0 && (
+              {(refreshCountdown > 0 || (refreshCountdown === 0 && undercutDialogOpen && undercutResult && undercutResult.startsWith('Success'))) && (
                 <div style={{ width: '100%', padding: '8px 0 12px 0' }}>
                   <CountdownBar
                     total={10}
-                    current={refreshCountdown }
+                    current={Math.max(refreshCountdown, 0)}
                   />
                 </div>
               )}
@@ -587,19 +587,18 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
                       const rateToSend = (fraction && fraction !== '1' && fraction !== '1/1') ? fraction : newPrice.toString();
                       await onReload(pair.index, rateToSend);
                       setUndercutResult('Success!');
-                      // Immediately decrement so the bar starts animating right away
                       setRefreshCountdown(prev => prev - 1);
                       timer = setInterval(() => {
                         setRefreshCountdown(prev => {
                           if (prev <= 1) {
                             clearInterval(timer!);
-                            setRefreshCountdown(0);
                             setTimeout(() => {
+                              setRefreshCountdown(0);
                               setUndercutDialogOpen(false);
                               setUndercutMenuPos(null);
                               setUndercutResult(null);
                               onReload(pair.index);
-                            }, 200);
+                            }, 1000);
                             return 0;
                           }
                           return prev - 1;

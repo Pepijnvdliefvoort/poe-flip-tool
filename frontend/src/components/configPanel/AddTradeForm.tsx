@@ -19,16 +19,16 @@ const AddTradeForm: React.FC<AddTradeFormProps> = ({ get, setGet, pay, setPay, s
     </label>
     <div style={{display: 'flex', flexDirection: 'column', gap: 6}}>
       <input 
-        placeholder="Want (e.g. divine)" 
-        value={get} 
-        onChange={e => setGet(e.target.value)}
+        placeholder="Pay (e.g. chaos)" 
+        value={pay} 
+        onChange={e => setPay(e.target.value)}
         disabled={saving}
         style={{ fontSize: '13px', padding: '6px 8px' }}
       />
       <input 
-        placeholder="Pay (e.g. chaos)" 
-        value={pay} 
-        onChange={e => setPay(e.target.value)}
+        placeholder="Get (e.g. divine)" 
+        value={get} 
+        onChange={e => setGet(e.target.value)}
         disabled={saving}
         style={{ fontSize: '13px', padding: '6px 8px' }}
       />
