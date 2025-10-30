@@ -210,10 +210,6 @@ def undercut_trade_service(index: int, new_rate: str = None):
     if n == 0:
         # If not found, do nothing (do not add a new line)
         new_forum_content = forum_content
-
-    print(f"[undercut] Editing forum post for trade pair {t.pay}->{t.get}")
-    print(f"[undercut] New ~b/o string: {b_o_str}")
-    print(f"[undercut] New forum post content preview (first 500 chars):\n{new_forum_content}")
     content_new = new_forum_content
     POESESSID = os.getenv("POESESSID")
     CF_CLEARANCE = os.getenv("CF_CLEARANCE")

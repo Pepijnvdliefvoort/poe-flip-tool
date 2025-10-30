@@ -166,8 +166,7 @@ class DatabasePersistence:
                 key = (row['league'], row['have'], row['want'])
                 listings = json.loads(row['listings_json'])
                 expires_at = datetime.fromisoformat(row['expires_at'])
-                fetched_at = datetime.fromisoformat(row['created_at']) if 'created_at' in row.keys() else expires_at
-                entries[key] = (listings, expires_at, fetched_at)
+                entries[key] = (listings, expires_at)
 
             log.info(f"Loaded {len(entries)} cache entries from database")
             return entries
