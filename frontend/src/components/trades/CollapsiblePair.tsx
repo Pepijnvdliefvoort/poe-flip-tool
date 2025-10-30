@@ -311,16 +311,15 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
         replaced++;
         if (replaced === 1) {
           // First number: get amount
-          return formatNumberEU(haveAmount, 0, 0);
+          return formatNumberEU(wantAmount, 0, 0);
         } else if (replaced === 2) {
           // Second number: pay amount
-          return formatNumberEU(wantAmount, 0, 0);
+          return formatNumberEU(haveAmount, 0, 0);
         }
         return match;
       });
     }
     navigator.clipboard.writeText(newWhisper)
-    navigator.clipboard.writeText(newWhisper.replace(/\./g, ''))
     setCopiedIndex(index)
     timeoutRef.current = window.setTimeout(() => {
       setCopiedIndex(null)
@@ -808,8 +807,8 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
                               {copiedAccountIndex === i ? '✓ Copied!' : (l.account_name || 'Unknown')}
                             </span>
                           </span>
-                          {/* Slider and buy calculation (always show, disable if not enough stock) */}
-                          {(() => {
+                          {/* Slider and buy calculation (only if stock > 1) */}
+                          {l.stock && l.stock > 1 && (() => {
                             // Try to parse the rate as a fraction from the display string (e.g., 2/620 or 1/310)
                             let havePerStep = 1;
                             let wantPerStep = l.rate;
@@ -829,8 +828,8 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
                             const stock = l.stock ?? 1;
                             let maxSteps = 0;
                             if (l.want_currency === pair.get) {
-                              // Stock is in want currency (e.g., mirrors for 1 mirror at 1873 divines)
-                              maxSteps = Math.floor(stock / havePerStep);
+                              // Stock is in want currency (e.g., chaos for 1/310)
+                              maxSteps = Math.floor(stock / wantPerStep);
                             } else if (l.have_currency === pair.get) {
                               // Stock is in have currency (rare, but possible)
                               maxSteps = Math.floor(stock / havePerStep);
@@ -838,49 +837,48 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
                               // Fallback: use havePerStep
                               maxSteps = Math.floor(stock / havePerStep);
                             }
-                            // Always show the slider, but disable if not enough stock
-                            const effectiveMaxSteps = maxSteps < 1 ? 1 : maxSteps;
-                            let sliderValue = getSliderValue(i, effectiveMaxSteps);
+                            if (maxSteps < 1) return null;
+                            let sliderValue = getSliderValue(i, maxSteps);
+                            // Always clamp to [1, maxSteps]
                             if (sliderValue < 1) sliderValue = 1;
-                            if (sliderValue > effectiveMaxSteps) sliderValue = effectiveMaxSteps;
+                            if (sliderValue > maxSteps) sliderValue = maxSteps;
                             return (
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 260 }}>
                                 {/* Left: what/how much to pay */}
                                 <span style={{ minWidth: 48, textAlign: 'right', fontSize: 12, display: 'flex', alignItems: 'center', gap: 2, justifyContent: 'flex-end' }}>
                                   {formatNumberEU(sliderValue * havePerStep, 0, 0)}
-                                  <CurrencyIcon currency={l.want_currency} size={18} />
+                                  <CurrencyIcon currency={l.have_currency} size={18} />
                                 </span>
                                 {/* Slider */}
-                                  <input
-                                    type="range"
-                                    min={1}
-                                    max={effectiveMaxSteps}
-                                    step={1}
-                                    value={sliderValue}
-                                    onChange={e => handleSliderChange(i, Number(e.target.value))}
-                                    disabled={maxSteps < 1}
-                                    style={{
-                                      width: 1000,
-                                      height: 28,
-                                      accentColor: '#2563eb',
-                                      cursor: maxSteps < 1 ? 'not-allowed' : 'pointer',
-                                      padding: 0,
-                                      margin: 0,
-                                      border: 'none',
-                                      outline: 'none',
-                                      background: 'transparent',
-                                      appearance: 'none',
-                                      WebkitAppearance: 'none',
-                                      MozAppearance: 'none',
-                                      '--slider-track-color': '#e5e7eb',
-                                      '--slider-thumb-color': '#2563eb',
-                                      '--slider-thumb-shadow': '0 2px 8px rgba(37,99,235,0.10)',
-                                    } as React.CSSProperties}
-                                    className="modern-slider"
-                                  />
+                                <input
+                                  type="range"
+                                  min={1}
+                                  max={maxSteps}
+                                  step={1}
+                                  value={sliderValue}
+                                  onChange={e => handleSliderChange(i, Number(e.target.value))}
+                                  style={{
+                                    width: 1000,
+                                    height: 28,
+                                    accentColor: '#2563eb',
+                                    cursor: 'pointer',
+                                    padding: 0,
+                                    margin: 0,
+                                    border: 'none',
+                                    outline: 'none',
+                                    background: 'transparent',
+                                    appearance: 'none',
+                                    WebkitAppearance: 'none',
+                                    MozAppearance: 'none',
+                                    '--slider-track-color': '#e5e7eb',
+                                    '--slider-thumb-color': '#2563eb',
+                                    '--slider-thumb-shadow': '0 2px 8px rgba(37,99,235,0.10)',
+                                  } as React.CSSProperties}
+                                  className="modern-slider"
+                                />
                                 {/* Right: what/how much you get */}
                                 <span style={{ minWidth: 80, textAlign: 'left', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                  <CurrencyIcon currency={l.have_currency} size={18} />
+                                  <CurrencyIcon currency={l.want_currency} size={18} />
                                   {formatNumberEU(sliderValue * wantPerStep, 0, 0)}
                                 </span>
                               </div>
