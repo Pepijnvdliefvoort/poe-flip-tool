@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+// Track slider values for each listing by index (top-level, not inside map)
+// (must be inside the component, but after imports)
 import './CollapsiblePair.css';
 import CountdownBar from './CountdownBar';
 import { createPortal } from 'react-dom';
@@ -23,9 +25,19 @@ interface CollapsiblePairProps {
 
 
 const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded, loading, onReload, globalMaxAbsDelta, accountName, selectedMetrics }) => {
+  // --- All hooks must be at the top level ---
   const containerRef = useRef<HTMLDivElement | null>(null);
   // Local state for trend (sparkline) data
   const [trend, setTrend] = useState<PriceTrend | null | undefined>(pair.trend);
+  // Track slider values for each listing by index (top-level, not inside map)
+  const [sliderValues, setSliderValues] = useState<{ [key: number]: number }>({});
+  const getSliderValue = (idx: number, stock: number | undefined) => {
+    if (sliderValues[idx] !== undefined) return sliderValues[idx];
+    return 1;
+  };
+  const handleSliderChange = (idx: number, value: number) => {
+    setSliderValues(prev => ({ ...prev, [idx]: value }));
+  };
 
   // Fetch trend data if missing
   useEffect(() => {
@@ -286,11 +298,28 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
     setIsExpanded(defaultExpanded)
   }, [defaultExpanded])
 
-  const copyWhisper = (whisper: string, index: number) => {
+  const copyWhisper = (whisper: string, index: number, listing?: any, sliderValueOverride?: number) => {
     if (timeoutRef.current !== null) {
       clearTimeout(timeoutRef.current)
     }
-    navigator.clipboard.writeText(whisper)
+    let newWhisper = whisper;
+    if (listing && sliderValueOverride) {
+      const haveAmount = sliderValueOverride * (listing.havePerStep || 1);
+      const wantAmount = sliderValueOverride * (listing.wantPerStep || 1);
+      let replaced = 0;
+      newWhisper = whisper.replace(/(\d+[\d,.]*)/g, (match) => {
+        replaced++;
+        if (replaced === 1) {
+          // First number: get amount
+          return formatNumberEU(wantAmount, 0, 0);
+        } else if (replaced === 2) {
+          // Second number: pay amount
+          return formatNumberEU(haveAmount, 0, 0);
+        }
+        return match;
+      });
+    }
+    navigator.clipboard.writeText(newWhisper)
     setCopiedIndex(index)
     timeoutRef.current = window.setTimeout(() => {
       setCopiedIndex(null)
@@ -727,7 +756,10 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
                           style={{
                             background: isMyTrade ? 'rgba(59, 130, 246, 0.12)' : undefined,
                             border: isMyTrade ? '1px solid rgba(59, 130, 246, 0.35)' : undefined,
-                            boxShadow: isMyTrade ? '0 0 8px rgba(59, 130, 246, 0.2)' : undefined
+                            boxShadow: isMyTrade ? '0 0 8px rgba(59, 130, 246, 0.2)' : undefined,
+                            alignItems: 'center',
+                            display: 'flex',
+                            gap: 8
                           }}
                         >
                           <span className="listing-rank" style={{ width: '40px', flexShrink: 0 }}>#{i + 1}</span>
@@ -741,6 +773,7 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
                             <span className="meta-label">Stock:</span>
                             <span className="meta-value">{l.stock ?? '∞'}</span>
                           </span>
+                          {/* Account name first */}
                           <span className="listing-info" style={{ width: '180px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
                             <span className="meta-label">Account:</span>
                             <span
@@ -774,35 +807,131 @@ const CollapsiblePair: React.FC<CollapsiblePairProps> = ({ pair, defaultExpanded
                               {copiedAccountIndex === i ? '✓ Copied!' : (l.account_name || 'Unknown')}
                             </span>
                           </span>
-                          {l.whisper && (
-                            <span
-                              className="whisper-message"
-                              onClick={() => copyWhisper(l.whisper!, i)}
-                              style={{
-                                flex: '1 1 auto',
-                                minWidth: 0,
-                                padding: '4px 8px',
-                                fontSize: '11px',
-                                background: copiedIndex === i ? 'rgba(16, 185, 129, 0.3)' : 'rgba(100, 100, 100, 0.1)',
-                                color: copiedIndex === i ? 'rgba(255, 255, 255, 0.5)' : 'rgba(156, 163, 175, 0.7)',
-                                border: '1px solid',
-                                borderColor: copiedIndex === i ? 'rgba(16, 185, 129, 0.9)' : 'rgba(156, 163, 175, 0.3)',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                fontFamily: 'monospace',
-                                transition: 'all 0.3s ease-in-out',
-                                userSelect: 'none',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                                alignSelf: 'center',
-                                textAlign: 'center'
-                              }}
-                              title={copiedIndex === i ? 'Copied!' : `Click to copy: ${l.whisper}`}
-                            >
-                              {copiedIndex === i ? '✓ Copied!' : l.whisper}
-                            </span>
-                          )}
+                          {/* Slider and buy calculation (only if stock > 1) */}
+                          {l.stock && l.stock > 1 && (() => {
+                            // Try to parse the rate as a fraction from the display string (e.g., 2/620 or 1/310)
+                            let havePerStep = 1;
+                            let wantPerStep = l.rate;
+                            const rateStr = formatRate(l.rate, l.have_currency, l.want_currency);
+                            const fracMatch = rateStr.match(/^(\d+)\s*\/\s*(\d+)$/);
+                            if (fracMatch) {
+                              havePerStep = parseInt(fracMatch[1], 10);
+                              wantPerStep = parseInt(fracMatch[2], 10);
+                            } else if (typeof l.rate === 'number' && l.rate > 0 && l.rate < 1) {
+                              havePerStep = 1;
+                              wantPerStep = 1 / l.rate;
+                            } else if (typeof l.rate === 'number' && l.rate >= 1) {
+                              havePerStep = 1;
+                              wantPerStep = l.rate;
+                            }
+                            // Calculate max steps based on which side the stock is on
+                            const stock = l.stock ?? 1;
+                            let maxSteps = 0;
+                            if (l.want_currency === pair.get) {
+                              // Stock is in want currency (e.g., chaos for 1/310)
+                              maxSteps = Math.floor(stock / wantPerStep);
+                            } else if (l.have_currency === pair.get) {
+                              // Stock is in have currency (rare, but possible)
+                              maxSteps = Math.floor(stock / havePerStep);
+                            } else {
+                              // Fallback: use havePerStep
+                              maxSteps = Math.floor(stock / havePerStep);
+                            }
+                            if (maxSteps < 1) return null;
+                            let sliderValue = getSliderValue(i, maxSteps);
+                            // Always clamp to [1, maxSteps]
+                            if (sliderValue < 1) sliderValue = 1;
+                            if (sliderValue > maxSteps) sliderValue = maxSteps;
+                            return (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 260 }}>
+                                {/* Left: what/how much to pay */}
+                                <span style={{ minWidth: 48, textAlign: 'right', fontSize: 12, display: 'flex', alignItems: 'center', gap: 2, justifyContent: 'flex-end' }}>
+                                  {formatNumberEU(sliderValue * havePerStep, 0, 0)}
+                                  <CurrencyIcon currency={l.have_currency} size={18} />
+                                </span>
+                                {/* Slider */}
+                                <input
+                                  type="range"
+                                  min={1}
+                                  max={maxSteps}
+                                  step={1}
+                                  value={sliderValue}
+                                  onChange={e => handleSliderChange(i, Number(e.target.value))}
+                                  style={{
+                                    width: 1000,
+                                    height: 28,
+                                    accentColor: '#2563eb',
+                                    cursor: 'pointer',
+                                    padding: 0,
+                                    margin: 0,
+                                    border: 'none',
+                                    outline: 'none',
+                                    background: 'transparent',
+                                    appearance: 'none',
+                                    WebkitAppearance: 'none',
+                                    MozAppearance: 'none',
+                                    '--slider-track-color': '#e5e7eb',
+                                    '--slider-thumb-color': '#2563eb',
+                                    '--slider-thumb-shadow': '0 2px 8px rgba(37,99,235,0.10)',
+                                  } as React.CSSProperties}
+                                  className="modern-slider"
+                                />
+                                {/* Right: what/how much you get */}
+                                <span style={{ minWidth: 80, textAlign: 'left', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <CurrencyIcon currency={l.want_currency} size={18} />
+                                  {formatNumberEU(sliderValue * wantPerStep, 0, 0)}
+                                </span>
+                              </div>
+                            );
+                          })()}
+                          {/* Whisper copy button last */}
+                          {l.whisper && (() => {
+                            // For slider listings, pass the calculated values to copyWhisper
+                            let havePerStep = 1;
+                            let wantPerStep = l.rate;
+                            const rateStr = formatRate(l.rate, l.have_currency, l.want_currency);
+                            const fracMatch = rateStr.match(/^(\d+)\s*\/\s*(\d+)$/);
+                            if (fracMatch) {
+                              havePerStep = parseInt(fracMatch[1], 10);
+                              wantPerStep = parseInt(fracMatch[2], 10);
+                            } else if (typeof l.rate === 'number' && l.rate > 0 && l.rate < 1) {
+                              havePerStep = 1;
+                              wantPerStep = 1 / l.rate;
+                            } else if (typeof l.rate === 'number' && l.rate >= 1) {
+                              havePerStep = 1;
+                              wantPerStep = l.rate;
+                            }
+                            let sliderValue = getSliderValue(i, l.stock ?? undefined);
+                            if (sliderValue < 1) sliderValue = 1;
+                            // Pass havePerStep and wantPerStep for message editing
+                            const listingForMsg = { ...l, havePerStep, wantPerStep };
+                            return (
+                              <button
+                                className="copy-whisper-btn"
+                                onClick={() => copyWhisper(l.whisper!, i, listingForMsg, sliderValue)}
+                                style={{
+                                  marginLeft: 0,
+                                  padding: '4px 0px',
+                                  fontSize: '12px',
+                                  borderRadius: '4px',
+                                  border: '1px solid',
+                                  borderColor: copiedIndex === i ? 'rgba(16, 185, 129, 0.9)' : 'rgba(156, 163, 175, 0.3)',
+                                  background: copiedIndex === i ? 'rgba(16, 185, 129, 0.3)' : 'rgba(100, 100, 100, 0.1)',
+                                  color: copiedIndex === i ? 'rgba(255, 255, 255, 0.5)' : 'rgba(156, 163, 175, 0.7)',
+                                  fontFamily: 'monospace',
+                                  cursor: 'pointer',
+                                  minWidth: 80,
+                                  transition: 'all 0.3s ease-in-out',
+                                  userSelect: 'none',
+                                  outline: 'none',
+                                  fontWeight: 500
+                                }}
+                                title={copiedIndex === i ? 'Copied!' : 'Copy whisper message'}
+                              >
+                                {copiedIndex === i ? '✓ Copied!' : 'Copy'}
+                              </button>
+                            );
+                          })()}
                           {l.indexed && (
                             <span className="listing-time">
                               {new Date(l.indexed).toLocaleString()}
