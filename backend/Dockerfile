@@ -15,6 +15,9 @@ WORKDIR /app/backend
 COPY . /app
 
 # Install dependencies
+
+# Install CA certificates for SSL support
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir -r /app/backend/requirements.txt
 
 # Expose FastAPI port

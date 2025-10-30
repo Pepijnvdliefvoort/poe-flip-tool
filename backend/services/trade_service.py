@@ -230,7 +230,15 @@ def undercut_trade_service(index: int, new_rate: str = None):
     })
     cookies = {"POESESSID": POESESSID, "cf_clearance": CF_CLEARANCE}
     scraper.cookies.update(cookies)
-    r = scraper.get(EDIT_URL, timeout=30)
+    import requests
+    try:
+        r = scraper.get(EDIT_URL, timeout=30)
+    except requests.exceptions.SSLError as ssl_err:
+        print(f"[ERROR] SSL error while requesting {EDIT_URL}: {ssl_err}")
+        return {"status": "ssl_error", "error": str(ssl_err)}
+    except Exception as e:
+        print(f"[ERROR] Unexpected error while requesting {EDIT_URL}: {e}")
+        return {"status": "request_error", "error": str(e)}
     if r.status_code == 403:
         raise Exception("403 on GET. Cloudflare or cookies. Double-check cf_clearance + User-Agent + IP.")
     m = re.search(r'name="hash"\s+value="([a-f0-9\-]+)"', r.text, re.I)
@@ -244,5 +252,12 @@ def undercut_trade_service(index: int, new_rate: str = None):
         "hash": hash_token,
         "post_submit": "Submit",
     }
-    r2 = scraper.post(EDIT_URL, data=payload, timeout=30, allow_redirects=False)
+    try:
+        r2 = scraper.post(EDIT_URL, data=payload, timeout=30, allow_redirects=False)
+    except requests.exceptions.SSLError as ssl_err:
+        print(f"[ERROR] SSL error while posting to {EDIT_URL}: {ssl_err}")
+        return {"status": "ssl_error", "error": str(ssl_err)}
+    except Exception as e:
+        print(f"[ERROR] Unexpected error while posting to {EDIT_URL}: {e}")
+        return {"status": "request_error", "error": str(e)}
     return {"status": r2.status_code, "new_rate": new_rate, "forum_location": r2.headers.get("Location")}
