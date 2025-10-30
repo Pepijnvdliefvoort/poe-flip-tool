@@ -20,6 +20,7 @@
 - [x] Refactor
 - [x] UI/UX Enhancements: Add more detailed tooltips, animations, or visual feedback for user actions.
 - [x] 'Enter' to submit undercut price
+- [ ] Search box
 - [ ] Slider to buy more than a single item for a trade
 - [ ] When an item is 'hot', refresh every x (30) seconds
 - [ ] Mobile responsiveness

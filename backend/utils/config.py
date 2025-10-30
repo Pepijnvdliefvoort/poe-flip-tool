@@ -12,21 +12,17 @@ log = logging.getLogger("poe-backend")
 # Try to load config from DB, fallback to file if not present
 def load_config(league: str = None) -> ConfigData:
     # If league is not specified, try to get from DB, then file, then fallback to Standard
-    log.info(f"[load_config] Requested league: {league}")
     if not league:
         try:
             league = db.load_last_selected_league()
-            log.info(f"[load_config] Loaded last selected league from DB: {league}")
         except Exception as e:
             log.error(f"[load_config] Error loading last selected league from DB: {e}")
             league = None
         if not league:
             league = "Standard"
-    log.info(f"[load_config] Using league: {league}")
     try:
         db_config = db.load_config_db(league)
         if db_config:
-            log.info(f"[load_config] Found config in DB for league {league}: {db_config}")
             return ConfigData.parse_obj(db_config)
         else:
             log.warning(f"[load_config] No config found in DB for league {league}")
