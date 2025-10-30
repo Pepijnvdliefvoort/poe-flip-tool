@@ -369,7 +369,8 @@ class TradeCache:
             for key, (listings_data, expires_at) in entries.items():
                 # Reconstruct ListingSummary objects
                 listings = [ListingSummary(**l) for l in listings_data]
-                self._store[key] = CacheEntry(data=listings, expires_at=expires_at)
+                # Use expires_at as a fallback for fetched_at
+                self._store[key] = CacheEntry(data=listings, expires_at=expires_at, fetched_at=expires_at)
             
             if entries:
                 log.info(f"Restored {len(entries)} cache entries from database")
