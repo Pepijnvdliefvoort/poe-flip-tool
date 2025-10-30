@@ -15,6 +15,46 @@ log = logging.getLogger("poe-backend")
 
 
 class DatabasePersistence:
+    # ============================================================================
+    # Config Table Operations
+    # ============================================================================
+
+    def save_config_db(self, league: str, trades: list, account_name: str = None) -> bool:
+        """Save config data to the database (single row, id=1)."""
+        try:
+            trades_json = json.dumps(trades)
+            with self._transaction() as cursor:
+                cursor.execute('''
+                    INSERT INTO config (id, league, trades_json, account_name)
+                    VALUES (1, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET league=excluded.league, trades_json=excluded.trades_json, account_name=excluded.account_name
+                ''', (league, trades_json, account_name))
+            log.debug(f"Saved config to database: league={league}, trades={trades}, account_name={account_name}")
+            return True
+        except Exception as e:
+            log.error(f"Failed to save config to database: {e}")
+            return False
+
+    def load_config_db(self) -> dict:
+        """Load config data from the database (single row, id=1). Returns dict or None."""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute('SELECT league, trades_json, account_name FROM config WHERE id=1')
+            row = cursor.fetchone()
+            if not row:
+                log.info("No config found in database.")
+                return None
+            trades = json.loads(row['trades_json'])
+            config = {
+                'league': row['league'],
+                'trades': trades,
+                'account_name': row['account_name']
+            }
+            log.debug(f"Loaded config from database: {config}")
+            return config
+        except Exception as e:
+            log.error(f"Failed to load config from database: {e}")
+            return None
     """Handles SQLite persistence for cache entries and price snapshots."""
     
     def __init__(self, db_path: str = "poe_cache.db"):
@@ -50,10 +90,10 @@ class DatabasePersistence:
                     created_at TEXT NOT NULL,
                     PRIMARY KEY (league, have, want)
                 );
-                
+
                 CREATE INDEX IF NOT EXISTS idx_cache_expiry 
                 ON cache_entries(expires_at);
-                
+
                 CREATE TABLE IF NOT EXISTS price_snapshots (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     league TEXT NOT NULL,
@@ -65,10 +105,10 @@ class DatabasePersistence:
                     median_rate REAL NOT NULL,
                     listing_count INTEGER NOT NULL
                 );
-                
+
                 CREATE INDEX IF NOT EXISTS idx_snapshots_pair 
                 ON price_snapshots(league, have, want, timestamp);
-                
+
                 CREATE INDEX IF NOT EXISTS idx_snapshots_time 
                 ON price_snapshots(timestamp);
 
@@ -81,6 +121,14 @@ class DatabasePersistence:
 
                 CREATE INDEX IF NOT EXISTS idx_portfolio_time
                 ON portfolio_snapshots(timestamp);
+
+                -- New config table
+                CREATE TABLE IF NOT EXISTS config (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    league TEXT NOT NULL,
+                    trades_json TEXT NOT NULL,
+                    account_name TEXT
+                );
             ''')
             log.debug("Database schema created/verified")
         except Exception as e:
