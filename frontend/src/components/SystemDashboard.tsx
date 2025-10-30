@@ -13,7 +13,7 @@ import { CacheEntriesTable } from './systemDashboard/CacheEntriesTable';
 import { HistoryMiniChart } from './dashboard/HistoryMiniChart';
 import { HistoryViewer } from './systemDashboard/HistoryViewer';
 
-export function SystemDashboard() {
+export function SystemDashboard({ selectedLeague }: { selectedLeague?: string }) {
   const { isAuthenticated } = useAuth();
   const [cacheSummary, setCacheSummary] = useState<CacheSummary | null>(null);
   const [cacheStatus, setCacheStatus] = useState<CacheStatus | null>(null);
@@ -32,8 +32,9 @@ export function SystemDashboard() {
     if (!isAuthenticated) return;
     const load = async () => {
       try {
+        const leagueToLoad = selectedLeague || 'Standard';
         const [cfg, summary, status, db] = await Promise.all([
-          Api.getConfig(),
+          Api.getConfig(leagueToLoad),
           Api.cacheSummary(),
           Api.cacheStatus(),
           Api.databaseStats()
@@ -42,8 +43,10 @@ export function SystemDashboard() {
         setCacheSummary(summary);
         setCacheStatus(status);
         setDbStats(db);
-        if (!selectedPair && cfg.trades.length > 0) {
+        if (cfg.trades.length > 0) {
           setSelectedPair({ have: cfg.trades[0].pay, want: cfg.trades[0].get });
+        } else {
+          setSelectedPair(null);
         }
       } catch (e: any) {
         setError(extractErrorMessage(e, 'Failed to load data'));

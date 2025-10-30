@@ -12,6 +12,7 @@ class ConfigData(BaseModel):
     league: str = Field(default="Standard")
     trades: List[TradePair] = Field(default_factory=list)
     account_name: Optional[str] = Field(default=None, description="PoE account name used for highlighting own listings")
+    thread_id: Optional[str] = Field(default=None, description="Forum thread ID for shop, per league")
 
 
 class ListingSummary(BaseModel):

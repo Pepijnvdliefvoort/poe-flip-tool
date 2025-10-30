@@ -16,39 +16,74 @@ log = logging.getLogger("poe-backend")
 
 class DatabasePersistence:
     # ============================================================================
+    # Last Selected League Operations
+    # ============================================================================
+
+    def save_last_selected_league(self, league: str) -> bool:
+        """Save the last selected league to the database."""
+        try:
+            with self._transaction() as cursor:
+                cursor.execute('''
+                    INSERT INTO last_selected_league (id, league)
+                    VALUES (1, ?)
+                    ON CONFLICT(id) DO UPDATE SET league=excluded.league
+                ''', (league,))
+            log.debug(f"Saved last selected league: {league}")
+            return True
+        except Exception as e:
+            log.error(f"Failed to save last selected league: {e}")
+            return False
+
+    def load_last_selected_league(self) -> str:
+        """Load the last selected league from the database. Returns league or None."""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute('SELECT league FROM last_selected_league WHERE id=1')
+            row = cursor.fetchone()
+            if not row:
+                log.info("No last selected league found in database.")
+                return None
+            league = row['league']
+            log.debug(f"Loaded last selected league: {league}")
+            return league
+        except Exception as e:
+            log.error(f"Failed to load last selected league: {e}")
+            return None
+    # ============================================================================
     # Config Table Operations
     # ============================================================================
 
-    def save_config_db(self, league: str, trades: list, account_name: str = None) -> bool:
-        """Save config data to the database (single row, id=1)."""
+    def save_config_db(self, league: str, trades: list, account_name: str = None, thread_id: str = None) -> bool:
+        """Save config data to the database for a specific league."""
         try:
             trades_json = json.dumps(trades)
             with self._transaction() as cursor:
                 cursor.execute('''
-                    INSERT INTO config (id, league, trades_json, account_name)
-                    VALUES (1, ?, ?, ?)
-                    ON CONFLICT(id) DO UPDATE SET league=excluded.league, trades_json=excluded.trades_json, account_name=excluded.account_name
-                ''', (league, trades_json, account_name))
-            log.debug(f"Saved config to database: league={league}, trades={trades}, account_name={account_name}")
+                    INSERT INTO config (league, trades_json, account_name, thread_id)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(league) DO UPDATE SET trades_json=excluded.trades_json, account_name=excluded.account_name, thread_id=excluded.thread_id
+                ''', (league, trades_json, account_name, thread_id))
+            log.debug(f"Saved config to database: league={league}, trades={trades}, account_name={account_name}, thread_id={thread_id}")
             return True
         except Exception as e:
             log.error(f"Failed to save config to database: {e}")
             return False
 
-    def load_config_db(self) -> dict:
-        """Load config data from the database (single row, id=1). Returns dict or None."""
+    def load_config_db(self, league: str) -> dict:
+        """Load config data for a specific league from the database. Returns dict or None."""
         try:
             cursor = self.conn.cursor()
-            cursor.execute('SELECT league, trades_json, account_name FROM config WHERE id=1')
+            cursor.execute('SELECT league, trades_json, account_name, thread_id FROM config WHERE league=?', (league,))
             row = cursor.fetchone()
             if not row:
-                log.info("No config found in database.")
+                log.info(f"No config found in database for league {league}.")
                 return None
             trades = json.loads(row['trades_json'])
             config = {
                 'league': row['league'],
                 'trades': trades,
-                'account_name': row['account_name']
+                'account_name': row['account_name'],
+                'thread_id': row['thread_id']
             }
             log.debug(f"Loaded config from database: {config}")
             return config
@@ -114,6 +149,7 @@ class DatabasePersistence:
 
                 CREATE TABLE IF NOT EXISTS portfolio_snapshots (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    league TEXT NOT NULL,
                     timestamp TEXT NOT NULL,
                     total_divines REAL NOT NULL,
                     breakdown_json TEXT NOT NULL
@@ -122,12 +158,18 @@ class DatabasePersistence:
                 CREATE INDEX IF NOT EXISTS idx_portfolio_time
                 ON portfolio_snapshots(timestamp);
 
-                -- New config table
+                -- Config table: one row per league
                 CREATE TABLE IF NOT EXISTS config (
-                    id INTEGER PRIMARY KEY CHECK (id = 1),
-                    league TEXT NOT NULL,
+                    league TEXT PRIMARY KEY,
                     trades_json TEXT NOT NULL,
-                    account_name TEXT
+                    account_name TEXT,
+                    thread_id TEXT
+                );
+
+                -- Table to store last selected league
+                CREATE TABLE IF NOT EXISTS last_selected_league (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    league TEXT NOT NULL
                 );
             ''')
             log.debug("Database schema created/verified")
@@ -464,44 +506,43 @@ class DatabasePersistence:
     # Portfolio Snapshot Operations
     # ============================================================================
 
-    def save_portfolio_snapshot(self, timestamp: datetime, total_divines: float, breakdown: List[Dict[str, Any]]) -> bool:
-        """Persist a portfolio snapshot with total value and breakdown list."""
+    def save_portfolio_snapshot(self, league: str, timestamp: datetime, total_divines: float, breakdown: List[Dict[str, Any]]) -> bool:
+        """Persist a portfolio snapshot with total value and breakdown list, per league."""
         try:
             payload = json.dumps(breakdown)
             with self._transaction() as cursor:
                 cursor.execute('''
-                    INSERT INTO portfolio_snapshots (timestamp, total_divines, breakdown_json)
-                    VALUES (?, ?, ?)
-                ''', (timestamp.isoformat(), total_divines, payload))
-            log.debug(f"Saved portfolio snapshot total={total_divines:.3f} @ {timestamp.isoformat()}")
+                    INSERT INTO portfolio_snapshots (league, timestamp, total_divines, breakdown_json)
+                    VALUES (?, ?, ?, ?)
+                ''', (league, timestamp.isoformat(), total_divines, payload))
+            log.debug(f"Saved portfolio snapshot for league={league} total={total_divines:.3f} @ {timestamp.isoformat()}")
             return True
         except Exception as e:
             log.error(f"Failed to save portfolio snapshot: {e}")
             return False
 
-    def load_portfolio_history(self, limit: Optional[int] = None, hours: Optional[float] = None) -> List[Dict[str, Any]]:
-        """Return chronological portfolio snapshots (oldest -> newest).
-        
+    def load_portfolio_history(self, league: str, limit: Optional[int] = None, hours: Optional[float] = None) -> List[Dict[str, Any]]:
+        """Return chronological portfolio snapshots (oldest -> newest) for a league.
         Args:
+            league: League to filter by
             limit: Maximum number of snapshots to return (most recent N)
             hours: Only return snapshots from the last N hours
         """
         try:
             # Build query with optional time filter
-            where_clause = ""
+            where_clauses = ["league = ?"]
+            params = [league]
             if hours is not None:
-                # Calculate cutoff timestamp
                 cutoff = datetime.utcnow() - timedelta(hours=hours)
-                where_clause = f"WHERE timestamp >= '{cutoff.isoformat()}'"
-            
-            # When limit is specified, get the most recent N snapshots (DESC), then reverse for chronological order
+                where_clauses.append("timestamp >= ?")
+                params.append(cutoff.isoformat())
+            where_clause = "WHERE " + " AND ".join(where_clauses)
             if limit:
                 query = f'SELECT timestamp, total_divines, breakdown_json FROM portfolio_snapshots {where_clause} ORDER BY timestamp DESC LIMIT {int(limit)}'
             else:
                 query = f'SELECT timestamp, total_divines, breakdown_json FROM portfolio_snapshots {where_clause} ORDER BY timestamp ASC'
-            
             cursor = self.conn.cursor()
-            cursor.execute(query)
+            cursor.execute(query, params)
             rows = []
             for r in cursor.fetchall():
                 try:
@@ -519,11 +560,8 @@ class DatabasePersistence:
                 except Exception as e:
                     log.warning(f"Skipping invalid portfolio snapshot row: {e}")
                     continue
-            
-            # If we used DESC order (limit case), reverse to get chronological order
             if limit:
                 rows.reverse()
-            
             return rows
         except Exception as e:
             log.error(f"Failed to load portfolio history: {e}")

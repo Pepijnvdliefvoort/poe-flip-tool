@@ -50,6 +50,7 @@ export type ConfigData = {
   league: string
   trades: TradePair[]
   account_name?: string | null
+  thread_id?: string | null
 }
 
 // Cache status (lightweight per pair)

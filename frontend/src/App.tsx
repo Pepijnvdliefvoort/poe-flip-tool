@@ -13,6 +13,7 @@ import { useGlobalPolling } from './hooks/useGlobalPolling'
 import { BASE, getApiKey } from './utils/apiHelpers'
 import { calculateProfitMargins } from './utils/profit'
 import { updateRateLimit } from './utils/rateLimit'
+
 import { reloadPair, addNewPair, removePair, updateHotStatus, handleTradeDataUpdate } from './utils/tradeData'
 
 
@@ -25,6 +26,7 @@ export default function App() {
   const [data, setData] = useState<TradesResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [topN, setTopN] = useState(5)
+  const [selectedLeague, setSelectedLeague] = useState<string>('Standard');
   // Removed autoRefresh state - no longer needed with global polling
   const [rateLimit, setRateLimit] = useState<{ blocked: boolean; block_remaining: number; rules: Record<string, { current: number; limit: number; reset_s: number }[]> } | null>(null)
   const [nearLimit, setNearLimit] = useState(false)
@@ -56,9 +58,10 @@ export default function App() {
 
 
 
-  const load = useCallback((forceRefresh = false) => {
+  const load = useCallback((forceRefresh = false, leagueOverride?: string) => {
     setLoading(true)
-    Api.getConfig().then(cfg => {
+    const leagueToUse = leagueOverride || selectedLeague;
+    Api.getConfig(leagueToUse).then(cfg => {
       const emptyResults = (cfg.trades || []).map((t, idx) => ({
         index: idx,
         get: t.get,
@@ -75,7 +78,7 @@ export default function App() {
       }
       const apiKey = getApiKey();
       const apiKeyParam = apiKey ? `&api_key=${encodeURIComponent(apiKey)}` : '';
-      const url = `${BASE}/api/trades/stream?top_n=${topN}&force=${forceRefresh}${apiKeyParam}`;
+      const url = `${BASE}/api/trades/stream?top_n=${topN}&force=${forceRefresh}&league=${encodeURIComponent(cfg.league)}${apiKeyParam}`;
       const es = new window.EventSource(url);
       eventSourceRef.current = es;
       let league = cfg.league;
@@ -107,18 +110,17 @@ export default function App() {
       };
     });
     updateRateLimit(setRateLimit, setRateLimitDisplay, setNearLimit);
-  }, [topN])
+  }, [topN, selectedLeague])
 
   // Initial load uses cache, subsequent manual refreshes force fresh data
   useEffect(() => { 
     if (!isAuthenticated) return; // Don't load if not authenticated
-    
     if (initialLoadRef.current) {
-      load(false); // Initial load from cache
+      load(false, selectedLeague); // Initial load from cache for selected league
       initialLoadRef.current = false;
     }
     return () => { eventSourceRef.current?.close() } 
-  }, [load, isAuthenticated])
+  }, [load, isAuthenticated, selectedLeague])
 
 
   // Modularized reloadPair
@@ -205,9 +207,9 @@ export default function App() {
         </div>
       </header>
 
-      {view === 'trades' ? (
-        <div className="main-layout">
-          <div className="trades-section">
+      <div className="main-layout">
+        <div className="trades-section">
+          {view === 'trades' && (
             <TradesTable 
               data={data?.results || []} 
               loading={loading} 
@@ -219,7 +221,7 @@ export default function App() {
                     // Optionally handle error (show toast, etc)
                   }
                 } else {
-                  reloadPair(index, data, setData, topN, () => updateRateLimit(setRateLimit, setRateLimitDisplay, setNearLimit));
+                  reloadPair(index, data, setData, topN, () => updateRateLimit(setRateLimit, setRateLimitDisplay, setNearLimit), selectedLeague);
                 }
               }} 
               onRefresh={() => load(true)} 
@@ -227,28 +229,28 @@ export default function App() {
               onDataUpdate={(newResults) => handleTradeDataUpdate(newResults, setData)}
               topN={topN}
             />
-          </div>
-          <aside className="config-sidebar">
-            <ConfigPanel 
-              onChanged={() => load(false)} 
-              onHotToggled={(index: number, hot: boolean) => updateHotStatus(index, hot, setData)} 
-              onPairAdded={(get: string, pay: string) => addNewPair(get, pay, data, setData, topN, () => updateRateLimit(setRateLimit, setRateLimitDisplay, setNearLimit))} 
-              onPairRemoved={(index: number) => removePair(index, setData)} 
-              topN={topN} 
-              onTopNChanged={setTopN}
-              onAccountNameChanged={setAccountName}
-            />
-          </aside>
+          )}
+          {view === 'system' && (
+            <SystemDashboard selectedLeague={selectedLeague} />
+          )}
+          {view === 'profit' && (
+            <ProfitTracker selectedLeague={selectedLeague} />
+          )}
         </div>
-      ) : view === 'system' ? (
-        <div style={{ padding: '0 12px 40px' }}>
-          <SystemDashboard />
-        </div>
-      ) : (
-        <div style={{ padding: '0 12px 40px' }}>
-          <ProfitTracker />
-        </div>
-      )}
+        <aside className="config-sidebar">
+          <ConfigPanel 
+            onChanged={() => load(false, selectedLeague)} 
+            onHotToggled={(index: number, hot: boolean) => updateHotStatus(index, hot, setData)} 
+            onPairAdded={(get: string, pay: string) => addNewPair(get, pay, data, setData, topN, () => updateRateLimit(setRateLimit, setRateLimitDisplay, setNearLimit), selectedLeague)} 
+            onPairRemoved={(index: number) => removePair(index, setData)} 
+            topN={topN} 
+            onTopNChanged={setTopN}
+            onAccountNameChanged={setAccountName}
+            onLeagueChanged={(league: string) => { setSelectedLeague(league); load(false, league); }}
+            selectedLeague={selectedLeague}
+          />
+        </aside>
+      </div>
 
       {/* Small rate limit info box, bottom right */}
       {rateLimitDisplay && (

@@ -10,7 +10,7 @@ import { EmptyState } from './profitTracker/EmptyState';
 import { ErrorDisplay } from './profitTracker/ErrorDisplay';
 import { extractErrorMessage } from '../utils/error';
 
-const ProfitTracker: React.FC = () => {
+const ProfitTracker: React.FC<{ selectedLeague?: string }> = ({ selectedLeague }) => {
   const { isAuthenticated } = useAuth()
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -50,7 +50,7 @@ const ProfitTracker: React.FC = () => {
   async function loadLatestSnapshot() {
     if (!isAuthenticated) return;
     try {
-      const h = await Api.portfolioHistory(1); // Get just the latest snapshot
+      const h = await Api.portfolioHistory(1, undefined, selectedLeague); // Get just the latest snapshot for league
       if (h.snapshots.length > 0) {
         const latest = h.snapshots[0];
         setSnapshot({
@@ -84,7 +84,7 @@ const ProfitTracker: React.FC = () => {
     if (!isAuthenticated) return;
     setHistoryLoading(true); setError(null);
     try {
-      const h = await Api.portfolioHistory(limit, timeRange ?? undefined);
+      const h = await Api.portfolioHistory(limit, timeRange ?? undefined, selectedLeague);
       setHistory(h);
     } catch (e: any) {
       setError(e.message || 'Failed to load history');
@@ -122,7 +122,7 @@ const ProfitTracker: React.FC = () => {
     if (!isAuthenticated) return;
     setLoading(true); setError(null);
     try {
-      const snap = await Api.portfolioSnapshot();
+      const snap = await Api.portfolioSnapshot(selectedLeague);
       lastSnapshotRef.current = snap.timestamp;
       nextSnapshotAtRef.current = Date.now() + 15 * 60 * 1000;
       setSnapshot(snap);
@@ -187,7 +187,7 @@ const ProfitTracker: React.FC = () => {
     loadHistory();
     loadLatestSnapshot();
     loadSchedulerStatus();
-  }, [isAuthenticated, timeRange]);
+  }, [isAuthenticated, timeRange, selectedLeague]);
 
   // Periodically refresh age + countdown display
   useEffect(() => {

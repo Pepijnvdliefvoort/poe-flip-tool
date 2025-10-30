@@ -9,7 +9,7 @@ router = APIRouter()
 
 @router.post("/portfolio/snapshot")
 
-def create_portfolio_snapshot(api_key: str = Depends(verify_api_key)):
+def create_portfolio_snapshot(league: str = None, api_key: str = Depends(verify_api_key)):
 	# Allow scheduler to bypass API key check
 	if api_key == "__scheduler__":
 		pass
@@ -17,7 +17,7 @@ def create_portfolio_snapshot(api_key: str = Depends(verify_api_key)):
 	from backend.utils.config import load_config
 	from backend.trade_logic import cache
 	now = datetime.utcnow()
-	cfg = load_config()
+	cfg = load_config(league)
 	league = cfg.league
 	top_n = getattr(cfg, 'top_n', 5) if hasattr(cfg, 'top_n') else cfg.__dict__.get('topN', 5) if hasattr(cfg, '__dict__') else 5
 	# Fetch items from both tabs
@@ -127,7 +127,7 @@ def create_portfolio_snapshot(api_key: str = Depends(verify_api_key)):
 			"source_pair": source_pair
 		})
 		total_divines += total_divine
-	saved = db.save_portfolio_snapshot(now, total_divines, breakdown)
+	saved = db.save_portfolio_snapshot(league, now, total_divines, breakdown)
 	return {
 		"saved": saved,
 		"timestamp": now.isoformat(),
@@ -137,9 +137,13 @@ def create_portfolio_snapshot(api_key: str = Depends(verify_api_key)):
 	}
 
 @router.get("/portfolio/history")
-def get_portfolio_history(limit: Optional[int] = Query(None), hours: Optional[float] = Query(None), api_key: str = Depends(verify_api_key)):
-    snapshots = db.load_portfolio_history(limit=limit, hours=hours)
-    return {"count": len(snapshots), "snapshots": snapshots}
+def get_portfolio_history(league: str = None, limit: Optional[int] = Query(None), hours: Optional[float] = Query(None), api_key: str = Depends(verify_api_key)):
+	from backend.utils.config import load_config
+	if not league:
+		cfg = load_config()
+		league = cfg.league
+	snapshots = db.load_portfolio_history(league, limit=limit, hours=hours)
+	return {"count": len(snapshots), "snapshots": snapshots}
 
 @router.get("/portfolio/scheduler_status")
 def get_scheduler_status(api_key: str = Depends(verify_api_key)):

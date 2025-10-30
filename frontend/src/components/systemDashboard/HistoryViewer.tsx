@@ -14,20 +14,22 @@ export const HistoryViewer: React.FC<{
     <section className="dashboard-section">
       <div className="history-header">
         <h3 style={{ margin: 0 }}>History</h3>
-        <select
-          id="history-pair-select"
-          name="historyPair"
-          value={selectedPair ? `${selectedPair.have}|${selectedPair.want}` : ''}
-          onChange={e => {
-            const [have, want] = e.target.value.split('|');
-            setSelectedPair({ have, want });
-          }}
-          className="history-select"
-        >
-          {pairs.map((p, i) => (
-            <option key={i} value={`${p.pay}|${p.get}`}>{p.pay} → {p.get}</option>
-          ))}
-        </select>
+        {selectedPair && (
+          <div
+            style={{
+              marginTop: 4,
+              marginBottom: 8,
+              color: '#3b82f6', // Tailwind blue-500
+              borderRadius: 6,
+              padding: '2px 10px',
+              display: 'inline-block',
+              fontWeight: 500,
+              fontSize: 15
+            }}
+          >
+            {selectedPair.have} → {selectedPair.want}
+          </div>
+        )}
         {loading && <span className="history-loading">Loading…</span>}
       </div>
       {!history ? (

@@ -83,12 +83,12 @@ async def stream_trades_service(request, delay_s: int = 2, top_n: int = 5, force
                 await asyncio.sleep(delay_s)
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 # --- SERVICE: refresh_one_trade_service ---
-def refresh_one_trade_service(index: int, top_n: int = 5):
-    """Fetch and return a summary for a single trade pair by index."""
+def refresh_one_trade_service(index: int, top_n: int = 5, league: str = None):
+    """Fetch and return a summary for a single trade pair by index and league."""
     from backend.models import PairSummary
     from backend.trade_logic import fetch_listings_force
     from backend.utils.config import load_config
-    cfg = load_config()
+    cfg = load_config(league)
     if not (0 <= index < len(cfg.trades)):
         raise Exception("Trade pair not found")
     t = cfg.trades[index]

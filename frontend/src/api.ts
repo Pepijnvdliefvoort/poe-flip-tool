@@ -56,8 +56,9 @@ export const Api = {
             headers: headers()
         })
     },
-    async getConfig(): Promise<ConfigData> {
-        return j(await fetch(`${BASE}/api/config`, { headers: headers() }))
+    async getConfig(league?: string): Promise<ConfigData> {
+        const url = league ? `${BASE}/api/config?league=${encodeURIComponent(league)}` : `${BASE}/api/config`;
+        return j(await fetch(url, { headers: headers() }))
     },
     async putConfig(cfg: ConfigData): Promise<ConfigData> {
         return j(await fetch(`${BASE}/api/config`, {
@@ -72,15 +73,17 @@ export const Api = {
             headers: headers()
         }))
     },
-    async patchTrades(body: { add?: TradePair[]; remove_indices?: number[] }): Promise<ConfigData> {
-        return j(await fetch(`${BASE}/api/config/trades`, {
+    async patchTrades(body: { add?: TradePair[]; remove_indices?: number[] }, league?: string): Promise<ConfigData> {
+        const url = league ? `${BASE}/api/config/trades?league=${encodeURIComponent(league)}` : `${BASE}/api/config/trades`;
+        return j(await fetch(url, {
             method: 'PATCH',
             headers: headers(),
             body: JSON.stringify({ add: body.add || [], remove_indices: body.remove_indices || [] })
         }))
     },
-    async patchAccountName(account_name: string): Promise<ConfigData> {
-        return j(await fetch(`${BASE}/api/config/account_name`, {
+    async patchAccountName(account_name: string, league?: string): Promise<ConfigData> {
+        const url = league ? `${BASE}/api/config/account_name?league=${encodeURIComponent(league)}` : `${BASE}/api/config/account_name`;
+        return j(await fetch(url, {
             method: 'PATCH',
             headers: headers(),
             body: JSON.stringify({ account_name })
@@ -89,8 +92,11 @@ export const Api = {
     async rateLimitStatus(): Promise<{ blocked: boolean; block_remaining: number; rules: Record<string, { current: number; limit: number; reset_s: number }[]> }> {
         return j(await fetch(`${BASE}/api/rate_limit`, { headers: headers() }))
     },
-    async refreshOne(index: number, top_n = 5): Promise<PairSummary> {
-        return j(await fetch(`${BASE}/api/trades/refresh_one?index=${index}&top_n=${top_n}`, { method: 'POST', headers: headers() }))
+    async refreshOne(index: number, top_n = 5, league?: string): Promise<PairSummary> {
+        const url = league
+            ? `${BASE}/api/trades/refresh_one?index=${index}&top_n=${top_n}&league=${encodeURIComponent(league)}`
+            : `${BASE}/api/trades/refresh_one?index=${index}&top_n=${top_n}`;
+        return j(await fetch(url, { method: 'POST', headers: headers() }))
     },
     async refreshCacheAll(top_n = 5): Promise<TradesResponse> {
         return j(await fetch(`${BASE}/api/trades/refresh_cache?top_n=${top_n}`, { method: 'POST', headers: headers() }))
@@ -123,13 +129,17 @@ export const Api = {
         return j(await fetch(`${BASE}/api/value/latest`, { headers: headers() }))
     }
     ,
-    async portfolioSnapshot(): Promise<PortfolioSnapshot> {
-        return j(await fetch(`${BASE}/api/portfolio/snapshot`, { method: 'POST', headers: headers() }))
+    async portfolioSnapshot(league?: string): Promise<PortfolioSnapshot> {
+        const params = new URLSearchParams();
+        if (league) params.append('league', league);
+        const qp = params.toString() ? `?${params.toString()}` : '';
+        return j(await fetch(`${BASE}/api/portfolio/snapshot${qp}`, { method: 'POST', headers: headers() }))
     },
-    async portfolioHistory(limit?: number, hours?: number): Promise<PortfolioHistoryResponse> {
+    async portfolioHistory(limit?: number, hours?: number, league?: string): Promise<PortfolioHistoryResponse> {
         const params = new URLSearchParams();
         if (limit) params.append('limit', String(limit));
         if (hours !== undefined) params.append('hours', String(hours));
+        if (league) params.append('league', league);
         const qp = params.toString() ? `?${params.toString()}` : '';
         return j(await fetch(`${BASE}/api/portfolio/history${qp}`, { headers: headers() }))
     }

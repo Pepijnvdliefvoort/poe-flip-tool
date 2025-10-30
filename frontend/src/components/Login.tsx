@@ -139,7 +139,8 @@ export function Login({ onLogin }: LoginProps) {
               style={{
                 position: 'absolute',
                 right: 8,
-                top: '55%',
+                top: '50%',
+                transform: 'translateY(-50%)',
                 background: 'none',
                 border: 'none',
                 color: 'inherit',

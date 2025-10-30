@@ -3,28 +3,31 @@ import { Api } from '../api';
 import type { ConfigData } from '../types';
 
 export async function changeLeague(newLeague: string, setCfg: Function, onChanged: Function) {
-  const next = await Api.patchLeague(newLeague);
-  setCfg(next);
-  onChanged();
+  // Patch league on backend
+  await Api.patchLeague(newLeague);
+  // Fetch config for the new league
+  const refreshed = await Api.getConfig(newLeague);
+  setCfg(refreshed);
+  onChanged && onChanged(newLeague);
 }
 
-export async function addPair(get: string, pay: string, setCfg: Function, setGet: Function, setPay: Function, setSaving: Function, onPairAdded?: Function) {
+export async function addPair(get: string, pay: string, setCfg: Function, setGet: Function, setPay: Function, setSaving: Function, onPairAdded?: Function, league?: string) {
   const g = get.trim();
   const p = pay.trim();
   if (!g || !p) return;
   setSaving(true);
   try {
-    const next = await Api.patchTrades({ add: [{ get: g, pay: p }] });
+    const next = await Api.patchTrades({ add: [{ get: g, pay: p }] }, league);
     setCfg(next);
     setGet(''); setPay('');
     if (onPairAdded) onPairAdded(g, p);
   } finally { setSaving(false); }
 }
 
-export async function removePair(idx: number, setCfg: Function, setSaving: Function, onPairRemoved?: Function) {
+export async function removePair(idx: number, setCfg: Function, setSaving: Function, onPairRemoved?: Function, league?: string) {
   setSaving(true);
   try {
-    const next = await Api.patchTrades({ remove_indices: [idx] });
+    const next = await Api.patchTrades({ remove_indices: [idx] }, league);
     setCfg(next);
     if (onPairRemoved) onPairRemoved(idx);
   } finally { setSaving(false); }
@@ -53,7 +56,7 @@ export function useDebouncedAccountNameSave(cfg: ConfigData | null, accountNameD
       if (draft === (cfg.account_name || '')) return;
       setAccountNameSaving(true);
       try {
-        const next = await Api.patchAccountName(draft);
+        const next = await Api.patchAccountName(draft, cfg.league);
         setCfg(next);
         if (onAccountNameChanged) onAccountNameChanged(next.account_name || null);
       } finally {

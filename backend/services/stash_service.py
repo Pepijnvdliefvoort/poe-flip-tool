@@ -7,7 +7,7 @@ from fastapi import HTTPException
 def get_stash_tab_service(tab_name: str):
     cfg = load_config()
     if not cfg.account_name:
-        raise HTTPException(status_code=400, detail="No account_name configured in backend config.json")
+        raise HTTPException(status_code=400, detail="No account_name configured in backend config.")
     league = cfg.league
     account = cfg.account_name
     base_url = "https://www.pathofexile.com/character-window/get-stash-items"

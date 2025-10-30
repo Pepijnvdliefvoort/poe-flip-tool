@@ -2,7 +2,7 @@ import { Api } from '../api'
 import { calculateProfitMargins } from './profit'
 import type { TradesResponse, PairSummary } from '../types'
 
-export function reloadPair(index: number, data: TradesResponse | null, setData: Function, topN: number, updateRateLimit: Function) {
+export function reloadPair(index: number, data: TradesResponse | null, setData: Function, topN: number, updateRateLimit: Function, league?: string) {
   if (!data) return;
   setData((prev: TradesResponse | null) => {
     if (!prev) return prev;
@@ -13,7 +13,7 @@ export function reloadPair(index: number, data: TradesResponse | null, setData: 
     }
     return { ...prev, results };
   });
-  Api.refreshOne(index, topN)
+  Api.refreshOne(index, topN, league)
     .then(() => Api.latestCached(topN))
     .then((latest) => {
       setData((prev: TradesResponse | null) => {
@@ -35,7 +35,7 @@ export function reloadPair(index: number, data: TradesResponse | null, setData: 
     .finally(() => updateRateLimit());
 }
 
-export function addNewPair(get: string, pay: string, data: TradesResponse | null, setData: Function, topN: number, updateRateLimit: Function) {
+export function addNewPair(get: string, pay: string, data: TradesResponse | null, setData: Function, topN: number, updateRateLimit: Function, league?: string) {
   if (!data) return;
   const newIndex = data.results.length;
   setData((prev: TradesResponse | null) => {
@@ -52,7 +52,7 @@ export function addNewPair(get: string, pay: string, data: TradesResponse | null
     }];
     return { ...prev, pairs: results.length, results };
   });
-  Api.refreshOne(newIndex, topN)
+  Api.refreshOne(newIndex, topN, league)
     .then((refreshed) => {
       setData((prev: TradesResponse | null) => {
         if (!prev) return prev;

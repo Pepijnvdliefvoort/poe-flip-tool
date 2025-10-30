@@ -13,8 +13,9 @@ from backend.services.trade_service import (
 router = APIRouter()
 
 @router.post("/trades/refresh_one", response_model=PairSummary)
-def refresh_one_trade(index: int = Query(..., ge=0), top_n: int = Query(5, ge=1, le=20), api_key: str = Depends(verify_api_key)):
-    return refresh_one_trade_service(index, top_n)
+@router.post("/trades/refresh_one", response_model=PairSummary)
+def refresh_one_trade(index: int = Query(..., ge=0), top_n: int = Query(5, ge=1, le=20), league: str = Query(None), api_key: str = Depends(verify_api_key)):
+    return refresh_one_trade_service(index, top_n, league)
 
 @router.get("/trades/stream")
 async def stream_trades(
