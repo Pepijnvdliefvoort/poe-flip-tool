@@ -118,6 +118,7 @@ export function ConfigPanel({
                     >
                         <option value="Standard">Standard</option>
                         <option value="Hardcore">Hardcore</option>
+                        <option value="Keepers">Keepers</option>
                     </select>
                 </div>
                 <TopResultsInput topN={topN} onTopNChanged={onTopNChanged} />
