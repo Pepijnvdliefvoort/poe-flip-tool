@@ -141,6 +141,7 @@ See the [gitmoji cheat sheet](https://gitmoji.dev/) for more.
 - [FastAPI](https://fastapi.tiangolo.com/)
 - [Vite](https://vitejs.dev/)
 - [gitmoji](https://gitmoji.dev/)
+- [Fly.io](https://fly.io/)
 
 ---
 
