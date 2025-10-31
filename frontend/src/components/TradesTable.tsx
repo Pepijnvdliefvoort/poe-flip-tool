@@ -60,8 +60,10 @@ export function TradesTable(props: TradesTableProps) {
             }
         };
 
-        // Fetch immediately on mount
-        fetchLatestCached();
+        // Fetch immediately on mount if no data
+        if (!data || data.length === 0) {
+            fetchLatestCached();
+        }
         // Set up interval for polling every 30s
         intervalRef = window.setInterval(fetchLatestCached, 30000);
 
@@ -69,7 +71,7 @@ export function TradesTable(props: TradesTableProps) {
             cancelled = true;
             if (intervalRef !== null) clearInterval(intervalRef);
         };
-    }, []);
+    }, [data]);
 
     // Always display all metrics
     const selectedMetrics = ['spread', 'median', 'profit'] as const

@@ -65,8 +65,8 @@ def create_portfolio_snapshot(league: str = None, api_key: str = Depends(verify_
 			total_divine = quantity
 			source_pair = None
 		else:
-			# Try direct cache (currency->divine)
-			key_direct = (league, currency, "divine")
+			# Try direct cache (divine->currency)
+			key_direct = (league, "divine", currency)
 			entry = cache._store.get(key_direct)
 			median_rate = None
 			if entry and hasattr(entry, "data") and entry.data:
@@ -74,47 +74,47 @@ def create_portfolio_snapshot(league: str = None, api_key: str = Depends(verify_
 				if rates:
 					import statistics
 					median_rate = statistics.median(rates)
-					source_pair = f"{currency}/divine"
+					source_pair = f"divine/{currency}"
 			# If not in cache, try DB for direct pair
 			if not median_rate or median_rate <= 0:
-				snapshots = db.load_snapshots(league, currency, "divine", limit=1)
+				snapshots = db.load_snapshots(league, "divine", currency, limit=1)
 				if snapshots:
 					median_rate = snapshots[-1]["median_rate"]
-					source_pair = f"{currency}/divine"
+					source_pair = f"divine/{currency}"
 			# If still not found, try indirect via chaos
 			if (not median_rate or median_rate <= 0) and currency != "chaos":
-				# currency->chaos
-				key_to_chaos = (league, currency, "chaos")
-				entry_to_chaos = cache._store.get(key_to_chaos)
-				median_to_chaos = None
-				if entry_to_chaos and hasattr(entry_to_chaos, "data") and entry_to_chaos.data:
-					rates = [l.rate for l in entry_to_chaos.data[:top_n] if hasattr(l, "rate")]
+				# divine->chaos
+				key_divine_chaos = (league, "divine", "chaos")
+				entry_divine_chaos = cache._store.get(key_divine_chaos)
+				median_divine_chaos = None
+				if entry_divine_chaos and hasattr(entry_divine_chaos, "data") and entry_divine_chaos.data:
+					rates = [l.rate for l in entry_divine_chaos.data[:top_n] if hasattr(l, "rate")]
 					if rates:
 						import statistics
-						median_to_chaos = statistics.median(rates)
-				if not median_to_chaos or median_to_chaos <= 0:
-					snapshots = db.load_snapshots(league, currency, "chaos", limit=1)
+						median_divine_chaos = statistics.median(rates)
+				if not median_divine_chaos or median_divine_chaos <= 0:
+					snapshots = db.load_snapshots(league, "divine", "chaos", limit=1)
 					if snapshots:
-						median_to_chaos = snapshots[-1]["median_rate"]
-				# chaos->divine
-				key_chaos_div = (league, "chaos", "divine")
-				entry_chaos_div = cache._store.get(key_chaos_div)
-				median_chaos_div = None
-				if entry_chaos_div and hasattr(entry_chaos_div, "data") and entry_chaos_div.data:
-					rates = [l.rate for l in entry_chaos_div.data[:top_n] if hasattr(l, "rate")]
+						median_divine_chaos = snapshots[-1]["median_rate"]
+				# chaos->currency
+				key_chaos_cur = (league, "chaos", currency)
+				entry_chaos_cur = cache._store.get(key_chaos_cur)
+				median_chaos_cur = None
+				if entry_chaos_cur and hasattr(entry_chaos_cur, "data") and entry_chaos_cur.data:
+					rates = [l.rate for l in entry_chaos_cur.data[:top_n] if hasattr(l, "rate")]
 					if rates:
 						import statistics
-						median_chaos_div = statistics.median(rates)
-				if not median_chaos_div or median_chaos_div <= 0:
-					snapshots = db.load_snapshots(league, "chaos", "divine", limit=1)
+						median_chaos_cur = statistics.median(rates)
+				if not median_chaos_cur or median_chaos_cur <= 0:
+					snapshots = db.load_snapshots(league, "chaos", currency, limit=1)
 					if snapshots:
-						median_chaos_div = snapshots[-1]["median_rate"]
-				if median_to_chaos and median_chaos_div and median_to_chaos > 0 and median_chaos_div > 0:
-					# currency->chaos->divine
-					median_rate = median_to_chaos * median_chaos_div
-					source_pair = f"{currency}/chaos/divine"
+						median_chaos_cur = snapshots[-1]["median_rate"]
+				if median_divine_chaos and median_chaos_cur and median_divine_chaos > 0 and median_chaos_cur > 0:
+					# divine->chaos->currency
+					median_rate = median_divine_chaos * median_chaos_cur
+					source_pair = f"divine/chaos/{currency}"
 			if median_rate and median_rate > 0:
-				divine_per_unit = 1.0 / median_rate
+				divine_per_unit = median_rate
 			else:
 				divine_per_unit = 0.0
 				source_pair = None
