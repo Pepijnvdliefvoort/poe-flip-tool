@@ -1,0 +1,27 @@
+/* CountdownBar.css */
+
+.countdown-bar-container {
+  width: 100%;
+  background: var(--bg-secondary, #23272f);
+  border-radius: 6px;
+  height: 8px;
+  margin: 0;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+
+.countdown-bar {
+  height: 100%;
+  background: #4f46e5;
+  transition: width 1s linear;
+}
+
+.countdown-bar-label {
+  font-size: 12px;
+  color: #a5b4fc;
+  text-align: right;
+  margin-top: 2px;
+  letter-spacing: 0.02em;
+  font-weight: 500;
+}

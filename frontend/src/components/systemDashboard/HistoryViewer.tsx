@@ -1,0 +1,71 @@
+
+import React from 'react';
+import type { HistoryResponse } from '../../types';
+
+export const HistoryViewer: React.FC<{
+  history: HistoryResponse | null;
+  selectedPair: { have: string; want: string } | null;
+  loading: boolean;
+  pairs: { get: string; pay: string }[];
+  setSelectedPair: (pair: { have: string; want: string }) => void;
+}> = ({ history, selectedPair, loading, pairs, setSelectedPair }) => {
+  if (!selectedPair) return null;
+  return (
+    <section className="dashboard-section">
+      <div className="history-header">
+        <h3 style={{ margin: 0 }}>History</h3>
+        {selectedPair && (
+          <div
+            style={{
+              marginTop: 4,
+              marginBottom: 8,
+              color: '#3b82f6', // Tailwind blue-500
+              borderRadius: 6,
+              padding: '2px 10px',
+              display: 'inline-block',
+              fontWeight: 500,
+              fontSize: 15
+            }}
+          >
+            {selectedPair.have} → {selectedPair.want}
+          </div>
+        )}
+        {loading && <span className="history-loading">Loading…</span>}
+      </div>
+      {!history ? (
+        <div className="history-empty">Select a pair to view history.</div>
+      ) : history.history.length === 0 ? (
+        <div className="history-none">No snapshots yet.</div>
+      ) : (
+        <div style={{ marginTop: 12 }}>
+          <div className="history-meta">
+            {history.history.length} points | Change: {history.trend.change_percent > 0 ? '+' : ''}{history.trend.change_percent.toFixed(2)}% ({history.trend.direction})
+          </div>
+          {/* Chart can be added here if needed */}
+          <div className="history-table-container">
+            <table className="history-table">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Median</th>
+                  <th>Avg</th>
+                  <th>Listings</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.history.slice().reverse().map((h, i) => (
+                  <tr key={i}>
+                    <td>{new Date(h.timestamp).toLocaleTimeString()}</td>
+                    <td>{h.median_rate.toFixed(4)}</td>
+                    <td>{h.avg_rate.toFixed(4)}</td>
+                    <td>{h.listing_count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+};

@@ -12,6 +12,7 @@ class ConfigData(BaseModel):
     league: str = Field(default="Standard")
     trades: List[TradePair] = Field(default_factory=list)
     account_name: Optional[str] = Field(default=None, description="PoE account name used for highlighting own listings")
+    thread_id: Optional[str] = Field(default=None, description="Forum thread ID for shop, per league")
 
 
 class ListingSummary(BaseModel):
@@ -44,6 +45,7 @@ class PairSummary(BaseModel):
     status: str  # "ok" | "error" | "invalid" | "rate_limited"
     listings: List[ListingSummary] = Field(default_factory=list)
     best_rate: Optional[float] = None
+    median_rate: Optional[float] = None
     count_returned: int = 0
     trend: Optional[PriceTrend] = None  # Price trend for sparkline
     fetched_at: Optional[str] = None  # ISO timestamp of when data was fetched

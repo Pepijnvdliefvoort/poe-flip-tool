@@ -15,6 +15,81 @@ log = logging.getLogger("poe-backend")
 
 
 class DatabasePersistence:
+    # ============================================================================
+    # Last Selected League Operations
+    # ============================================================================
+
+    def save_last_selected_league(self, league: str) -> bool:
+        """Save the last selected league to the database."""
+        try:
+            with self._transaction() as cursor:
+                cursor.execute('''
+                    INSERT INTO last_selected_league (id, league)
+                    VALUES (1, ?)
+                    ON CONFLICT(id) DO UPDATE SET league=excluded.league
+                ''', (league,))
+            log.debug(f"Saved last selected league: {league}")
+            return True
+        except Exception as e:
+            log.error(f"Failed to save last selected league: {e}")
+            return False
+
+    def load_last_selected_league(self) -> str:
+        """Load the last selected league from the database. Returns league or None."""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute('SELECT league FROM last_selected_league WHERE id=1')
+            row = cursor.fetchone()
+            if not row:
+                log.info("No last selected league found in database.")
+                return None
+            league = row['league']
+            log.debug(f"Loaded last selected league: {league}")
+            return league
+        except Exception as e:
+            log.error(f"Failed to load last selected league: {e}")
+            return None
+    # ============================================================================
+    # Config Table Operations
+    # ============================================================================
+
+    def save_config_db(self, league: str, trades: list, account_name: str = None, thread_id: str = None) -> bool:
+        """Save config data to the database for a specific league."""
+        try:
+            trades_json = json.dumps(trades)
+            with self._transaction() as cursor:
+                cursor.execute('''
+                    INSERT INTO config (league, trades_json, account_name, thread_id)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(league) DO UPDATE SET trades_json=excluded.trades_json, account_name=excluded.account_name, thread_id=excluded.thread_id
+                ''', (league, trades_json, account_name, thread_id))
+            log.debug(f"Saved config to database: league={league}, trades={trades}, account_name={account_name}, thread_id={thread_id}")
+            return True
+        except Exception as e:
+            log.error(f"Failed to save config to database: {e}")
+            return False
+
+    def load_config_db(self, league: str) -> dict:
+        """Load config data for a specific league from the database. Returns dict or None."""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute('SELECT league, trades_json, account_name, thread_id FROM config WHERE league=?', (league,))
+            row = cursor.fetchone()
+            if not row:
+                log.info(f"No config found in database for league {league}.")
+                return None
+            trades = json.loads(row['trades_json'])
+            config = {
+                'league': row['league'],
+                'trades': trades,
+                'account_name': row['account_name'],
+                'thread_id': row['thread_id']
+            }
+            log.debug(f"Loaded config from database: {config}")
+            return config
+        except Exception as e:
+            log.error(f"Failed to load config from database: {e}")
+            return None
     """Handles SQLite persistence for cache entries and price snapshots."""
     
     def __init__(self, db_path: str = "poe_cache.db"):
@@ -50,10 +125,10 @@ class DatabasePersistence:
                     created_at TEXT NOT NULL,
                     PRIMARY KEY (league, have, want)
                 );
-                
+
                 CREATE INDEX IF NOT EXISTS idx_cache_expiry 
                 ON cache_entries(expires_at);
-                
+
                 CREATE TABLE IF NOT EXISTS price_snapshots (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     league TEXT NOT NULL,
@@ -62,17 +137,19 @@ class DatabasePersistence:
                     timestamp TEXT NOT NULL,
                     best_rate REAL NOT NULL,
                     avg_rate REAL NOT NULL,
+                    median_rate REAL NOT NULL,
                     listing_count INTEGER NOT NULL
                 );
-                
+
                 CREATE INDEX IF NOT EXISTS idx_snapshots_pair 
                 ON price_snapshots(league, have, want, timestamp);
-                
+
                 CREATE INDEX IF NOT EXISTS idx_snapshots_time 
                 ON price_snapshots(timestamp);
 
                 CREATE TABLE IF NOT EXISTS portfolio_snapshots (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    league TEXT NOT NULL,
                     timestamp TEXT NOT NULL,
                     total_divines REAL NOT NULL,
                     breakdown_json TEXT NOT NULL
@@ -80,6 +157,20 @@ class DatabasePersistence:
 
                 CREATE INDEX IF NOT EXISTS idx_portfolio_time
                 ON portfolio_snapshots(timestamp);
+
+                -- Config table: one row per league
+                CREATE TABLE IF NOT EXISTS config (
+                    league TEXT PRIMARY KEY,
+                    trades_json TEXT NOT NULL,
+                    account_name TEXT,
+                    thread_id TEXT
+                );
+
+                -- Table to store last selected league
+                CREATE TABLE IF NOT EXISTS last_selected_league (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    league TEXT NOT NULL
+                );
             ''')
             log.debug("Database schema created/verified")
         except Exception as e:
@@ -154,19 +245,19 @@ class DatabasePersistence:
             now = datetime.utcnow()
             cursor = self.conn.cursor()
             cursor.execute('''
-                SELECT league, have, want, listings_json, expires_at
+                SELECT league, have, want, listings_json, expires_at, created_at
                 FROM cache_entries
                 WHERE expires_at > ?
                 ORDER BY expires_at ASC
             ''', (now.isoformat(),))
-            
+
             entries = {}
             for row in cursor.fetchall():
                 key = (row['league'], row['have'], row['want'])
                 listings = json.loads(row['listings_json'])
                 expires_at = datetime.fromisoformat(row['expires_at'])
                 entries[key] = (listings, expires_at)
-            
+
             log.info(f"Loaded {len(entries)} cache entries from database")
             return entries
         except Exception as e:
@@ -203,21 +294,39 @@ class DatabasePersistence:
         timestamp: datetime,
         best_rate: float,
         avg_rate: float,
+        median_rate: float,
         listing_count: int
     ) -> bool:
-        """Save a price snapshot to the database."""
+        """Save a price snapshot to the database, avoiding duplicates."""
         try:
+            # Check for duplicate: same median_rate within 1 minute
+            cursor = self.conn.cursor()
+            cursor.execute('''
+                SELECT timestamp, median_rate FROM price_snapshots
+                WHERE league = ? AND have = ? AND want = ?
+                ORDER BY timestamp DESC LIMIT 1
+            ''', (league, have, want))
+            row = cursor.fetchone()
+            if row:
+                last_ts = datetime.fromisoformat(row['timestamp'])
+                last_median = row['median_rate']
+                time_diff = abs((timestamp - last_ts).total_seconds())
+                median_diff = abs(last_median - median_rate)
+                if time_diff < 60 and median_diff < 1e-6:
+                    log.debug(f"Skipped DB duplicate snapshot for {have}->{want}: median unchanged ({median_rate:.6f})")
+                    cursor.close()
+                    return False
+            cursor.close()
             with self._transaction() as cursor:
                 cursor.execute('''
                     INSERT INTO price_snapshots 
-                    (league, have, want, timestamp, best_rate, avg_rate, listing_count)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (league, have, want, timestamp, best_rate, avg_rate, median_rate, listing_count)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     league, have, want,
                     timestamp.isoformat(),
-                    best_rate, avg_rate, listing_count
+                    best_rate, avg_rate, median_rate, listing_count
                 ))
-            
             log.debug(f"Saved snapshot: {have}->{want} @ {timestamp.isoformat()}")
             return True
         except Exception as e:
@@ -235,7 +344,7 @@ class DatabasePersistence:
         """Load price snapshots for a specific pair."""
         try:
             query = '''
-                SELECT timestamp, best_rate, avg_rate, listing_count
+                SELECT timestamp, best_rate, avg_rate, median_rate, listing_count
                 FROM price_snapshots
                 WHERE league = ? AND have = ? AND want = ?
             '''
@@ -259,6 +368,7 @@ class DatabasePersistence:
                     'timestamp': datetime.fromisoformat(row['timestamp']),
                     'best_rate': row['best_rate'],
                     'avg_rate': row['avg_rate'],
+                    'median_rate': row['median_rate'],
                     'listing_count': row['listing_count']
                 })
             
@@ -274,7 +384,7 @@ class DatabasePersistence:
             cutoff = datetime.utcnow() - timedelta(hours=retention_hours)
             cursor = self.conn.cursor()
             cursor.execute('''
-                SELECT league, have, want, timestamp, best_rate, avg_rate, listing_count
+                SELECT league, have, want, timestamp, best_rate, avg_rate, median_rate, listing_count
                 FROM price_snapshots
                 WHERE timestamp > ?
                 ORDER BY league, have, want, timestamp ASC
@@ -298,6 +408,7 @@ class DatabasePersistence:
                     'timestamp': ts,
                     'best_rate': row['best_rate'],
                     'avg_rate': row['avg_rate'],
+                    'median_rate': row['median_rate'],
                     'listing_count': row['listing_count']
                 })
             
@@ -395,29 +506,43 @@ class DatabasePersistence:
     # Portfolio Snapshot Operations
     # ============================================================================
 
-    def save_portfolio_snapshot(self, timestamp: datetime, total_divines: float, breakdown: List[Dict[str, Any]]) -> bool:
-        """Persist a portfolio snapshot with total value and breakdown list."""
+    def save_portfolio_snapshot(self, league: str, timestamp: datetime, total_divines: float, breakdown: List[Dict[str, Any]]) -> bool:
+        """Persist a portfolio snapshot with total value and breakdown list, per league."""
         try:
             payload = json.dumps(breakdown)
             with self._transaction() as cursor:
                 cursor.execute('''
-                    INSERT INTO portfolio_snapshots (timestamp, total_divines, breakdown_json)
-                    VALUES (?, ?, ?)
-                ''', (timestamp.isoformat(), total_divines, payload))
-            log.debug(f"Saved portfolio snapshot total={total_divines:.3f} @ {timestamp.isoformat()}")
+                    INSERT INTO portfolio_snapshots (league, timestamp, total_divines, breakdown_json)
+                    VALUES (?, ?, ?, ?)
+                ''', (league, timestamp.isoformat(), total_divines, payload))
+            log.debug(f"Saved portfolio snapshot for league={league} total={total_divines:.3f} @ {timestamp.isoformat()}")
             return True
         except Exception as e:
             log.error(f"Failed to save portfolio snapshot: {e}")
             return False
 
-    def load_portfolio_history(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
-        """Return chronological portfolio snapshots (oldest -> newest)."""
+    def load_portfolio_history(self, league: str, limit: Optional[int] = None, hours: Optional[float] = None) -> List[Dict[str, Any]]:
+        """Return chronological portfolio snapshots (oldest -> newest) for a league.
+        Args:
+            league: League to filter by
+            limit: Maximum number of snapshots to return (most recent N)
+            hours: Only return snapshots from the last N hours
+        """
         try:
-            query = 'SELECT timestamp, total_divines, breakdown_json FROM portfolio_snapshots ORDER BY timestamp ASC'
+            # Build query with optional time filter
+            where_clauses = ["league = ?"]
+            params = [league]
+            if hours is not None:
+                cutoff = datetime.utcnow() - timedelta(hours=hours)
+                where_clauses.append("timestamp >= ?")
+                params.append(cutoff.isoformat())
+            where_clause = "WHERE " + " AND ".join(where_clauses)
             if limit:
-                query += f' LIMIT {int(limit)}'
+                query = f'SELECT timestamp, total_divines, breakdown_json FROM portfolio_snapshots {where_clause} ORDER BY timestamp DESC LIMIT {int(limit)}'
+            else:
+                query = f'SELECT timestamp, total_divines, breakdown_json FROM portfolio_snapshots {where_clause} ORDER BY timestamp ASC'
             cursor = self.conn.cursor()
-            cursor.execute(query)
+            cursor.execute(query, params)
             rows = []
             for r in cursor.fetchall():
                 try:
@@ -435,6 +560,8 @@ class DatabasePersistence:
                 except Exception as e:
                     log.warning(f"Skipping invalid portfolio snapshot row: {e}")
                     continue
+            if limit:
+                rows.reverse()
             return rows
         except Exception as e:
             log.error(f"Failed to load portfolio history: {e}")

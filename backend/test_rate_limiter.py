@@ -1,5 +1,9 @@
+
 import time
-from rate_limiter import rate_limiter
+try:
+    from backend.rate_limiter import rate_limiter  # For running from project root
+except ModuleNotFoundError:
+    from rate_limiter import rate_limiter  # For running from backend/
 
 
 def simulate(headers):

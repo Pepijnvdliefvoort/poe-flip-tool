@@ -19,6 +19,8 @@ export type PriceTrend = {
   oldest?: string | null
   newest?: string | null
   sparkline?: number[]
+  lowest_median?: number | null
+  highest_median?: number | null
 }
 
 export type PairSummary = {
@@ -29,6 +31,7 @@ export type PairSummary = {
   status: 'ok' | 'error' | 'invalid' | 'loading' | 'rate_limited'
   listings: ListingSummary[]
   best_rate?: number | null
+  median_rate?: number | null
   count_returned: number
   trend?: PriceTrend | null
   fetched_at?: string | null
@@ -47,6 +50,7 @@ export type ConfigData = {
   league: string
   trades: TradePair[]
   account_name?: string | null
+  thread_id?: string | null
 }
 
 // Cache status (lightweight per pair)
@@ -93,7 +97,7 @@ export type HistoryResponse = {
   league: string
   have: string
   want: string
-  history: { timestamp: string; best_rate: number; avg_rate: number; listing_count: number }[]
+  history: { timestamp: string; median_rate: number; avg_rate: number; listing_count: number }[]
   trend: PriceTrend
 }
 

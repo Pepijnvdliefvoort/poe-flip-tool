@@ -416,3 +416,7 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+poe_cache.db
+backend/config1.json
+backend/config2.json
+backend/config3.json
