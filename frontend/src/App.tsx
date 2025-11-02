@@ -216,7 +216,9 @@ export default function App() {
               onReload={async (index, newPrice) => {
                 if (newPrice) {
                   try {
-                    await Api.undercut(index, newPrice);
+                    // Find thread_id from config (data is TradesResponse)
+                    const thread_id = (data as any)?.thread_id || (data as any)?.config?.thread_id || null;
+                    await Api.undercut(index, newPrice, thread_id);
                   } catch (err) {
                     // Optionally handle error (show toast, etc)
                   }

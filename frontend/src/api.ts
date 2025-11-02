@@ -43,11 +43,11 @@ export const Api = {
         const data = await res.json();
         return data.thread_id || null;
     },
-    async undercut(index: number, new_rate: string): Promise<{ status: number; new_rate: string; forum_location?: string }> {
+    async undercut(index: number, new_rate: string, thread_id?: string): Promise<{ status: number; new_rate: string; forum_location?: string }> {
         return j(await fetch(`${BASE}/api/trades/undercut`, {
             method: 'POST',
             headers: headers(),
-            body: JSON.stringify({ index, new_rate })
+            body: JSON.stringify({ index, new_rate, ...(thread_id ? { thread_id } : {}) })
         }))
     },
     async logout(): Promise<void> {

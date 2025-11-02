@@ -124,13 +124,18 @@ import cloudscraper
 from dotenv import load_dotenv
 from ..rate_limiter import rate_limiter
 
-def get_current_forum_post_content():
-    THREAD_ID = int(os.getenv("THREAD_ID", "0"))
-    EDIT_URL = f"https://www.pathofexile.com/forum/edit-thread/{THREAD_ID}?history=1"
+def get_current_forum_post_content(cfg=None):
+    if cfg is None:
+        from backend.utils.config import load_config
+        cfg = load_config()
+    thread_id = cfg.thread_id
+    if not thread_id:
+        raise Exception("Missing thread_id in config.")
+    EDIT_URL = f"https://www.pathofexile.com/forum/edit-thread/{thread_id}?history=1"
     POESESSID = os.getenv("POESESSID")
     CF_CLEARANCE = os.getenv("CF_CLEARANCE")
-    if not POESESSID or not CF_CLEARANCE or not THREAD_ID:
-        raise Exception("Missing POESESSID, CF_CLEARANCE, or THREAD_ID in .env")
+    if not POESESSID or not CF_CLEARANCE:
+        raise Exception("Missing POESESSID or CF_CLEARANCE in .env")
     scraper = cloudscraper.create_scraper(
         browser={"browser": "chrome", "platform": "windows", "mobile": False}
     )
@@ -169,19 +174,16 @@ def undercut_trade_service(index: int, new_rate: str = None):
     )
     if not listings or not account_name:
         raise Exception("No listings or account name not set")
-    # Find my own listing(s)
-    def normalize(name):
-        return re.sub(r"#\d{3,5}$", "", (name or "")).lower() if name else ''
-    my_names = [normalize(n) for n in (account_name.split(',') if account_name else [])]
-    # (Removed: check for own listing in listings. Always proceed to update forum post.)
     # Use the exact new_rate provided by the frontend (can be a fraction string like '1/261')
     if new_rate is None:
         raise Exception("new_rate must be provided")
-    # Update forum post using cloudscraper
-    THREAD_ID = int(os.getenv("THREAD_ID", "0"))
+    # Get thread_id from config
+    thread_id = cfg.thread_id
+    if not thread_id:
+        raise Exception("Missing thread_id in config.")
     TITLE = os.getenv("THREAD_TITLE", "shop")
     import html
-    forum_content = get_current_forum_post_content()
+    forum_content = get_current_forum_post_content(cfg)
     forum_content = html.unescape(forum_content)
     # Build the correct ~b/o string
     try:
@@ -213,9 +215,7 @@ def undercut_trade_service(index: int, new_rate: str = None):
     content_new = new_forum_content
     POESESSID = os.getenv("POESESSID")
     CF_CLEARANCE = os.getenv("CF_CLEARANCE")
-    if not POESESSID or not CF_CLEARANCE or not THREAD_ID:
-        raise Exception("Missing POESESSID, CF_CLEARANCE, or THREAD_ID in .env")
-    EDIT_URL = f"https://www.pathofexile.com/forum/edit-thread/{THREAD_ID}?history=1"
+    EDIT_URL = f"https://www.pathofexile.com/forum/edit-thread/{thread_id}?history=1"
     scraper = cloudscraper.create_scraper(
         browser={"browser": "chrome", "platform": "windows", "mobile": False}
     )
