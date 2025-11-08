@@ -124,17 +124,25 @@ import cloudscraper
 from dotenv import load_dotenv
 from ..rate_limiter import rate_limiter
 
+import logging
+
 def get_current_forum_post_content(cfg=None):
+    logger = logging.getLogger("poe-backend")
     if cfg is None:
         from backend.utils.config import load_config
         cfg = load_config()
     thread_id = cfg.thread_id
+    logger.debug(f"Using thread_id: {thread_id}")
     if not thread_id:
+        logger.error("Missing thread_id in config.")
         raise Exception("Missing thread_id in config.")
     EDIT_URL = f"https://www.pathofexile.com/forum/edit-thread/{thread_id}?history=1"
+    logger.debug(f"EDIT_URL: {EDIT_URL}")
     POESESSID = os.getenv("POESESSID")
     CF_CLEARANCE = os.getenv("CF_CLEARANCE")
+    logger.debug(f"POESESSID set: {bool(POESESSID)}, CF_CLEARANCE set: {bool(CF_CLEARANCE)}")
     if not POESESSID or not CF_CLEARANCE:
+        logger.error("Missing POESESSID or CF_CLEARANCE in .env")
         raise Exception("Missing POESESSID or CF_CLEARANCE in .env")
     scraper = cloudscraper.create_scraper(
         browser={"browser": "chrome", "platform": "windows", "mobile": False}
@@ -146,22 +154,33 @@ def get_current_forum_post_content(cfg=None):
     })
     cookies = {"POESESSID": POESESSID, "cf_clearance": CF_CLEARANCE}
     scraper.cookies.update(cookies)
+    logger.debug(f"Requesting forum edit page with cookies: {cookies}")
     r = scraper.get(EDIT_URL, timeout=30)
+    logger.debug(f"Forum edit page status code: {r.status_code}")
     if r.status_code == 403:
+        logger.error("403 on GET. Cloudflare or cookies. Double-check cf_clearance + User-Agent + IP.")
         raise Exception("403 on GET. Cloudflare or cookies. Double-check cf_clearance + User-Agent + IP.")
     m = re.search(r'<textarea[^>]*name="content"[^>]*>(.*?)</textarea>', r.text, re.DOTALL | re.IGNORECASE)
     if not m:
+        logger.error("Could not find forum post content textarea. Response length: %d", len(r.text))
+        # Optionally, log a snippet of the response for debugging
+        logger.debug(f"Response snippet: {r.text[:500]}")
         raise Exception("Could not find forum post content textarea.")
+    logger.debug("Successfully found forum post content textarea.")
     return m.group(1)
 
 def undercut_trade_service(index: int, new_rate: str = None):
     """Set the price for a trade pair to the exact value provided (fraction or decimal) and update the forum post."""
+    logger = logging.getLogger("poe-backend")
+    logger.debug(f"undercut_trade_service called with index={index}, new_rate={new_rate}")
     load_dotenv()
     from backend.models import PairSummary
     from backend.trade_logic import fetch_listings_with_cache
     from backend.utils.config import load_config
     cfg = load_config()
+    logger.debug(f"Loaded config: trades={len(cfg.trades)}, account_name={cfg.account_name}, league={cfg.league}, thread_id={cfg.thread_id}")
     if not (0 <= index < len(cfg.trades)):
+        logger.error(f"Trade pair not found for index {index}")
         raise Exception("Trade pair not found")
     t = cfg.trades[index]
     account_name = cfg.account_name
@@ -172,19 +191,24 @@ def undercut_trade_service(index: int, new_rate: str = None):
         want=t.get,
         top_n=10,
     )
+    logger.debug(f"Fetched {len(listings) if listings else 0} listings for {t.pay}->{t.get}")
     if not listings or not account_name:
+        logger.error("No listings or account name not set")
         raise Exception("No listings or account name not set")
     # Use the exact new_rate provided by the frontend (can be a fraction string like '1/261')
     if new_rate is None:
+        logger.error("new_rate must be provided")
         raise Exception("new_rate must be provided")
     # Get thread_id from config
     thread_id = cfg.thread_id
     if not thread_id:
+        logger.error("Missing thread_id in config.")
         raise Exception("Missing thread_id in config.")
     TITLE = os.getenv("THREAD_TITLE", "shop")
     import html
     forum_content = get_current_forum_post_content(cfg)
     forum_content = html.unescape(forum_content)
+    logger.debug("Successfully fetched and unescaped forum content.")
     # Build the correct ~b/o string
     try:
         s = str(new_rate)
@@ -195,9 +219,11 @@ def undercut_trade_service(index: int, new_rate: str = None):
         else:
             rate_str = s
     except Exception:
+        logger.warning("Failed to parse new_rate, using as string.")
         rate_str = str(new_rate)
     b_o_str = f'~b/o {rate_str} {t.pay}'
-    # Build the trade pair line regex (e.g., divine->mirror [item post="26417551" index="2"])
+    logger.debug(f"b/o string to set: {b_o_str}")
+    # Build the trade pair line regex (e.g., divine->mirror [item post=\"26417551\" index=\"2\")
     # Regex: find the exact trade pair, then the closing bracket, then (optionally) ~b/o, and update in-place
     # Only update the first occurrence
     # More robust pattern: match the trade pair, any spaces, the item tag, and anything after (including ~b/o or not), up to end of line

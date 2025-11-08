@@ -41,7 +41,11 @@ async def refresh_cache_all(top_n: int = Query(5, ge=1, le=20), api_key: str = D
 # --- Undercut endpoint ---
 
 # Accept exact new_rate from frontend
+
 from pydantic import BaseModel
+from fastapi import status
+from fastapi.responses import JSONResponse
+import logging
 
 class SetPriceRequest(BaseModel):
     index: int
@@ -50,4 +54,11 @@ class SetPriceRequest(BaseModel):
 @router.post("/trades/undercut")
 def undercut_trade(req: SetPriceRequest, api_key: str = Depends(verify_api_key)):
     """Set the price for a trade pair to the exact value provided and update the forum post."""
-    return undercut_trade_service(req.index, new_rate=req.new_rate)
+    try:
+        return undercut_trade_service(req.index, new_rate=req.new_rate)
+    except Exception as e:
+        logging.exception("Error in undercut_trade endpoint")
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"error": str(e)}
+        )
