@@ -262,6 +262,7 @@ def undercut_trade_service(index: int, new_rate: str = None):
         print(f"[ERROR] Unexpected error while requesting {EDIT_URL}: {e}")
         return {"status": "request_error", "error": str(e)}
     if r.status_code == 403:
+        print(f"POESESSID: {POESESSID}, CF_CLEARANCE: {CF_CLEARANCE}, EDIT_URL: {EDIT_URL}")
         raise Exception("403 on GET. Cloudflare or cookies. Double-check cf_clearance + User-Agent + IP.")
     m = re.search(r'name="hash"\s+value="([a-f0-9\-]+)"', r.text, re.I)
     if not m:
