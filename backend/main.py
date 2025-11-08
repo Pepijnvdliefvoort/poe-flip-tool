@@ -19,7 +19,7 @@ log = logging.getLogger("poe-backend")
 app = FastAPI(title="PoE Trade Backend")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://pepijnvdliefvoort.github.io"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
